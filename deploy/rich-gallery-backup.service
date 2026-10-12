@@ -1,0 +1,11 @@
+[Unit]
+Description=Cadangan harian database Rich Gallery
+
+[Service]
+Type=oneshot
+User=richgallery
+WorkingDirectory=/opt/rich-gallery
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning scripts/backup.js
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/rich-gallery/data

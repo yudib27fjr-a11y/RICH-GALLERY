@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="utama">#8E1D4B</color>
+    <color name="latar">#F1F4F1</color>
+    <color name="logo_pink">#C7657C</color>
+    <style name="Tema" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:colorPrimary">@color/utama</item>
+        <item name="android:colorPrimaryDark">@color/utama</item>
+        <item name="android:colorAccent">@color/utama</item>
+        <item name="android:statusBarColor">@color/utama</item>
+        <item name="android:windowBackground">@color/latar</item>
+    </style>
+</resources>

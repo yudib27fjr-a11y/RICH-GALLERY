@@ -1,0 +1,99 @@
+name: Bangun & terbitkan pembaruan
+
+# Setiap perubahan di branch main:
+#  1. menjalankan tes aturan bisnis,
+#  2. membangun APK (ditandatangani kunci dari Secret RG_KEYSTORE_B64),
+#  3. menerbitkan rilis GitHub berisi APK + paket tampilan (www.zip) + versi.json yang ditandatangani.
+# Aplikasi Android memeriksa rilis terbaru dan memperbarui diri (tampilan: muat ulang; APK: tombol Pasang).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rilis
+  cancel-in-progress: false
+
+jobs:
+  rilis:
+    runs-on: ubuntu-24.04   # dikunci agar build tidak berubah saat GitHub mengganti versi Ubuntu
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Tes aturan bisnis (server & jalur Android)
+        run: npm test
+
+      - name: Siapkan aset Android
+        run: WEB_VERSI=${{ github.run_number }} node android/siapkan-aset.mjs
+
+      - name: Pasang kunci tanda tangan
+        env:
+          RG_KEYSTORE_B64: ${{ secrets.RG_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$RG_KEYSTORE_B64" ]; then
+            echo "::error::Secret RG_KEYSTORE_B64 belum diisi. Lihat android/README.md bagian 'Pembaruan otomatis'."
+            exit 1
+          fi
+          echo "$RG_KEYSTORE_B64" | base64 -d > android/app/rich-gallery.keystore
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Bangun APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+
+      - name: Paket pembaruan + tanda tangan
+        env:
+          CATATAN: ${{ github.event.head_commit.message }}
+        run: |
+          set -e
+          mkdir -p rilis
+          cp android/app/build/outputs/apk/release/app-release.apk rilis/RichGallery.apk
+          (cd android/app/src/main/assets/www && zip -qr -X "$GITHUB_WORKSPACE/rilis/www.zip" .)
+          export WEB=${{ github.run_number }}
+          export API=$(grep -o 'API = [0-9][0-9]*' android/app/src/main/java/id/richgallery/kasir/RgNative.java | grep -o '[0-9]*$')
+          export APK=$(grep -o 'versionCode [0-9][0-9]*' android/app/build.gradle | grep -o '[0-9]*$')
+          export NAMA=$(grep -o "versionName '[^']*'" android/app/build.gradle | cut -d"'" -f2)
+          node -e '
+            const fs = require("fs"), c = require("crypto");
+            const h = f => c.createHash("sha256").update(fs.readFileSync(f)).digest("hex");
+            fs.writeFileSync("rilis/versi.json", JSON.stringify({
+              web: +process.env.WEB, apk: +process.env.APK, apkNama: process.env.NAMA, minApi: +process.env.API,
+              wwwSha256: h("rilis/www.zip"), apkSha256: h("rilis/RichGallery.apk"),
+              tanggal: new Date().toISOString(), catatan: (process.env.CATATAN || "").split("\n")[0].slice(0, 160)
+            }));'
+          cat rilis/versi.json
+          openssl pkcs12 -in android/app/rich-gallery.keystore -nocerts -nodes -passin pass:richgallery -out kunci.pem
+          openssl dgst -sha256 -sign kunci.pem -out rilis/versi.json.sig rilis/versi.json
+          rm -f kunci.pem android/app/rich-gallery.keystore
+          echo "NAMA=$NAMA" >> "$GITHUB_ENV"
+
+      - name: Terbitkan rilis
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CATATAN: ${{ github.event.head_commit.message }}
+        run: |
+          gh release create "v${{ github.run_number }}" rilis/* \
+            --title "Rich Gallery $NAMA · tampilan #${{ github.run_number }}" \
+            --notes "$CATATAN" --latest
+          # Simpan 10 rilis terakhir saja.
+          gh release list --limit 100 --json tagName --jq '.[10:][].tagName' | xargs -r -n1 gh release delete --yes --cleanup-tag
+
+      - name: Simpan APK (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: RichGallery-APK
+          path: rilis/RichGallery.apk

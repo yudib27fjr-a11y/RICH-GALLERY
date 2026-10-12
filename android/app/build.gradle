@@ -1,0 +1,51 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'id.richgallery.kasir'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'id.richgallery.kasir'
+        minSdk 24          // Android 7.0 ke atas (termasuk perangkat iMin lama)
+        targetSdk 34
+        // Naikkan versionCode setiap kali membuat APK baru, supaya bisa dipasang menimpa versi lama tanpa kehilangan data.
+        versionCode 3
+        versionName '1.2.0'
+    }
+
+    // Kunci tanda tangan TIDAK disimpan di GitHub. Di GitHub Actions diambil dari Secret RG_KEYSTORE_B64;
+    // untuk build di komputer sendiri, taruh file rich-gallery.keystore (yang diberikan terpisah) di folder android/app/.
+    // Semua APK harus ditandatangani kunci yang sama supaya bisa saling menimpa tanpa menghapus data,
+    // dan supaya pembaruan otomatis mau dipasang.
+    def kunci = file('rich-gallery.keystore')
+    signingConfigs {
+        rg {
+            storeFile kunci
+            storePassword System.getenv('RG_KEYSTORE_PASS') ?: 'richgallery'
+            keyAlias 'richgallery'
+            keyPassword System.getenv('RG_KEYSTORE_PASS') ?: 'richgallery'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (kunci.exists()) signingConfig signingConfigs.rg
+        }
+        debug {
+            if (kunci.exists()) signingConfig signingConfigs.rg
+        }
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

@@ -1,0 +1,11 @@
+node_modules/
+data/
+.env
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+
+# Kunci tanda tangan APK: JANGAN masuk ke GitHub (disimpan sebagai Secret RG_KEYSTORE_B64)
+*.keystore
+*.jks
