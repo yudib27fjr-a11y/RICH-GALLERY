@@ -42,7 +42,17 @@ jobs:
             echo "::error::Secret RG_KEYSTORE_B64 belum diisi. Lihat android/README.md bagian 'Pembaruan otomatis'."
             exit 1
           fi
-          echo "$RG_KEYSTORE_B64" | base64 -d > android/app/rich-gallery.keystore
+          # Buang spasi/baris baru yang ikut tertempel (mis. dari Notepad), lalu periksa isinya.
+          BERSIH=$(printf '%s' "$RG_KEYSTORE_B64" | tr -d ' \r\n\t')
+          if ! printf '%s' "$BERSIH" | base64 -d > android/app/rich-gallery.keystore 2>/dev/null; then
+            echo "::error::Isi secret RG_KEYSTORE_B64 bukan teks base64 yang valid (panjang ${#BERSIH} karakter, seharusnya 4740). Tempel ulang seluruh isi file RG_KEYSTORE_B64.txt."
+            exit 1
+          fi
+          if ! keytool -list -keystore android/app/rich-gallery.keystore -storepass richgallery -alias richgallery >/dev/null 2>&1; then
+            echo "::error::Secret RG_KEYSTORE_B64 terbaca, tapi bukan kunci Rich Gallery yang benar (panjang ${#BERSIH} karakter, seharusnya 4740)."
+            exit 1
+          fi
+          echo "Kunci tanda tangan terpasang."
 
       - uses: actions/setup-java@v4
         with:
