@@ -278,7 +278,7 @@ function tawarBaru(kode){
 function tampilLogin(pesan = ""){
   B = null; $("#cartbar").hidden = true; closeModal();
   $("#root").innerHTML = `<div class="auth"><form class="card" id="fLogin" autocomplete="on">
-    <div class="merek"><img src="/logo.png" alt="Rich Gallery" width="128" height="128"></div>
+    <div class="merek"><img src="/logo.png" alt="Rich Gallery POS" width="128" height="128"></div>
     <div class="muted">Masuk untuk mulai bekerja</div>
     <label class="f">Nama<input type="text" id="lNama" name="username" autocomplete="username" required></label>
     <label class="f">Password / PIN<input type="password" id="lPw" name="password" autocomplete="current-password" required></label>
@@ -293,7 +293,7 @@ function tampilLogin(pesan = ""){
 }
 function tampilSetup(){
   $("#root").innerHTML = `<div class="auth"><form class="card" id="fSetup">
-    <div class="merek"><img src="/logo.png" alt="Rich Gallery" width="128" height="128"></div>
+    <div class="merek"><img src="/logo.png" alt="Rich Gallery POS" width="128" height="128"></div>
     <div><b>Selamat datang.</b> <span class="muted">Buat akun admin pertama. Akun ini memegang laporan, pengaturan, dan akun karyawan.</span></div>
     <label class="f">Nama admin<input type="text" id="sNama" autocomplete="username" required maxlength="40"></label>
     <label class="f">Password (min. 8 karakter)<input type="password" id="sPw" autocomplete="new-password" required minlength="8"></label>
@@ -327,7 +327,7 @@ let view = "kasir";
 function shell(){
   $("#root").innerHTML = `<div class="app">
     <header class="topbar">
-      <div class="brand"><img src="/icon-192.png" alt="" width="30" height="30"><h1>${esc(toTitle(B.toko.nama_toko))}</h1><small>Florist</small></div>
+      <div class="brand"><img src="/monogram.png" alt="" width="30" height="30"><h1>${esc(toTitle(B.toko.nama_toko))}</h1><small>POS</small></div>
       <span class="sp"></span>
       ${isAdmin() ? `<span class="sync-dot" id="syncDot" title="Status sinkron Google Sheet"></span>` : ""}
       <span class="userchip"><b>${esc(B.me.nama)}</b><span class="pill mut">${isAdmin() ? "ADMIN" : "KARYAWAN"}</span><button class="btn ghost sm" id="keluar" type="button">Keluar</button></span>

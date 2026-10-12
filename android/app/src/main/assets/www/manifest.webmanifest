@@ -1,6 +1,6 @@
 {
-  "name": "Rich Gallery",
-  "short_name": "Rich Gallery",
+  "name": "Rich Gallery POS",
+  "short_name": "RG POS",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f1f4f1",

@@ -14,7 +14,7 @@ else if (baru) console.log("Database baru dibuat.");
 const server = createServer((req, res) => { handle(req, res); });
 server.requestTimeout = 300_000;
 server.listen(config.port, config.host, () => {
-  console.log(`Rich Gallery berjalan di http://${config.host}:${config.port}  (zona waktu toko ${config.tz})`);
+  console.log(`Rich Gallery POS berjalan di http://${config.host}:${config.port}  (zona waktu toko ${config.tz})`);
 });
 
 // Kirim antrean ke Google Sheet secara berkala, dan bersihkan sesi kedaluwarsa tiap jam.
