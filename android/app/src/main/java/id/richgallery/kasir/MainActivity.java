@@ -55,6 +55,7 @@ public class MainActivity extends Activity {
     private SharedPreferences pref;
     private ValueCallback<Uri[]> pilihFileCb;
     Pembaru pembaru;
+    PrinterLangsung printer;
 
     @Override
     protected void onCreate(Bundle simpanan) {
@@ -64,6 +65,7 @@ public class MainActivity extends Activity {
 
         db = new RgDb(this);
         pembaru = new Pembaru(this);
+        printer = new PrinterLangsung(this);
         pembaru.saatMulai();
         web = new WebView(this);
         setContentView(web);
@@ -288,6 +290,13 @@ public class MainActivity extends Activity {
             pilihFileCb.onReceiveValue(r);
             pilihFileCb = null;
         }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int req, String[] izin, int[] hasil) {
+        super.onRequestPermissionsResult(req, izin, hasil);
+        if (req == PrinterLangsung.KODE_IZIN && printer != null)
+            printer.hasilIzin(hasil.length > 0 && hasil[0] == android.content.pm.PackageManager.PERMISSION_GRANTED);
     }
 
     @Override

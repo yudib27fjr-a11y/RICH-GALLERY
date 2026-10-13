@@ -74,6 +74,10 @@ class ApiError extends Error { constructor(status, msg){ super(msg); this.status
 /* Di aplikasi Android mode offline, API dijalankan oleh mesin lokal (public/lokal/mesin.js) — aturannya sama dengan server. */
 const NATIVE = window.RGNative || null;
 const LOKAL = location.hostname === "rg.lokal";
+/* Perangkat kasir dengan printer bawaan (iMin "BluetoothPrinter", Sunmi "InnerPrinter"): pakai cetak langsung ESC/POS,
+   hasilnya teks hitam tajam. Hanya otomatis bila pengguna belum pernah memilih cara cetak sendiri. */
+const statusPrinterLangsung = () => { try { return NATIVE && NATIVE.printerLangsung ? String(NATIVE.printerLangsung() || "") : ""; } catch { return ""; } };
+if (!D.modeDipilih && NATIVE && NATIVE.cetakLangsung) { const st = statusPrinterLangsung(); if (st && st !== "izin") D.modeCetak = "langsung"; }
 async function api(method, url, body){
   if (window.RG_LOKAL) {
     const r = await window.RG_LOKAL.request(method, url, body);
@@ -161,13 +165,22 @@ function strukLines(s){
   return L;
 }
 const strukText = s => strukLines(s).map(l => l.t).join("\n");
+/* ---------- ESC/POS: teks asli untuk printer termal (tajam, hitam pekat) ---------- */
+const ESC = "\x1B", GS = "\x1D";
+const ascii = t => String(t).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/[\u2013\u2014]/g, "-").replace(/[^\x20-\x7E]/g, "?");
+function escposStruk(lines){
+  let s = ESC + "@" + ESC + "t\x00";
+  lines.forEach(l => { s += (l.b ? ESC + "E\x01" : "") + ascii(l.t) + (l.b ? ESC + "E\x00" : "") + "\n"; });
+  return s + "\n\n\n" + GS + "V\x41\x03";
+}
+/** Kirim ESC/POS ke printer: langsung ke printer bawaan, atau lewat aplikasi RawBT. Mengembalikan true bila terkirim. */
+function kirimEscpos(s){
+  if (D.modeCetak === "langsung" && NATIVE && NATIVE.cetakLangsung) { NATIVE.cetakLangsung(btoa(s)); toast("Mencetak…"); return true; }
+  if (D.modeCetak === "rawbt" || D.modeCetak === "langsung") { window.location.href = "rawbt:base64," + btoa(s); return true; }
+  return false;
+}
 function cetakBaris(lines){
-  if (D.modeCetak === "rawbt") {
-    const ESC = "\x1B", GS = "\x1D"; let s = ESC + "@";
-    lines.forEach(l => { s += (l.b ? ESC + "E\x01" : "") + l.t.replace(/[^\x20-\x7E]/g, "?") + (l.b ? ESC + "E\x00" : "") + "\n"; });
-    s += "\n\n\n" + GS + "V\x41\x03";
-    window.location.href = "rawbt:base64," + btoa(s); return;
-  }
+  if (kirimEscpos(escposStruk(lines))) return;
   const mm = D.kertas == 80 ? 80 : 58, cw = mm == 80 ? 72 : 48, chars = lebar();
   $("#page-style").textContent = `@page{size:${mm}mm auto;margin:0}`;
   $("#print-area").innerHTML = `<pre style="width:${cw}mm;margin:0 ${(mm - cw) / 2}mm;padding:2mm 0 8mm;font-size:${(cw / chars / 0.6).toFixed(2)}mm">${lines.map(l => l.b ? `<b>${esc(l.t)}</b>` : esc(l.t)).join("\n")}</pre>`;
@@ -211,13 +224,13 @@ function cariScan(kode){
 }
 function cetakLabel(daftar){ // [{x, jenis, n}]
   const mm = D.kertas == 80 ? 80 : 58, cw = mm == 80 ? 72 : 48, w = lebar();
-  if (D.modeCetak === "rawbt") {
-    const ESC = "\x1B", GS = "\x1D"; let s = ESC + "@";
+  if (D.modeCetak === "rawbt" || D.modeCetak === "langsung") {
+    let s = ESC + "@";
     daftar.forEach(({ x, jenis, n }) => { const bc = labelBarcode(x, jenis); for (let i = 0; i < n; i++) {
-      s += ESC + "a\x01" + ESC + "E\x01" + x.nama.slice(0, w).replace(/[^\x20-\x7E]/g, "?") + "\n" + ESC + "E\x00";
+      s += ESC + "a\x01" + ESC + "E\x01" + ascii(x.nama).slice(0, w) + "\n" + ESC + "E\x00";
       if (jenis === "produk" && x.harga) s += "Rp" + angka(x.harga) + "\n";
       s += GS + "h\x50" + GS + "w\x02" + GS + "H\x02" + GS + "f\x00" + GS + "k\x43\x0D" + bc + "\n" + x.kode + "\n\n\n"; } });
-    window.location.href = "rawbt:base64," + btoa(s + GS + "V\x41\x03"); return;
+    if (kirimEscpos(s + ESC + "a\x00" + GS + "V\x41\x03")) return;
   }
   $("#page-style").textContent = `@page{size:${mm}mm auto;margin:0}`;
   let html = "";
@@ -984,8 +997,8 @@ function vAtur(){
       <section class="panel stack"><h3 style="font-size:17px">Perangkat ini</h3>
         <p class="small muted" style="margin:0">Berlaku untuk HP/tablet yang sedang dipakai saja.</p>
         <label class="f">Lebar kertas printer<select id="pK"><option value="58" ${D.kertas == 58 ? "selected" : ""}>58 mm (32 karakter)</option><option value="80" ${D.kertas == 80 ? "selected" : ""}>80 mm (48 karakter)</option></select></label>
-        <label class="f">Cara mencetak<select id="pM"><option value="chrome" ${D.modeCetak === "chrome" ? "selected" : ""}>Cetak bawaan Android (Chrome → printer iMin)</option><option value="rawbt" ${D.modeCetak === "rawbt" ? "selected" : ""}>Aplikasi RawBT (ESC/POS langsung)</option></select></label>
-        <p class="note">Mode Chrome memakai layanan cetak Android: pilih printer bawaan perangkat dan ukuran kertas ${D.kertas} mm. Bila printer iMin tidak muncul, pasang RawBT dari Play Store lalu pilih mode RawBT.</p>
+        <label class="f">Cara mencetak<select id="pM">${NATIVE && NATIVE.cetakLangsung ? `<option value="langsung" ${D.modeCetak === "langsung" ? "selected" : ""}>Printer bawaan iMin langsung (paling tajam)</option>` : ""}<option value="chrome" ${D.modeCetak === "chrome" ? "selected" : ""}>Layanan cetak Android (gambar)</option><option value="rawbt" ${D.modeCetak === "rawbt" ? "selected" : ""}>Aplikasi RawBT (ESC/POS)</option></select></label>
+        <p class="note">${NATIVE && NATIVE.cetakLangsung ? `<b>Printer bawaan langsung</b> mengirim teks ke printer iMin seperti aplikasi kasir lain, hasilnya hitam dan tajam. Bluetooth harus menyala (printer iMin tersambung lewat Bluetooth internal "BluetoothPrinter"). ${(() => { const st = statusPrinterLangsung(); return st === "izin" ? "Saat mencetak pertama kali, izinkan akses <i>Perangkat sekitar</i>." : st ? `Printer ditemukan: <b>${esc(st)}</b>.` : "Printer bawaan belum terdeteksi — pastikan Bluetooth menyala."; })()}<br>` : ""}Layanan cetak Android mengubah struk menjadi gambar, sehingga bisa tampak buram. RawBT butuh aplikasi RawBT dari Play Store.</p>
         <button class="btn" id="pTest" type="button">Cetak struk uji</button>
         <label class="f">Tema<select id="thm"><option value="">Ikuti perangkat</option><option value="light" ${D.tema === "light" ? "selected" : ""}>Terang</option><option value="dark" ${D.tema === "dark" ? "selected" : ""}>Gelap</option></select></label>
       </section>
@@ -1012,7 +1025,7 @@ function vAtur(){
     </div>`;
   if (NATIVE) aturMode();
   $("#pK").onchange = e => { D.kertas = +e.target.value; simpanD(); vAtur(); };
-  $("#pM").onchange = e => { D.modeCetak = e.target.value; simpanD(); };
+  $("#pM").onchange = e => { D.modeCetak = e.target.value; D.modeDipilih = true; simpanD(); vAtur(); };
   $("#thm").onchange = e => { D.tema = e.target.value; simpanD(); terapkanTema(); };
   $("#pTest").onclick = () => cetak({ no: B.toko.prefix + "UJI", tgl: today(), jam: "00:00", kasir: B.me.nama, pelanggan: "UJI CETAK", hp: "", items: [{ nama: "BUKET BUNGA 100K", harga: 100000, qty: 1 }, { nama: "COKLAT SILVERQUEEN", harga: 15000, qty: 2 }], subtotal: 130000, diskon: 0, ongkir: 0, total: 130000, metode: "Tunai", bayar: 150000, catatan: "" });
   $("#pwSave").onclick = e => coba(async () => { await api("POST", "/api/akun/password", { lama: $("#pwL").value, baru: $("#pwB").value }); $("#pwL").value = $("#pwB").value = ""; toast("Password diganti"); }, e.target);

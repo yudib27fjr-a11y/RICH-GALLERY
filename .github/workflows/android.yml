@@ -74,7 +74,7 @@ jobs:
           cp android/app/build/outputs/apk/release/app-release.apk rilis/RichGallery.apk
           (cd android/app/src/main/assets/www && zip -qr -X "$GITHUB_WORKSPACE/rilis/www.zip" .)
           export WEB=${{ github.run_number }}
-          export API=$(grep -o 'API = [0-9][0-9]*' android/app/src/main/java/id/richgallery/kasir/RgNative.java | grep -o '[0-9]*$')
+          export API=$(grep -o 'WEB_BUTUH_API = [0-9][0-9]*' android/app/src/main/java/id/richgallery/kasir/RgNative.java | grep -o '[0-9]*$')
           export APK=$(grep -o 'versionCode [0-9][0-9]*' android/app/build.gradle | grep -o '[0-9]*$')
           export NAMA=$(grep -o "versionName '[^']*'" android/app/build.gradle | cut -d"'" -f2)
           node -e '
