@@ -30,6 +30,45 @@ const simpanD = () => { try { localStorage.setItem(DKEY, JSON.stringify(D)); } c
 function terapkanTema(){ if (D.tema) document.documentElement.setAttribute("data-theme", D.tema); else document.documentElement.removeAttribute("data-theme"); }
 terapkanTema();
 
+/* ================= WebView lama (Chrome < 84): "gap" pada flexbox belum didukung ================= */
+/* Perangkat kasir seperti iMin sering membawa WebView lama. Bila gap flex tidak didukung, jaraknya diganti margin. */
+(function gapFlexLama(){
+  const uji = document.createElement("div");
+  uji.style.cssText = "display:flex;flex-direction:column;row-gap:1px;position:absolute;visibility:hidden";
+  uji.appendChild(document.createElement("div")); uji.appendChild(document.createElement("div"));
+  document.body.appendChild(uji); const didukung = uji.scrollHeight === 1 && !window.__rgUjiGapLama; uji.remove();
+  if (didukung) return;
+  document.documentElement.classList.add("tanpa-gap-flex");
+  const px = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+  const atur = el => {
+    const cs = getComputedStyle(el);
+    if (cs.display !== "flex" && cs.display !== "inline-flex") return;
+    const rg = px(cs.rowGap), cg = px(cs.columnGap);
+    if (!rg && !cg) return;
+    const kolom = cs.flexDirection.indexOf("column") === 0, bungkus = cs.flexWrap !== "nowrap";
+    const anak = Array.prototype.filter.call(el.children, c => { const s = getComputedStyle(c); return s.display !== "none" && s.position !== "absolute" && s.position !== "fixed"; });
+    anak.forEach((c, i) => {
+      const akhir = i === anak.length - 1;
+      if (kolom) { c.style.marginBottom = akhir ? "" : rg + "px"; if (bungkus && cg) c.style.marginRight = cg + "px"; }
+      else { c.style.marginRight = akhir ? "" : cg + "px"; if (bungkus && rg) c.style.marginBottom = rg + "px"; }
+    });
+  };
+  const proses = akar => { if (akar.nodeType !== 1) return; atur(akar); akar.querySelectorAll("*").forEach(atur); };
+  let akarAntre = new Set(), antre = false;
+  const jadwal = akar => {
+    akarAntre.add(akar);
+    if (antre) return; antre = true;
+    requestAnimationFrame(() => {
+      antre = false; const daftar = akarAntre; akarAntre = new Set();
+      daftar.forEach(a => { if (a.isConnected !== false) proses(a); });
+    });
+  };
+  new MutationObserver(rec => rec.forEach(r => { if (r.target.nodeType === 1) { jadwal(r.target); r.addedNodes.forEach(n => { if (n.nodeType === 1) jadwal(n); }); } }))
+    .observe(document.body, { childList: true, subtree: true });
+  window.addEventListener("resize", () => jadwal(document.body));
+  jadwal(document.body);
+})();
+
 /* ================= API ================= */
 class ApiError extends Error { constructor(status, msg){ super(msg); this.status = status; } }
 /* Di aplikasi Android mode offline, API dijalankan oleh mesin lokal (public/lokal/mesin.js) — aturannya sama dengan server. */
@@ -59,6 +98,10 @@ async function coba(fn, tombol){
   finally { if (tombol) tombol.disabled = false; }
 }
 async function muatUlang(){ const b = await api("GET", "/api/bootstrap"); B = b; }
+
+/* Galat tak terduga ditampilkan, bukan diam saja (mis. fitur browser yang belum ada di WebView perangkat lama). */
+window.addEventListener("error", e => { try { toast("Galat: " + (e.message || "tidak diketahui")); } catch {} });
+window.addEventListener("unhandledrejection", e => { try { const m = e.reason && e.reason.message; if (!(e.reason && e.reason.status === 401)) toast("Galat: " + (m || "tidak diketahui")); } catch {} });
 
 /* ================= toast & modal ================= */
 let tt;
@@ -275,6 +318,8 @@ function tawarBaru(kode){
 }
 
 /* ================= layar masuk & setup ================= */
+/** Tombol kirim form. e.submitter baru ada di Chrome 81+, WebView perangkat lama (mis. iMin) belum punya. */
+const tombolKirim = e => e.submitter || e.target.querySelector('button[type="submit"]');
 function tampilLogin(pesan = ""){
   B = null; $("#cartbar").hidden = true; closeModal();
   $("#root").innerHTML = `<div class="auth"><form class="card" id="fLogin" autocomplete="on">
@@ -286,9 +331,9 @@ function tampilLogin(pesan = ""){
     <button class="btn pri big" type="submit">Masuk</button>
     <p class="small muted" style="margin:0">Lupa PIN? Minta admin menggantinya di Pengaturan → Pengguna.</p></form></div>`;
   $("#fLogin").onsubmit = async e => {
-    e.preventDefault(); const btn = e.submitter; btn.disabled = true; $("#lErr").textContent = "";
+    e.preventDefault(); const btn = tombolKirim(e); btn.disabled = true; $("#lErr").textContent = ""; const label = btn.textContent; btn.textContent = "Memeriksa…";
     try { await api("POST", "/api/login", { nama: $("#lNama").value, password: $("#lPw").value }); await mulai(); }
-    catch (err) { $("#lErr").textContent = err.message; btn.disabled = false; }
+    catch (err) { $("#lErr").textContent = err.message; btn.disabled = false; btn.textContent = label; }
   };
 }
 function tampilSetup(){
@@ -303,9 +348,9 @@ function tampilSetup(){
   $("#fSetup").onsubmit = async e => {
     e.preventDefault();
     if ($("#sPw").value !== $("#sPw2").value) { $("#sErr").textContent = "Kedua password tidak sama"; return; }
-    const btn = e.submitter; btn.disabled = true;
+    const btn = tombolKirim(e); btn.disabled = true; $("#sErr").textContent = ""; const label = btn.textContent; btn.textContent = "Membuat akun…";
     try { await api("POST", "/api/setup", { nama: $("#sNama").value, password: $("#sPw").value }); await mulai(); }
-    catch (err) { $("#sErr").textContent = err.message; btn.disabled = false; }
+    catch (err) { $("#sErr").textContent = err.message; btn.disabled = false; btn.textContent = label; }
   };
 }
 
@@ -1099,8 +1144,9 @@ async function mulai(){
   try {
     if (LOKAL && !window.RG_LOKAL) await import("/lokal/mesin.js");
     const st = await api("GET", "/api/status");
-    if (st.perluSetup) return tampilSetup();
-    if (!st.masuk) return tampilLogin();
+    // Layar setup/masuk juga berarti halaman berhasil tampil, supaya pembaruan tidak dibatalkan otomatis.
+    if (st.perluSetup) { tampilSetup(); return halamanTampil(); }
+    if (!st.masuk) { tampilLogin(); return halamanTampil(); }
     await muatUlang();
   } catch (e) {
     if (e.status === 401) return;
@@ -1109,7 +1155,10 @@ async function mulai(){
   }
   try { const h = location.hash.slice(1); if (SEMUA_VIEW.some(v => v[0] === h)) view = h; } catch {}
   pPer = null; shell(); render();
-  // Halaman berhasil tampil: konfirmasi ke aplikasi (jaring pengaman pembaruan), lalu tampilkan pembaruan yang menunggu.
+  halamanTampil();
+}
+/** Halaman berhasil tampil: konfirmasi ke aplikasi (jaring pengaman pembaruan), lalu tampilkan pembaruan yang menunggu. */
+function halamanTampil(){
   try { NATIVE?.webSiap?.(); const s = NATIVE?.statusPembaruan?.(); if (s) { const o = JSON.parse(s); window.rgPembaruan(o.jenis, o.teks); } } catch {}
 }
 mulai();
