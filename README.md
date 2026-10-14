@@ -48,48 +48,31 @@ Saat pertama dibuka, muncul layar **Buat akun admin**. Database otomatis terisi 
 
 ---
 
-## 3. Pasang di VPS (Ubuntu 22.04 / 24.04)
+## 3. Pasang di VPS (Ubuntu 22.04 / 24.04, Debian 12)
 
-Spesifikasi termurah sudah cukup: 1 vCPU, 1 GB RAM. Siapkan juga domain/subdomain, misalnya `kasir.richgallery.id`, yang diarahkan (A record) ke IP VPS.
+Spesifikasi termurah sudah cukup: 1 vCPU, 1 GB RAM.
 
-### 3.1 Pasang Node.js, nginx, certbot
+### 3.1 Satu perintah
+Masuk ke VPS lewat SSH (`ssh root@IP-VPS`), lalu jalankan:
 ```bash
-sudo apt update && sudo apt install -y curl nginx certbot python3-certbot-nginx
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt install -y nodejs
-node --version   # pastikan v22.13+
+curl -fsSL https://raw.githubusercontent.com/yudib27fjr-a11y/RICH-GALLERY/main/deploy/pasang.sh | sudo bash
 ```
+Skrip `deploy/pasang.sh` memasang Node.js 22, mengunduh aplikasi ke `/opt/rich-gallery`, menjalankannya sebagai layanan (hidup lagi otomatis bila server restart), memasang cadangan harian, dan memasang **HTTPS gratis** (Caddy + Let's Encrypt, diperpanjang otomatis). Di akhir, alamat website ditampilkan.
 
-### 3.2 Salin aplikasi
-```bash
-sudo useradd --system --create-home --home-dir /opt/rich-gallery richgallery
-# unggah isi folder rich-gallery ke /opt/rich-gallery (lewat scp/sftp/git), lalu:
-sudo mkdir -p /opt/rich-gallery/data
-sudo cp /opt/rich-gallery/.env.example /opt/rich-gallery/.env
-sudo chown -R richgallery:richgallery /opt/rich-gallery
-```
-Buka `/opt/rich-gallery/.env` dan sesuaikan bila perlu. Isi bawaannya sudah cocok untuk VPS di belakang nginx dengan HTTPS.
+- **Tanpa domain:** alamatnya memakai IP server, misalnya `https://103-11-22-33.sslip.io`.
+- **Dengan domain sendiri:** arahkan A record domain/subdomain ke IP VPS, tunggu beberapa menit, lalu:
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/yudib27fjr-a11y/RICH-GALLERY/main/deploy/pasang.sh | sudo bash -s -- kasir.domainanda.com
+  ```
+- Port **80 dan 443** harus terbuka. Bila penyedia VPS punya firewall di panelnya, buka kedua port itu.
 
-### 3.3 Jalankan sebagai layanan + cadangan harian
-```bash
-sudo cp /opt/rich-gallery/deploy/rich-gallery.service /etc/systemd/system/
-sudo cp /opt/rich-gallery/deploy/rich-gallery-backup.* /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now rich-gallery rich-gallery-backup.timer
-sudo systemctl status rich-gallery      # harus "active (running)"
-```
+### 3.2 Memperbarui ke versi terbaru
+Jalankan **perintah yang sama** lagi. Kode diperbarui dari GitHub dan layanan dimulai ulang; folder `data/` dan `.env` tidak disentuh. Domain yang terakhir dipakai diingat.
 
-### 3.4 nginx + HTTPS
-```bash
-sudo cp /opt/rich-gallery/deploy/nginx.conf /etc/nginx/sites-available/rich-gallery
-sudo nano /etc/nginx/sites-available/rich-gallery        # ganti kasir.contoh.com dengan domain Anda
-sudo ln -s /etc/nginx/sites-available/rich-gallery /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
-sudo certbot --nginx -d kasir.richgallery.id             # HTTPS gratis, diperpanjang otomatis
-sudo ufw allow OpenSSH && sudo ufw allow 'Nginx Full' && sudo ufw enable
-```
-
-> **Penting:** `.env` memakai `COOKIE_SECURE=true`, jadi login hanya berfungsi lewat **https**. Selesaikan langkah certbot dulu sebelum masuk dari HP.
+### 3.3 Letak file
+- Aplikasi: `/opt/rich-gallery` (milik root; layanan hanya bisa menulis ke `data/`)
+- Database: `/opt/rich-gallery/data/rich-gallery.db`, cadangan harian: `/opt/rich-gallery/data/backup/`
+- Pengaturan: `/opt/rich-gallery/.env`, HTTPS: `/etc/caddy/Caddyfile`
 
 ---
 
@@ -101,16 +84,17 @@ sudo ufw allow OpenSSH && sudo ufw allow 'Nginx Full' && sudo ufw enable
 4. **Pindahkan data dari aplikasi versi file** (bila sudah dipakai): di aplikasi lama buka Pengaturan → Unduh cadangan (.json). Di website baru buka Pengaturan → Cadangan & impor → Pilih file. Impor aman diulang karena data yang sama tidak akan tergandakan.
 
 ### Di perangkat iMin / HP kasir
-- Buka alamat website di **Chrome** → menu ⋮ → **Tambahkan ke layar utama**.
+- **Disarankan:** pakai aplikasi Android **Rich Gallery POS** → Pengaturan → Mode aplikasi → isi alamat server → **Pakai server online**. Cetak langsung ke printer bawaan iMin tetap berfungsi di mode online.
+- Atau lewat browser: buka alamat website di **Chrome** → menu ⋮ → **Tambahkan ke layar utama** (cetak memakai layanan cetak Android atau RawBT).
 - Masuk dengan nama dan PIN masing-masing. Sesi bertahan 30 hari.
-- **Pengaturan → Perangkat ini:** pilih kertas 58/80 mm dan cara cetak (Chrome atau RawBT), lalu tekan **Cetak struk uji**. Pengaturan ini tersimpan per perangkat.
+- **Pengaturan → Perangkat ini:** pilih kertas 58/80 mm dan cara cetak, lalu tekan **Cetak struk uji**. Pengaturan ini tersimpan per perangkat.
 - Alat scan barcode USB/Bluetooth (mode keyboard, akhiran Enter) langsung berfungsi di menu Kasir, Produksi, Masuk/Keluar, Opname, dan Stok.
 
 ---
 
 ## 5. Cadangan & pemulihan
 
-- **Otomatis:** setiap malam pukul 23:30 waktu server, salinan database dibuat di `/opt/rich-gallery/data/backup/` dan disimpan 30 hari. Untuk membuat cadangan saat itu juga: `sudo -u richgallery npm --prefix /opt/rich-gallery run backup`.
+- **Otomatis:** setiap malam pukul 23:30 waktu server, salinan database dibuat di `/opt/rich-gallery/data/backup/` dan disimpan 30 hari. Untuk membuat cadangan saat itu juga: `cd /opt/rich-gallery && sudo -u richgallery node --disable-warning=ExperimentalWarning scripts/backup.js`.
 - **Manual dari website:** Pengaturan → Unduh cadangan database (.db). Simpan juga di luar VPS, misalnya di Google Drive, minimal seminggu sekali.
 - **Memulihkan dari website:** Pengaturan → Cadangan & impor → *Pilih file cadangan (.db) untuk dipulihkan*. Seluruh data diganti dengan isi file, lalu semua pengguna masuk lagi. File boleh berasal dari server maupun dari aplikasi Android. Data server sebelum dipulihkan disimpan otomatis di `data/backup/sebelum-pulihkan-….db`.
 - **Memulihkan lewat terminal:**
@@ -122,16 +106,11 @@ sudo ufw allow OpenSSH && sudo ufw allow 'Nginx Full' && sudo ufw enable
   ```
 
 ## 6. Memperbarui versi aplikasi
-```bash
-# unggah file baru ke /opt/rich-gallery (JANGAN timpa folder data/ dan file .env)
-sudo chown -R richgallery:richgallery /opt/rich-gallery
-sudo systemctl restart rich-gallery
-```
-Perubahan struktur database dijalankan otomatis saat server mulai (lihat `MIGRASI` di `src/core/skema.js`).
+Jalankan lagi perintah pemasangan di bagian 3.1. Perubahan struktur database dijalankan otomatis saat server mulai (lihat `MIGRASI` di `src/core/skema.js`).
 
 ## 7. Lupa password admin
 ```bash
-cd /opt/rich-gallery && sudo -u richgallery npm run reset-admin -- "Yudi" "password-baru-min-8"
+cd /opt/rich-gallery && sudo -u richgallery node --disable-warning=ExperimentalWarning scripts/reset-admin.js "Yudi" "password-baru-min-8"
 ```
 
 ## 8. Melihat log / mengatasi masalah
@@ -163,7 +142,7 @@ public/shared.js           kategori, barcode EAN-13, periode insentif (dipakai s
 public/lokal/              mesin lokal Android: driver SQLite lewat jembatan native, platform, mesin.js
 android/                   proyek Android (Java, tanpa library tambahan) — lihat android/README.md
 .github/workflows/         membangun APK otomatis di GitHub
-deploy/                    systemd, nginx, skrip Apps Script
+deploy/                    pasang.sh (pasang VPS 1 perintah), systemd, Caddy, skrip Apps Script
 scripts/                   backup.js, reset-admin.js
 test/api.test.js           tes ujung-ke-ujung (npm test)
 ```
