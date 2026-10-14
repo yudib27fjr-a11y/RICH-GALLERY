@@ -85,6 +85,17 @@ Skrip `deploy/pasang-windows.ps1` memasang Node.js, menaruh aplikasi di `C:\Rich
 
 Perbarui aplikasi: jalankan perintah yang sama lagi.
 
+### 3.5 Gratis: Mac di toko sebagai server
+Sama seperti 3.4, tetapi untuk Mac. Mac harus menyala, login, dan tersambung internet selama toko buka.
+
+Buka aplikasi **Terminal**, lalu tempel (tanpa `sudo`):
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/yudib27fjr-a11y/RICH-GALLERY/main/deploy/pasang-mac.sh)"
+```
+Skrip `deploy/pasang-mac.sh` memasang Node.js, menaruh aplikasi di `/Users/Shared/RichGallery/app` (data di `/Users/Shared/RichGallery/data`), menjalankannya otomatis lewat launchd, membuat cadangan harian 23:30, mencegah Mac tidur saat dicas, lalu membuat alamat HTTPS gratis lewat **Tailscale Funnel** (disimpan di `/Users/Shared/RichGallery/ALAMAT-SERVER.txt`). Tailscale dipasang dari App Store atau tailscale.com/download/mac, lalu login dengan akun Google.
+
+Perbarui aplikasi: jalankan perintah yang sama lagi.
+
 ---
 
 ## 4. Langkah pertama setelah online
