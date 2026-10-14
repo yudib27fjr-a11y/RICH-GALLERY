@@ -74,6 +74,17 @@ Jalankan **perintah yang sama** lagi. Kode diperbarui dari GitHub dan layanan di
 - Database: `/opt/rich-gallery/data/rich-gallery.db`, cadangan harian: `/opt/rich-gallery/data/backup/`
 - Pengaturan: `/opt/rich-gallery/.env`, HTTPS: `/etc/caddy/Caddyfile`
 
+### 3.4 Gratis: komputer Windows di toko sebagai server
+Tanpa VPS dan tanpa kartu kredit. Komputer harus menyala dan tersambung internet selama toko buka.
+
+Buka **PowerShell sebagai Administrator** (klik kanan Start → *Terminal (Admin)*), lalu:
+```powershell
+irm https://raw.githubusercontent.com/yudib27fjr-a11y/RICH-GALLERY/main/deploy/pasang-windows.ps1 | iex
+```
+Skrip `deploy/pasang-windows.ps1` memasang Node.js, menaruh aplikasi di `C:\RichGallery\app` (data di `C:\RichGallery\data`), menjalankannya otomatis setiap komputer menyala (Task Scheduler, tanpa perlu login Windows), membuat cadangan harian 23:30, mencegah komputer tidur saat dicas, lalu membuat alamat HTTPS gratis lewat **Tailscale Funnel** (`https://nama-komputer.xxxx.ts.net`, disimpan di `C:\RichGallery\ALAMAT-SERVER.txt`). Saat pertama kali, Anda diminta masuk ke Tailscale (akun Google) dan menekan *Enable* untuk Funnel.
+
+Perbarui aplikasi: jalankan perintah yang sama lagi.
+
 ---
 
 ## 4. Langkah pertama setelah online
