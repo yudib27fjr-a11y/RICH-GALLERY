@@ -1,6 +1,6 @@
 import { route } from "../router.js";
 import { one, all, run, tx } from "../db.js";
-import { bad, notFound, teks, angka, tanggal, pilihan, hariIni } from "../util.js";
+import { HttpError, bad, notFound, teks, angka, tanggal, pilihan, hariIni } from "../util.js";
 import { antre } from "../stok.js";
 import { KAT_PENGELUARAN, tambahHari } from "../../../public/shared.js";
 
@@ -14,10 +14,11 @@ route("POST", "/api/pengeluaran", "admin", ({ body, user }) => tx(() => {
   const kategori = pilihan(body.kategori, KAT_PENGELUARAN, "Kategori");
   const ket = teks(body.ket, { max: 200, nama: "Keterangan" });
   const nominal = angka(body.nominal, { min: 1, max: 1e11, bulat: true, wajib: true, nama: "Nominal" });
-  const id = Number(run("INSERT INTO expenses(tgl, kategori, ket, nominal, user_id, oleh) VALUES (?,?,?,?,?,?)", [tgl, kategori, ket, nominal, user.id, user.nama]).lastInsertRowid);
+  const uid = body.uid ? teks(body.uid, { max: 80, nama: "uid" }) : null;
+  const id = Number(run("INSERT INTO expenses(tgl, kategori, ket, nominal, user_id, oleh, uid) VALUES (?,?,?,?,?,?,?)", [tgl, kategori, ket, nominal, user.id, user.nama, uid]).lastInsertRowid);
   antre("pengeluaran", [[String(id), tgl, kategori, ket, nominal, user.nama]]);
   return { id };
-}));
+}), { uid: true, cabang: ({ body }) => ({ aksi: "pengeluaran", data: { uid: body.uid, tgl: body.tgl, kategori: body.kategori, ket: body.ket || "", nominal: body.nominal } }) });
 route("DELETE", "/api/pengeluaran/:id", "admin", ({ params, user }) => tx(() => {
   const e = one("SELECT * FROM expenses WHERE id = ? AND dihapus IS NULL", [+params.id]);
   if (!e) throw notFound("Pengeluaran tidak ditemukan");
@@ -25,7 +26,13 @@ route("DELETE", "/api/pengeluaran/:id", "admin", ({ params, user }) => tx(() => 
   run("UPDATE expenses SET dihapus = datetime('now') WHERE id = ?", [e.id]);
   antre("hapus_pengeluaran", [[String(e.id), hariIni(), user.nama]]);
   return { ok: true };
-}));
+}), {
+  pra: ({ params }) => one("SELECT uid FROM expenses WHERE id = ?", [+params.id]),
+  cabang: ({ pra }) => {
+    if (!pra || !pra.uid) throw new HttpError(409, "Pengeluaran ini dibuat sebelum perangkat tersambung ke server pusat. Hapus dari server pusat.");
+    return { aksi: "hapus_pengeluaran", data: { uid: pra.uid } };
+  },
+});
 
 /* ---- Laporan (admin) ---- */
 route("GET", "/api/laporan", "admin", ({ query }) => {

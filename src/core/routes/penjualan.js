@@ -2,6 +2,7 @@ import { route } from "../router.js";
 import { one, all, run, tx, getSettings, setSetting } from "../db.js";
 import { HttpError, bad, notFound, teks, angka, tanggal, pilihan, daftar, sekarang } from "../util.js";
 import { ambilItem, ubahStok, antre } from "../stok.js";
+import { cabangAktif } from "../cabang-perangkat.js";
 import { KATEGORI, METODE, tebakKategori } from "../../../public/shared.js";
 
 function muatPenjualan(where, params, limit = 500){
@@ -15,9 +16,24 @@ function muatPenjualan(where, params, limit = 500){
 const sembunyikanHpp = (s, user) => { if (user.peran !== "admin") s.items.forEach(i => delete i.hpp); return s; };
 
 /** Simpan transaksi. Total dihitung ulang di server; stok produk READY dikurangi dalam satu transaksi. */
-route("POST", "/api/penjualan", "semua", ({ body, user }) => tx(() => {
-  const s = getSettings(), now = sekarang();
-  const tgl = user.peran === "admin" && body.tgl ? tanggal(body.tgl) : now.tgl;
+/* Nomor nota: server memakai prefix + 9 digit. Perangkat cabang memakai seri sendiri (prefix + kode perangkat + 6 digit),
+   supaya nota dari beberapa perangkat tidak pernah bentrok di server pusat. */
+function nomorBerikutnya(s){
+  const kode = cabangAktif() ? s.cabang_kode : "";
+  for (let n = s.no_berikutnya; ; n++) {
+    const no = s.prefix + (kode ? `${kode}-${String(n).padStart(6, "0")}` : String(n).padStart(9, "0"));
+    if (!one("SELECT 1 x FROM sales WHERE no = ?", [no])) { setSetting("no_berikutnya", n + 1); return no; }
+  }
+}
+/** Nomor dari perangkat cabang dipakai apa adanya; bila kebetulan sudah ada, diberi akhiran. */
+function nomorKiriman(no){
+  if (!one("SELECT 1 x FROM sales WHERE no = ?", [no])) return no;
+  for (let i = 2; ; i++) if (!one("SELECT 1 x FROM sales WHERE no = ?", [`${no}-${i}`])) return `${no}-${i}`;
+}
+
+route("POST", "/api/penjualan", "semua", ({ body, user, ctx }) => tx(() => {
+  const s = getSettings(), now = sekarang(), kiriman = ctx && ctx.replay;
+  const tgl = kiriman ? tanggal(kiriman.tgl) : user.peran === "admin" && body.tgl ? tanggal(body.tgl) : now.tgl;
   const items = daftar(body.items, { nama: "Keranjang", max: 200 }).map((x, i) => {
     const qty = angka(x.qty, { min: 0.01, max: 100000, wajib: true, nama: `Jumlah baris ${i + 1}` });
     const harga = angka(x.harga, { min: 0, max: 1e10, wajib: true, bulat: true, nama: `Harga baris ${i + 1}` });
@@ -39,19 +55,22 @@ route("POST", "/api/penjualan", "semua", ({ body, user }) => tx(() => {
   const hp = teks(body.hp, { max: 30, nama: "No HP" });
   const catatan = teks(body.catatan, { max: 500, nama: "Catatan" });
 
-  const no = s.prefix + String(s.no_berikutnya).padStart(9, "0");
-  setSetting("no_berikutnya", s.no_berikutnya + 1);
+  const no = kiriman && kiriman.no ? nomorKiriman(kiriman.no) : nomorBerikutnya(s);
+  const jam = kiriman && kiriman.jam ? kiriman.jam : now.jam;
   const saleId = Number(run(`INSERT INTO sales(no, tgl, jam, user_id, kasir, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [no, tgl, now.jam, user.id, user.nama, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan]).lastInsertRowid);
+    [no, tgl, jam, user.id, user.nama, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan]).lastInsertRowid);
   for (const it of items) {
     run(`INSERT INTO sale_items(sale_id, product_id, kode, nama, kategori, harga, qty, hpp, ready) VALUES (?,?,?,?,?,?,?,?,?)`,
       [saleId, it.product_id, it.kode, it.nama, it.kategori, it.harga, it.qty, it.hpp, it.ready]);
     if (it.ready) ubahStok({ jenis: "produk", item: it.p, delta: -it.qty, tipe: "jual", tgl, ref: no, user });
   }
   antre("penjualan", items.map(it => { const bagian = subtotal ? it.harga * it.qty / subtotal : 0;
-    return [String(saleId), tgl, now.jam, no, it.kode, it.nama, it.kategori, it.harga, it.qty, Math.round(it.harga * it.qty), it.ready ? "READY STOK" : "PRODUKSI", pelanggan, hp, user.nama, metode, Math.round(diskon * bagian), Math.round(ongkir * bagian), Math.round(it.hpp * it.qty), catatan]; }));
+    return [String(saleId), tgl, jam, no, it.kode, it.nama, it.kategori, it.harga, it.qty, Math.round(it.harga * it.qty), it.ready ? "READY STOK" : "PRODUKSI", pelanggan, hp, user.nama, metode, Math.round(diskon * bagian), Math.round(ongkir * bagian), Math.round(it.hpp * it.qty), catatan]; }));
   return sembunyikanHpp(muatPenjualan("id = ?", [saleId])[0], user);
-}));
+}), { cabang: ({ hasil: x }) => ({ aksi: "jual", data: {
+  no: x.no, tgl: x.tgl, jam: x.jam, pelanggan: x.pelanggan, hp: x.hp, diskon: x.diskon, ongkir: x.ongkir, metode: x.metode, bayar: x.bayar, catatan: x.catatan,
+  items: x.items.map(i => ({ kode: i.kode, nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty, ready: i.ready })),
+} }) });
 
 /** Daftar transaksi. Karyawan hanya melihat transaksi hari ini (untuk cetak ulang struk). */
 route("GET", "/api/penjualan", "semua", ({ query, user }) => {
@@ -85,6 +104,6 @@ route("POST", "/api/penjualan/:id/batal", "admin", ({ params, body, user }) => t
   run("UPDATE sales SET batal_at = datetime('now'), batal_oleh = ?, batal_alasan = ? WHERE id = ?", [user.nama, alasan, s.id]);
   antre("batal", [[String(s.id), s.no, now.tgl, now.jam, user.nama, s.total]]);
   return { ok: true };
-}));
+}), { cabang: ({ params, body }) => ({ aksi: "batal", data: { no: one("SELECT no FROM sales WHERE id = ?", [+params.id]).no, alasan: body.alasan || "" } }) });
 
 export { muatPenjualan };

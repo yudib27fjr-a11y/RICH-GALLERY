@@ -1,6 +1,6 @@
 /* Mesin lokal: menjalankan seluruh API Rich Gallery di dalam aplikasi Android, tanpa server.
    Aturan bisnisnya sama persis dengan server (src/core), hanya database dan platformnya yang berbeda. */
-import { pasangDriver, migrasi, seedJikaKosong, jalankan, kirimOutbox, bersihkanSesiKadaluarsa } from "/src/core/semua.js";
+import { pasangDriver, migrasi, seedJikaKosong, jalankan, kirimOutbox, bersihkanSesiKadaluarsa, sinkronCabang } from "/src/core/semua.js";
 import { buatDriver } from "./driver.js";
 import { pasangPlatformLokal } from "./platform.js";
 
@@ -31,3 +31,9 @@ const kirim = () => { if (navigator.onLine) kirimOutbox().catch(() => {}); };
 setInterval(kirim, 60_000);
 window.addEventListener("online", kirim);
 setTimeout(kirim, 5000);
+// Mode cabang: kirim transaksi ke server pusat & ambil data terbaru tiap 30 detik, dan begitu internet kembali.
+const sinkron = () => { if (navigator.onLine) sinkronCabang().catch(() => {}); };
+setInterval(sinkron, 30_000);
+window.addEventListener("online", sinkron);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) sinkron(); });
+setTimeout(sinkron, 3000);

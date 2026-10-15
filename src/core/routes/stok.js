@@ -1,7 +1,11 @@
 import { route } from "../router.js";
-import { all, tx } from "../db.js";
+import { one, all, tx } from "../db.js";
 import { teks, angka, tanggal, pilihan, daftar, sekarang } from "../util.js";
 import { ambilItem, ubahStok, antre } from "../stok.js";
+
+const TABEL = { produk: "products", bahan: "materials" };
+/** Untuk perintah ke server pusat: id lokal diganti kode barang (id di server bisa berbeda). */
+const kodeDari = (jenis, id) => { const r = one(`SELECT kode FROM ${TABEL[jenis]} WHERE id = ?`, [+id]); return r ? r.kode : ""; };
 
 /* Barang masuk & keluar, untuk produk jadi maupun bahan baku. */
 route("POST", "/api/mutasi", "semua", ({ body, user }) => tx(() => {
@@ -17,7 +21,10 @@ route("POST", "/api/mutasi", "semua", ({ body, user }) => tx(() => {
   });
   antre(tipe, rows);
   return { ok: true, jumlah: rows.length };
-}));
+}), { cabang: ({ body }) => ({ aksi: "mutasi", data: {
+  tipe: body.tipe, jenis: body.jenis, tgl: body.tgl || sekarang().tgl, ket: body.ket || "",
+  items: body.items.map(x => ({ kode: kodeDari(body.jenis, x.id), qty: x.qty })),
+} }) });
 
 /* Riwayat buku stok. tipe bisa beberapa, dipisah koma: masuk,keluar,opname,koreksi,jual,batal,produksi */
 route("GET", "/api/riwayat-stok", "semua", ({ query }) => {
@@ -46,4 +53,6 @@ route("POST", "/api/opname", "semua", ({ body, user }) => tx(() => {
   });
   antre("opname", rows);
   return { ok: true, jumlah: rows.length };
-}));
+}), { cabang: ({ body }) => ({ aksi: "opname", data: {
+  jenis: body.jenis, ket: body.ket || "", items: body.items.map(x => ({ kode: kodeDari(body.jenis, x.id), fisik: x.fisik })),
+} }) });

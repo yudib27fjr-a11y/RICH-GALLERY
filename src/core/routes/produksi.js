@@ -20,18 +20,23 @@ route("POST", "/api/produksi", "semua", ({ body, user }) => tx(() => {
   if (!pembuat) throw bad("Pilih pembuat");
   if (sudahDibayar(pembuat.id, tgl)) throw bad(`Insentif ${pembuat.nama} untuk periode ini sudah dibayar. Pilih tanggal di periode berikutnya.`);
   const restock = body.restock ? 1 : 0;
-  const rows = daftar(body.items, { nama: "Daftar produk" }).map(x => {
+  const uid = body.uid ? teks(body.uid, { max: 80, nama: "uid" }) : null;
+  const rows = daftar(body.items, { nama: "Daftar produk" }).map((x, i) => {
     const p = ambilItem("produk", +x.product_id);
     const qty = angka(x.qty, { min: 0.01, max: 100000, wajib: true, nama: `Jumlah ${p.nama}` });
     const tarif = p.insentif ?? s.insentif;
-    run(`INSERT INTO produksi(tgl, product_id, kode, nama, qty, pembuat_id, tarif, restock, user_id, oleh) VALUES (?,?,?,?,?,?,?,?,?,?)`,
-      [tgl, p.id, p.kode, p.nama, qty, pembuat.id, tarif, restock, user.id, user.nama]);
+    run(`INSERT INTO produksi(tgl, product_id, kode, nama, qty, pembuat_id, tarif, restock, user_id, oleh, uid) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      [tgl, p.id, p.kode, p.nama, qty, pembuat.id, tarif, restock, user.id, user.nama, uid ? `${uid}:${i}` : null]);
     if (restock) ubahStok({ jenis: "produk", item: p, delta: qty, tipe: "produksi", tgl, ket: `Produksi ${pembuat.nama}`, user });
     return [tgl, p.kode, p.nama, qty, pembuat.nama, tarif, Math.round(qty * tarif), restock ? "RESTOCK" : "PESANAN", user.nama];
   });
   antre("produksi", rows);
   return { ok: true, jumlah: rows.length };
-}));
+}), { uid: true, cabang: ({ body }) => ({ aksi: "produksi", data: {
+  uid: body.uid, tgl: body.tgl || sekarang().tgl, restock: body.restock ? 1 : 0,
+  pembuat: (one("SELECT nama FROM users WHERE id = ?", [+body.pembuat_id]) || {}).nama || "",
+  items: body.items.map(x => ({ kode: (one("SELECT kode FROM products WHERE id = ?", [+x.product_id]) || {}).kode || "", qty: x.qty })),
+} }) });
 
 /** Catatan produksi dalam rentang tanggal. Karyawan hanya melihat miliknya atau yang ia catat. */
 route("GET", "/api/produksi", "semua", ({ query, user }) => {
@@ -56,7 +61,13 @@ route("DELETE", "/api/produksi/:id", "semua", ({ params, user }) => tx(() => {
   const pembuat = one("SELECT nama FROM users WHERE id = ?", [r.pembuat_id]);
   antre("hapus_produksi", [[r.tgl, r.kode, r.nama, r.qty, pembuat?.nama || "", sekarang().tgl, user.nama]]);
   return { ok: true };
-}));
+}), {
+  pra: ({ params }) => one("SELECT uid FROM produksi WHERE id = ?", [+params.id]),
+  cabang: ({ pra }) => {
+    if (!pra || !pra.uid) throw new HttpError(409, "Catatan ini dibuat sebelum perangkat tersambung ke server pusat. Hapus catatan ini dari server pusat.");
+    return { aksi: "hapus_produksi", data: { uid: pra.uid } };
+  },
+});
 
 /** Rekap insentif satu periode (tanggal apa pun di dalam periode). */
 export function rekapInsentif(tglDalam, hanyaUser = null){

@@ -7,7 +7,7 @@
   "engines": { "node": ">=22.13" },
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning server.js",
-    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js && RG_DRIVER_UJI=android node --disable-warning=ExperimentalWarning --test test/api.test.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js && RG_DRIVER_UJI=android node --disable-warning=ExperimentalWarning --test test/*.test.js",
     "backup": "node --disable-warning=ExperimentalWarning scripts/backup.js",
     "reset-admin": "node --disable-warning=ExperimentalWarning scripts/reset-admin.js"
   }

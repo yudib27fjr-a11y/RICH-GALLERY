@@ -1,10 +1,13 @@
 import { all, one, run, getSettings, setSetting } from "./db.js";
 import { platform } from "./platform.js";
+import { cabangAktif } from "./cabang-perangkat.js";
 
 /* Kirim antrean (outbox) ke Google Apps Script → tab "APP …" di sheet PEMBUKUAN RG 2026.
    Di server berjalan tiap menit; di aplikasi Android berjalan tiap menit selama aplikasi terbuka dan ada internet. */
 let jalan = false;
 export async function kirimOutbox({ paksa = false } = {}){
+  // Perangkat cabang tidak mengirim ke sheet sendiri: server pusat yang mengirim, supaya baris tidak dobel.
+  if (cabangAktif()) { run("UPDATE outbox SET terkirim = datetime('now') WHERE terkirim IS NULL"); return { terkirim: 0, alasan: "dikirim lewat server pusat" }; }
   const url = String(getSettings().sync_url || "").trim();
   if (!url || jalan) return { terkirim: 0, alasan: !url ? "URL Apps Script belum diisi" : "sedang mengirim" };
   jalan = true; let total = 0;

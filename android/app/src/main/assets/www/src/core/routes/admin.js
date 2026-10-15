@@ -6,7 +6,7 @@ import { kirimOutbox, statusSync, tarikSheet } from "../sync.js";
 import { KATEGORI, KAT_BAHAN, KAT_PENGELUARAN, barcodeDefault, tebakKategori } from "../../../public/shared.js";
 
 /* ---- Pengaturan toko ---- */
-route("GET", "/api/pengaturan", "admin", () => { const s = getSettings(); return { ...s, sync: statusSync() }; });
+route("GET", "/api/pengaturan", "admin", () => { const { cabang_token, ...s } = getSettings(); return { ...s, sync: statusSync() }; });
 
 route("PUT", "/api/pengaturan", "admin", ({ body }) => tx(() => {
   const s = getSettings(), b = body;

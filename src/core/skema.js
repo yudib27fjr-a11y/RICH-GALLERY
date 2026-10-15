@@ -169,6 +169,44 @@ CREATE TABLE outbox(
   galat TEXT
 );
 CREATE INDEX outbox_pending ON outbox(id) WHERE terkirim IS NULL;`,
+
+/* 2: sinkron perangkat cabang (offline) ke server pusat. */
+`ALTER TABLE produksi ADD COLUMN uid TEXT;
+CREATE UNIQUE INDEX produksi_uid ON produksi(uid) WHERE uid IS NOT NULL;
+ALTER TABLE expenses ADD COLUMN uid TEXT;
+CREATE UNIQUE INDEX expenses_uid ON expenses(uid) WHERE uid IS NOT NULL;
+CREATE TABLE cabang_kirim(
+  id INTEGER PRIMARY KEY,
+  uid TEXT NOT NULL UNIQUE,
+  aksi TEXT NOT NULL,
+  data TEXT NOT NULL,
+  waktu TEXT NOT NULL,
+  oleh TEXT NOT NULL DEFAULT '',
+  dibuat TEXT NOT NULL DEFAULT (datetime('now')),
+  terkirim TEXT,
+  hasil TEXT,
+  percobaan INTEGER NOT NULL DEFAULT 0,
+  galat TEXT
+);
+CREATE INDEX cabang_kirim_pending ON cabang_kirim(id) WHERE terkirim IS NULL;
+CREATE TABLE cabang_terima(
+  uid TEXT PRIMARY KEY,
+  perangkat_id INTEGER,
+  aksi TEXT NOT NULL,
+  status TEXT NOT NULL,
+  pesan TEXT,
+  diterima TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE perangkat(
+  id INTEGER PRIMARY KEY,
+  kode TEXT NOT NULL UNIQUE,
+  nama TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  admin_id INTEGER,
+  dibuat TEXT NOT NULL DEFAULT (datetime('now')),
+  terakhir TEXT,
+  dicabut TEXT
+);`,
 ];
 
 export const DEFAULT_SETTINGS = {
@@ -183,4 +221,9 @@ export const DEFAULT_SETTINGS = {
   periode_mulai: 15,
   sync_url: "",
   sheet_id: "1dCUGkIgl0kzF4CaA-tlQxIspoWqUJ9Go5zV86148AwQ",
+  // Diisi saat perangkat ini disambungkan ke server pusat (mode cabang).
+  cabang_url: "",
+  cabang_token: "",
+  cabang_kode: "",
+  cabang_nama: "",
 };

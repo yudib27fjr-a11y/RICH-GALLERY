@@ -7,8 +7,16 @@ export class HttpError extends Error {
 export const bad = msg => new HttpError(400, msg);
 export const notFound = (msg = "Data tidak ditemukan") => new HttpError(404, msg);
 
+/* Saat menerima transaksi dari perangkat cabang, "sekarang" diganti waktu asli transaksi itu. */
+let waktuPaksa = null;
+export function denganWaktu(w, fn){
+  const lama = waktuPaksa; waktuPaksa = w;
+  try { return fn(); } finally { waktuPaksa = lama; }
+}
+
 /** Tanggal & jam sekarang di zona waktu toko. */
 export function sekarang(){
+  if (waktuPaksa) return { tgl: waktuPaksa.tgl, jam: waktuPaksa.jam };
   const f = new Intl.DateTimeFormat("en-CA", { timeZone: platform.zona, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
   const p = Object.fromEntries(f.formatToParts(new Date()).map(x => [x.type, x.value]));
   return { tgl: `${p.year}-${p.month}-${p.day}`, jam: `${p.hour}:${p.minute}` };

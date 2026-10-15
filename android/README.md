@@ -79,7 +79,23 @@ Pemeriksaan manual: **Pengaturan → Mode aplikasi → Periksa pembaruan sekaran
 
 Website di VPS: setelah file server diperbarui dan layanan dimulai ulang, semua perangkat langsung memakai versi baru saat halaman dimuat ulang.
 
-## 6. Pindah ke online (server VPS)
+## 6. Sinkron otomatis ke server pusat (disarankan)
+
+iMin tetap bekerja **offline** (cepat, tidak tergantung internet), dan setiap transaksi otomatis terkirim ke server pusat begitu server bisa dihubungi.
+
+1. Pindahkan data iMin ke server sekali: di iMin **Pengaturan → Simpan cadangan database sekarang**, lalu di server **Pengaturan → Pilih file cadangan (.db)**.
+2. Di iMin: **Pengaturan → Server pusat (sinkron otomatis)**. Isi alamat server, nama dan password **admin server**, lalu **Sambungkan**.
+3. Selesai. Penjualan, pembatalan, barang masuk/keluar, opname, produksi, dan pengeluaran dikirim otomatis tiap 30 detik (dan begitu internet kembali). Lampu di samping nama: hijau = semua terkirim, oranye = ada yang menunggu.
+
+Aturannya:
+- Nomor nota iMin memakai seri sendiri, misalnya `RG/SC/A-001190`, supaya tidak bentrok dengan perangkat lain.
+- Setiap transaksi punya kode unik. Kiriman ulang tidak pernah tercatat dobel di server.
+- Harga, produk, stok, akun/PIN karyawan, dan pengaturan toko **diubah di server**, lalu masuk ke iMin saat sinkron. Di iMin, menu ubah produk/akun menampilkan pesan untuk mengubahnya di server.
+- Server mati atau internet putus: kasir tetap bisa jual. Transaksi menunggu dan terkirim otomatis nanti.
+- Server pusat yang mengirim ke Google Sheet, sehingga baris di sheet tidak dobel.
+- Daftar perangkat yang tersambung ada di server: **Pengaturan → Perangkat cabang** (bisa dicabut).
+
+## 7. Pindah ke online (server VPS)
 
 1. Pasang server mengikuti `README.md` utama (bagian 3), lalu buat admin di website.
 2. Di aplikasi: **Pengaturan → Simpan cadangan database sekarang**.
@@ -91,7 +107,7 @@ Data offline di HP **tidak dihapus**. Tombol **Kembali ke mode offline** ada di 
 
 ---
 
-## 7. Bila ada masalah
+## 8. Bila ada masalah
 
 | Gejala | Yang dicoba |
 |---|---|
@@ -101,7 +117,7 @@ Data offline di HP **tidak dihapus**. Tombol **Kembali ke mode offline** ada di 
 | Titik oranye di samping nama | Ada data yang belum terkirim ke Google Sheet; lihat pesan galat di Pengaturan → Sinkron |
 | Lupa password admin (offline) | Pulihkan cadangan yang password-nya masih diingat. Tidak ada reset jarak jauh karena data hanya ada di HP |
 
-## 8. Untuk pengembang
+## 9. Untuk pengembang
 
 ```
 android/

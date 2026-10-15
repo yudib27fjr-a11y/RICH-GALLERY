@@ -3,7 +3,7 @@ import { config } from "./config.js";
 import { bukaDb, tutupDb } from "./driver.js";
 import { pasangPlatformNode } from "./platform.js";
 import { handle } from "./http.js";
-import { migrasi, seedJikaKosong, kirimOutbox, bersihkanSesiKadaluarsa } from "../core/semua.js";
+import { migrasi, seedJikaKosong, kirimOutbox, bersihkanSesiKadaluarsa, sinkronCabang } from "../core/semua.js";
 
 pasangPlatformNode();
 bukaDb();
@@ -20,10 +20,12 @@ server.listen(config.port, config.host, () => {
 // Kirim antrean ke Google Sheet secara berkala, dan bersihkan sesi kedaluwarsa tiap jam.
 const syncTimer = setInterval(() => kirimOutbox().catch(e => console.error("sync:", e.message)), config.syncIntervalSec * 1000);
 const sesiTimer = setInterval(bersihkanSesiKadaluarsa, 3600_000);
+// Bila server ini disambungkan sebagai cabang dari server lain: kirim transaksi & ambil data terbaru tiap 30 detik.
+const cabangTimer = setInterval(() => sinkronCabang().catch(e => console.error("cabang:", e.message)), 30_000);
 
 function berhenti(){
   console.log("Menutup server…");
-  clearInterval(syncTimer); clearInterval(sesiTimer);
+  clearInterval(syncTimer); clearInterval(sesiTimer); clearInterval(cabangTimer);
   server.close(() => { tutupDb(); process.exit(0); });
   setTimeout(() => process.exit(0), 5000).unref();
 }

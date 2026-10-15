@@ -393,9 +393,19 @@ function shell(){
     <nav class="tabs" id="tabs"></nav>
     <main id="main"></main></div>`;
   $("#keluar").onclick = async () => { await api("POST", "/api/logout").catch(() => {}); resetCart(); tampilLogin(); };
-  if (isAdmin()) cekSync();
+  if (isAdmin()) { cekSync(); clearInterval(window.__rgCekSync); window.__rgCekSync = setInterval(cekSync, 30_000); }
 }
 async function cekSync(){
+  try {
+    if (LOKAL) { // perangkat cabang: lampu menunjukkan kiriman ke server pusat
+      const c = await api("GET", "/api/cabang"); const d = $("#syncDot");
+      if (d && c.aktif) {
+        d.className = "sync-dot " + (c.menunggu ? "pending" : "ok");
+        d.title = c.menunggu ? `${c.menunggu} transaksi menunggu dikirim ke server pusat${c.galatTerakhir ? " · " + c.galatTerakhir : ""}` : "Semua transaksi sudah terkirim ke server pusat";
+        return;
+      }
+    }
+  } catch {}
   try { const s = await api("GET", "/api/sync"); const d = $("#syncDot"); if (!d) return;
     d.className = "sync-dot " + (!s.aktif ? "" : s.galat && s.menunggu ? "pending" : s.menunggu ? "pending" : "ok");
     d.title = !s.aktif ? "Sinkron Google Sheet belum diatur" : s.menunggu ? `${s.menunggu} baris menunggu dikirim${s.galat ? " · galat: " + s.galat : ""}` : "Semua data sudah terkirim ke Google Sheet"; } catch {}
@@ -1010,6 +1020,7 @@ function vAtur(){
       </section>
       ${isAdmin() ? `<section class="panel stack" id="aToko"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aUser"><div class="empty">Memuat…</div></section>
+      <section class="panel stack" id="aCabang"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aSync"><div class="empty">Memuat…</div></section>
       <section class="panel stack"><h3 style="font-size:17px">Cadangan &amp; impor</h3>
         <p class="small muted" style="margin:0">${LOKAL ? "Aplikasi menyimpan cadangan otomatis setiap hari di folder Download/RichGallery (7 hari terakhir)." : "Server juga membuat cadangan otomatis setiap hari (lihat panduan pemasangan)."}</p>
@@ -1030,7 +1041,7 @@ function vAtur(){
   $("#pTest").onclick = () => cetak({ no: B.toko.prefix + "UJI", tgl: today(), jam: "00:00", kasir: B.me.nama, pelanggan: "UJI CETAK", hp: "", items: [{ nama: "BUKET BUNGA 100K", harga: 100000, qty: 1 }, { nama: "COKLAT SILVERQUEEN", harga: 15000, qty: 2 }], subtotal: 130000, diskon: 0, ongkir: 0, total: 130000, metode: "Tunai", bayar: 150000, catatan: "" });
   $("#pwSave").onclick = e => coba(async () => { await api("POST", "/api/akun/password", { lama: $("#pwL").value, baru: $("#pwB").value }); $("#pwL").value = $("#pwB").value = ""; toast("Password diganti"); }, e.target);
   if (!isAdmin()) return;
-  aturToko(); aturUser(); aturSync();
+  aturToko(); aturUser(); aturSync(); aturCabang();
   if ($("#bkDb")) $("#bkDb").onclick = e => coba(async () => { const r = await api("GET", "/api/cadangan"); toast(`Cadangan tersimpan di ${r.disimpan}`); }, e.target);
   $("#rsFile").onchange = e => { const f = e.target.files[0]; if (!f) return; e.target.value = "";
     const r = new FileReader();
@@ -1100,6 +1111,7 @@ function formUser(u){
 async function aturSync(){
   const s = await coba(() => api("GET", "/api/pengaturan")); if (!s || view !== "atur") return;
   const st = s.sync;
+  if (LOKAL && s.cabang_url) { $("#aSync").innerHTML = `<h3 style="font-size:17px">Sinkron ke Google Sheet</h3><p class="small muted" style="margin:0">Perangkat ini tersambung ke server pusat. Server pusat yang mengirim semua transaksi ke Google Sheet.</p>`; return; }
   $("#aSync").innerHTML = `<h3 style="font-size:17px">Sinkron ke Google Sheet</h3>
     <p class="small muted" style="margin:0">${LOKAL ? "Aplikasi" : "Server"} mengirim setiap transaksi, mutasi, opname, produksi, insentif dan pengeluaran ke tab <b>APP …</b> di sheet PEMBUKUAN RG 2026${LOKAL ? " setiap kali HP terhubung internet" : ""}. Tab lama tidak diubah.</p>
     <label class="f">URL Web App Apps Script<input type="url" id="sU" value="${esc(s.sync_url)}" placeholder="https://script.google.com/macros/s/…/exec"></label>
@@ -1119,6 +1131,60 @@ async function aturSync(){
     await muatUlang(); toast(`${jenis === "produk" ? "Produk" : "Bahan"}: ${r.baru} baru, ${r.diperbarui} diperbarui`);
   }, e.target);
   $("#pullP").onclick = tarik("produk"); $("#pullB").onclick = tarik("bahan");
+}
+
+/* ---------- Server pusat: perangkat offline (iMin) mengirim transaksinya ke server saat bisa dihubungi ---------- */
+const waktuLokal = iso => iso ? new Date(iso).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }) : "-";
+async function aturCabang(){
+  const el = $("#aCabang"); if (!el) return;
+  if (!LOKAL) { // di server: daftar perangkat yang tersambung
+    const d = await coba(() => api("GET", "/api/cabang/perangkat")); if (!d || view !== "atur") return;
+    el.innerHTML = `<h3 style="font-size:17px">Perangkat cabang</h3>
+      <p class="small muted" style="margin:0">Perangkat kasir (mis. iMin) yang bekerja offline dan mengirim transaksinya ke server ini. Sambungkan dari Pengaturan di perangkat itu.</p>
+      ${d.length ? d.map(x => `<div class="row" style="border:1px solid var(--line);border-radius:9px;padding:8px 10px;background:var(--surface);align-items:center">
+        <div style="flex:1;min-width:0"><b>${esc(x.kode)} · ${esc(x.nama)}</b>${x.dicabut ? ` <span class="pill mut">dicabut</span>` : ""}
+          <div class="small muted">Terakhir: ${x.terakhir ? waktuLokal(x.terakhir.replace(" ", "T") + "Z") : "belum pernah"} · ${x.diterima} transaksi diterima${x.ditolak ? ` · <span style="color:var(--bad)">${x.ditolak} ditolak</span>` : ""}</div></div>
+        ${x.dicabut ? "" : `<button class="btn sm danger" data-cabut="${x.id}" type="button">Cabut</button>`}</div>`).join("")
+        : `<div class="empty">Belum ada perangkat yang tersambung.</div>`}`;
+    el.querySelectorAll("[data-cabut]").forEach(b => b.onclick = () => konfirmasi("Cabut perangkat ini?", "Perangkat tidak bisa mengirim transaksi lagi sampai disambungkan ulang. Data yang sudah diterima tetap ada.", "Cabut", async () => { await api("DELETE", `/api/cabang/perangkat/${b.dataset.cabut}`); toast("Perangkat dicabut"); aturCabang(); }));
+    return;
+  }
+  const st = await coba(() => api("GET", "/api/cabang")); if (!st || view !== "atur") return;
+  if (!st.aktif) {
+    el.innerHTML = `<h3 style="font-size:17px">Server pusat (sinkron otomatis)</h3>
+      <p class="small muted" style="margin:0">Perangkat ini tetap bekerja offline. Begitu server pusat bisa dihubungi, transaksi otomatis terkirim ke sana, dan harga, produk, stok serta akun dari server masuk ke sini.</p>
+      <p class="note" style="margin:0"><b>Sebelum menyambung:</b> pindahkan dulu data perangkat ini ke server (Simpan cadangan di sini, lalu pulihkan di server). Setelah tersambung, produk, akun dan pengaturan toko diubah di server saja.</p>
+      <label class="f">Alamat server<input type="url" id="cbUrl" placeholder="https://macbook-pro-yudi.tailae4382.ts.net" autocomplete="off"></label>
+      <label class="f">Nama admin di server<input type="text" id="cbNama" value="${esc(B.me.nama)}" autocomplete="off"></label>
+      <label class="f">Password admin di server<input type="password" id="cbPw" autocomplete="off"></label>
+      <label class="f">Nama perangkat ini<input type="text" id="cbAlat" value="iMin kasir" maxlength="40"></label>
+      <button class="btn pri" id="cbGo" type="button">Sambungkan ke server pusat</button>`;
+    const sambung = paksa => e => coba(async () => {
+      toast("Menghubungi server…");
+      try {
+        await api("POST", "/api/cabang/sambung", { url: $("#cbUrl").value.trim(), nama: $("#cbNama").value.trim(), password: $("#cbPw").value, perangkat: $("#cbAlat").value.trim(), paksa });
+      } catch (err) {
+        if (err.status === 409 && !paksa && /belum ada di server/.test(err.message)) {
+          return konfirmasi("Data belum sama dengan server", err.message, "Sambungkan paksa", () => sambung(true)({ target: null }));
+        }
+        throw err;
+      }
+      await muatUlang(); toast("Tersambung ke server pusat"); aturCabang(); cekSync();
+    }, e && e.target);
+    $("#cbGo").onclick = sambung(false);
+    return;
+  }
+  const masalah = st.galatTerakhir && st.menunggu;
+  el.innerHTML = `<h3 style="font-size:17px">Server pusat (sinkron otomatis)</h3>
+    <p class="small" style="margin:0">Tersambung ke <b>${esc(st.url)}</b> sebagai perangkat <b>${esc(st.kode)} · ${esc(st.nama)}</b>. Nomor nota perangkat ini: <b>${esc(B.toko.prefix)}${esc(st.kode)}-…</b></p>
+    <p class="small" style="margin:0;${masalah ? "color:var(--bad)" : ""}">${st.menunggu ? `<b>${st.menunggu} transaksi menunggu dikirim.</b>` : "Semua transaksi sudah terkirim."} Terakhir sinkron: ${waktuLokal(st.terakhir)}${st.galatTerakhir ? `<br>${esc(st.galatTerakhir)}` : ""}</p>
+    ${st.ditolak ? `<p class="small" style="margin:0;color:var(--bad)">${st.ditolak} transaksi ditolak server (7 hari terakhir):<br>${st.ditolakDaftar.map(x => `${esc(x.aksi)}: ${esc(x.galat || "")}`).join("<br>")}</p>` : ""}
+    <p class="small muted" style="margin:0">Sinkron berjalan otomatis tiap 30 detik selama aplikasi terbuka dan ada internet. Produk, akun dan pengaturan toko diubah di server pusat.</p>
+    <div class="row"><button class="btn pri" id="cbSync" type="button">Sinkron sekarang</button><button class="btn" id="cbPutus" type="button">Putuskan</button></div>`;
+  $("#cbSync").onclick = e => coba(async () => { const r = await api("POST", "/api/cabang/sinkron"); await muatUlang(); toast(r.galatTerakhir ? "Belum terkirim: " + r.galatTerakhir : r.menunggu ? `${r.menunggu} masih menunggu` : "Sinkron selesai"); aturCabang(); cekSync(); }, e.target);
+  $("#cbPutus").onclick = () => konfirmasi("Putuskan dari server pusat?", st.menunggu ? `Masih ada ${st.menunggu} transaksi yang belum terkirim. Bila diputuskan sekarang, transaksi itu TIDAK akan dikirim.` : "Perangkat kembali bekerja sendiri. Data yang sudah terkirim tetap ada di server.", "Putuskan", async () => {
+    await api("POST", "/api/cabang/putus", { paksa: !!st.menunggu }); toast("Diputuskan dari server pusat"); aturCabang(); cekSync();
+  });
 }
 
 /* ---------- Pembaruan otomatis (aplikasi Android) ----------
