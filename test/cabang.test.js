@@ -401,6 +401,35 @@ test("absen PIN + selfie: hanya perangkat yang diizinkan & di lokasi toko", asyn
   assert.equal((await cabang("GET", "/api/absen/kiosk")).data.boleh, false);
 });
 
+test("barang custom dengan pembuat otomatis masuk produksi & insentif (cabang → pusat), batal → hilang", async () => {
+  await segarkan();
+  const hari = BC.hariIni;
+  const savira = BC.staf.find(s => s.nama === "SAVIRA");
+  const p = BC.produk.find(x => x.kode === "RG010");
+  const j = await cabang("POST", "/api/penjualan", { items: [
+    { nama: "buket custom pink", harga: 175000, qty: 1, pembuat_id: savira.id },
+    { product_id: p.id, harga: p.harga, qty: 2, ready: false, pembuat_id: savira.id },
+    { nama: "kartu ucapan", harga: 5000, qty: 1 },
+  ] });
+  assert.equal(j.status, 200, JSON.stringify(j.data));
+  assert.equal(j.data.items[0].pembuat, "SAVIRA");
+  const prodC = (await cabang("GET", `/api/produksi?dari=${hari}&sampai=${hari}`)).data.filter(x => x.pembuat === "SAVIRA");
+  assert.deepEqual(prodC.map(x => `${x.nama}:${x.qty}`).sort(), ["BUKET CUSTOM PINK:1", `${p.nama}:2`].sort(), "tercatat di produksi cabang");
+  await sinkron();
+  const prodP = (await pusat("GET", `/api/produksi?dari=${hari}&sampai=${hari}`)).data.filter(x => x.pembuat === "SAVIRA");
+  assert.equal(prodP.length, 2, "ikut tercatat di pusat");
+  const ins = (await pusat("GET", `/api/insentif?tgl=${hari}`)).data.rows.find(r => r.nama === "SAVIRA");
+  assert.equal(ins.qty, 3, "masuk hitungan insentif");
+  // Sinkron ulang tidak menggandakan
+  await sinkron(); await sinkron();
+  assert.equal((await cabang("GET", `/api/produksi?dari=${hari}&sampai=${hari}`)).data.filter(x => x.pembuat === "SAVIRA").length, 2);
+  // Batal → catatan produksi otomatis hilang di kedua sisi
+  assert.equal((await cabang("POST", `/api/penjualan/${j.data.id}/batal`, { alasan: "uji" })).status, 200);
+  await sinkron();
+  assert.equal((await cabang("GET", `/api/produksi?dari=${hari}&sampai=${hari}`)).data.filter(x => x.pembuat === "SAVIRA").length, 0);
+  assert.equal((await pusat("GET", `/api/produksi?dari=${hari}&sampai=${hari}`)).data.filter(x => x.pembuat === "SAVIRA").length, 0);
+});
+
 test("server mati: transaksi menunggu, lalu terkirim saat server hidup lagi", async () => {
   const pusatProc = procs[0];
   pusatProc.kill(); await new Promise(r => pusatProc.on("exit", r));

@@ -260,7 +260,8 @@ function lihatStruk(s, setelahBatal){
         cart = { ...cartKosong(), pelanggan: s.pelanggan === "CUSTOMER" ? "" : s.pelanggan, hp: s.hp || "", diskon: s.diskon || 0, ongkir: s.ongkir || 0, metode: s.metode, catatan: s.catatan || "", tgl: s.tgl !== today() ? s.tgl : "",
           kartuOn: !!s.kartu, kartu: s.kartu || "", pesanan: !!s.ambil_tgl, ambil_tgl: s.ambil_tgl || "", ambil_jam: s.ambil_jam || "", ambil_cara: s.ambil_cara || "ambil", request: s.request || "", bayar: s.bayar < s.total ? s.bayar : 0, bayarMode: s.bayar < s.total ? "dp" : "lunas",
           items: s.items.map(i => { const p = i.kode ? B.produk.find(x => x.kode === i.kode) : null;
-            return { product_id: p ? p.id : null, kode: p ? p.kode : "", nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty, ready: p ? !!i.ready : false }; }) };
+            const pb = i.pembuat ? B.staf.find(u => u.nama === i.pembuat) : null;
+            return { product_id: p ? p.id : null, kode: p ? p.kode : "", nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty, ready: p ? !!i.ready : false, pembuat_id: pb ? pb.id : null }; }) };
         saveCart(); toast("Perbaiki isi keranjang, lalu simpan lagi"); pindah("kasir");
       }), false);
       const vb = $("#voidBtn", m);
@@ -768,6 +769,7 @@ function drawCart(){
           <input type="number" class="price-in pIn num" value="${it.harga}" min="0" step="500" inputmode="numeric" aria-label="Harga satuan">
           ${it.product_id ? `<button type="button" class="pill ${it.ready ? "ok" : "mut"}" data-a="r" style="border:0;cursor:pointer" title="Ketuk untuk mengganti: ambil dari stok ready atau dibuat (produksi)">${it.ready ? "READY STOK" : "PRODUKSI"}</button>` : `<span class="pill mut">PRODUKSI</span>`}
           <button type="button" class="btn ghost sm" data-a="x" style="margin-left:auto">Hapus</button>
+          ${!it.ready ? `<label class="pembuat-baris"><span class="small muted">Dibuat oleh</span><select class="pbIn" aria-label="Pembuat"><option value="">— pilih pembuat (insentif) —</option>${B.staf.map(u => `<option value="${u.id}" ${+it.pembuat_id === u.id ? "selected" : ""}>${esc(u.nama)}</option>`).join("")}</select></label>` : ""}
         </div>
       </div>`).join("") : `<div class="empty">Belum ada barang.<br>Ketuk produk di katalog atau scan barcode.</div>`}</div>
     <label class="row pesanan-cek"><input type="checkbox" id="cPes" ${cart.pesanan ? "checked" : ""}> <b>Pesanan</b> <span class="small muted">— diambil / diantar nanti, dengan catatan khusus</span></label>
@@ -838,6 +840,7 @@ function drawCart(){
     });
     $(".qIn", row).onchange = e => { it.qty = num(e.target.value); if (!it.qty) cart.items.splice(i, 1); saveCart(); drawCart(); };
     $(".pIn", row).onchange = e => { it.harga = num(e.target.value); saveCart(); drawCart(); };
+    const pb = $(".pbIn", row); if (pb) pb.onchange = e => { it.pembuat_id = +e.target.value || null; saveCart(); };
   });
   const clr = $("#clr", el); if (clr) clr.onclick = () => konfirmasi("Kosongkan keranjang?", "Semua barang di keranjang akan dihapus.", "Kosongkan", () => { resetCart(); drawCart(); });
   $("#cclose", el).onclick = () => el.classList.remove("open");
@@ -1155,7 +1158,7 @@ async function simpanTransaksi(print, tombol){
       bayar: cart.bayarMode === "dp50" || cart.bayarMode === "dp" ? nilaiBayar() : (cart.bayar || undefined), diskon: cart.diskon || 0, ongkir: cart.ongkir || 0, catatan: cart.catatan,
       kartu: cart.kartuOn ? (cart.kartu || "") : "",
       pesanan: cart.pesanan ? { tgl: cart.ambil_tgl || today(), jam: cart.ambil_jam || "", cara: cart.ambil_cara || "ambil", request: cart.request || "" } : undefined,
-      items: cart.items.map(i => ({ product_id: i.product_id, nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty, ready: i.ready })),
+      items: cart.items.map(i => ({ product_id: i.product_id, nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty, ready: i.ready, pembuat_id: !i.ready && i.pembuat_id ? i.pembuat_id : undefined })),
     });
     saleTerakhir = s; resetCart(); daftarPel = null;
     $("#cart")?.classList.remove("open");

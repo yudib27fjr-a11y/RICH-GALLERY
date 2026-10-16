@@ -168,8 +168,8 @@ export function terapkanSnapshot(snap){
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?,?,?,?)`, [x.no, x.tgl, x.jam, x.kasir, x.pelanggan, x.hp || "", x.subtotal, x.diskon || 0, x.ongkir || 0, x.total, x.metode, x.catatan || "", x.batal_at, x.batal_oleh, x.batal_alasan, ...pes]).lastInsertRowid);
       for (const it of Array.isArray(x.items) ? x.items : []) {
         const p = it.kode ? one("SELECT id FROM products WHERE kode = ? AND dihapus IS NULL", [it.kode]) : null;
-        run("INSERT INTO sale_items(sale_id, product_id, kode, nama, kategori, harga, qty, hpp, ready) VALUES (?,?,?,?,?,?,?,?,?)",
-          [id, p ? p.id : null, it.kode || "", it.nama, it.kategori, it.harga, it.qty, it.hpp || 0, it.ready || 0]);
+        run("INSERT INTO sale_items(sale_id, product_id, kode, nama, kategori, harga, qty, hpp, ready, pembuat) VALUES (?,?,?,?,?,?,?,?,?,?)",
+          [id, p ? p.id : null, it.kode || "", it.nama, it.kategori, it.harga, it.qty, it.hpp || 0, it.ready || 0, it.pembuat || null]);
       }
     }
     // Transaksi yang dihapus di server (salah input / uji coba) ikut dihapus di sini. Hanya dalam rentang yang dikirim server,

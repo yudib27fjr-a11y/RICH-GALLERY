@@ -3,7 +3,16 @@ import { one, all, run, tx, getSettings, setSetting } from "../db.js";
 import { HttpError, bad, notFound, teks, angka, tanggal, pilihan, daftar, sekarang } from "../util.js";
 import { ambilItem, ubahStok, antre } from "../stok.js";
 import { cabangAktif } from "../cabang-perangkat.js";
-import { KATEGORI, METODE, tebakKategori } from "../../../public/shared.js";
+import { KATEGORI, METODE, tebakKategori, periodeDari } from "../../../public/shared.js";
+
+/** Pembuat barang (karyawan aktif): dari id (perangkat ini) atau nama (kiriman perangkat lain). */
+function cariPembuat(x){
+  if (x.pembuat_id) return one("SELECT id, nama FROM users WHERE id = ? AND aktif = 1", [+x.pembuat_id]);
+  if (x.pembuat) return one("SELECT id, nama FROM users WHERE nama_key = ? AND aktif = 1", [String(x.pembuat).trim().toLowerCase()]);
+  return null;
+}
+/** Hapus catatan produksi otomatis dari transaksi ini (dibatalkan / dihapus). */
+const hapusProduksiJual = no => run("DELETE FROM produksi WHERE uid LIKE ?", [`jual:${no}:%`]);
 
 function muatPenjualan(where, params, limit = 500){
   const sales = all(`SELECT * FROM sales WHERE ${where} ORDER BY id DESC LIMIT ${limit}`, params);
@@ -39,11 +48,11 @@ route("POST", "/api/penjualan", "semua", ({ body, user, ctx }) => tx(() => {
     const harga = angka(x.harga, { min: 0, max: 1e10, wajib: true, bulat: true, nama: `Harga baris ${i + 1}` });
     if (x.product_id) {
       const p = ambilItem("produk", +x.product_id);
-      return { p, product_id: p.id, kode: p.kode, nama: p.nama, kategori: p.kategori, harga, qty, hpp: p.hpp, ready: x.ready ? 1 : 0 };
+      return { p, product_id: p.id, kode: p.kode, nama: p.nama, kategori: p.kategori, harga, qty, hpp: p.hpp, ready: x.ready ? 1 : 0, pembuat: x.ready ? null : cariPembuat(x) };
     }
     const nama = teks(x.nama, { wajib: true, max: 120, upper: true, nama: `Nama barang baris ${i + 1}` });
     const kategori = x.kategori && KATEGORI.includes(x.kategori) ? x.kategori : tebakKategori(nama);
-    return { p: null, product_id: null, kode: "", nama, kategori, harga, qty, hpp: Math.round(harga * s.hpp_persen / 100), ready: 0 };
+    return { p: null, product_id: null, kode: "", nama, kategori, harga, qty, hpp: Math.round(harga * s.hpp_persen / 100), ready: 0, pembuat: cariPembuat(x) };
   });
   const subtotal = Math.round(items.reduce((a, i) => a + i.harga * i.qty, 0));
   const diskon = angka(body.diskon, { min: 0, max: subtotal, bulat: true, nama: "Diskon" }) ?? 0;
@@ -68,18 +77,29 @@ route("POST", "/api/penjualan", "semua", ({ body, user, ctx }) => tx(() => {
   const jam = kiriman && kiriman.jam ? kiriman.jam : now.jam;
   const saleId = Number(run(`INSERT INTO sales(no, tgl, jam, user_id, kasir, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan, kartu, ambil_tgl, ambil_jam, ambil_cara, request) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [no, tgl, jam, user.id, user.nama, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan, kartu, pesanan?.tgl ?? null, pesanan?.jam ?? null, pesanan?.cara ?? null, pesanan?.request ?? null]).lastInsertRowid);
-  for (const it of items) {
-    run(`INSERT INTO sale_items(sale_id, product_id, kode, nama, kategori, harga, qty, hpp, ready) VALUES (?,?,?,?,?,?,?,?,?)`,
-      [saleId, it.product_id, it.kode, it.nama, it.kategori, it.harga, it.qty, it.hpp, it.ready]);
+  const prodRows = [];
+  items.forEach((it, idx) => {
+    run(`INSERT INTO sale_items(sale_id, product_id, kode, nama, kategori, harga, qty, hpp, ready, pembuat) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [saleId, it.product_id, it.kode, it.nama, it.kategori, it.harga, it.qty, it.hpp, it.ready, it.pembuat ? it.pembuat.nama : null]);
     if (it.ready) ubahStok({ jenis: "produk", item: it.p, delta: -it.qty, tipe: "jual", tgl, ref: no, user });
-  }
+    // Barang dibuat (custom / pesanan) dengan pembuat → otomatis tercatat di produksi & insentif.
+    if (!it.ready && it.pembuat) {
+      const [dari] = periodeDari(tgl, s.periode_mulai);
+      if (one("SELECT 1 x FROM insentif_bayar WHERE pembuat_id = ? AND periode_dari = ?", [it.pembuat.id, dari])) return; // periode sudah dibayar
+      const tarif = (it.p && it.p.insentif != null) ? it.p.insentif : s.insentif;
+      run(`INSERT INTO produksi(tgl, product_id, kode, nama, qty, pembuat_id, tarif, restock, user_id, oleh, uid) VALUES (?,?,?,?,?,?,?,0,?,?,?)`,
+        [tgl, it.product_id, it.kode, it.nama, it.qty, it.pembuat.id, tarif, user.id, user.nama, `jual:${no}:${idx}`]);
+      prodRows.push([tgl, it.kode, it.nama, it.qty, it.pembuat.nama, tarif, Math.round(it.qty * tarif), "PESANAN " + no, user.nama]);
+    }
+  });
+  if (prodRows.length) antre("produksi", prodRows);
   antre("penjualan", items.map(it => { const bagian = subtotal ? it.harga * it.qty / subtotal : 0;
     return [String(saleId), tgl, jam, no, it.kode, it.nama, it.kategori, it.harga, it.qty, Math.round(it.harga * it.qty), it.ready ? "READY STOK" : "PRODUKSI", pelanggan, hp, user.nama, metode, Math.round(diskon * bagian), Math.round(ongkir * bagian), Math.round(it.hpp * it.qty), catatan]; }));
   return sembunyikanHpp(muatPenjualan("id = ?", [saleId])[0], user);
 }), { cabang: ({ hasil: x }) => ({ aksi: "jual", data: {
   no: x.no, tgl: x.tgl, jam: x.jam, pelanggan: x.pelanggan, hp: x.hp, diskon: x.diskon, ongkir: x.ongkir, metode: x.metode, bayar: x.bayar, catatan: x.catatan, kartu: x.kartu,
   pesanan: x.ambil_tgl ? { tgl: x.ambil_tgl, jam: x.ambil_jam, cara: x.ambil_cara, request: x.request } : null,
-  items: x.items.map(i => ({ kode: i.kode, nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty, ready: i.ready })),
+  items: x.items.map(i => ({ kode: i.kode, nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty, ready: i.ready, pembuat: i.pembuat || "" })),
 } }) });
 
 /** Daftar transaksi. Karyawan hanya melihat transaksi hari ini (untuk cetak ulang struk). */
@@ -112,6 +132,7 @@ route("POST", "/api/penjualan/:id/batal", "admin", ({ params, body, user }) => t
     if (p) ubahStok({ jenis: "produk", item: p, delta: it.qty, tipe: "batal", ref: s.no, ket: alasan, user });
   }
   run("UPDATE sales SET batal_at = datetime('now'), batal_oleh = ?, batal_alasan = ? WHERE id = ?", [user.nama, alasan, s.id]);
+  hapusProduksiJual(s.no); // pesanan batal: tidak dihitung insentif
   antre("batal", [[String(s.id), s.no, now.tgl, now.jam, user.nama, s.total]]);
   return { ok: true };
 }), { cabang: ({ params, body }) => ({ aksi: "batal", data: { no: one("SELECT no FROM sales WHERE id = ?", [+params.id]).no, alasan: body.alasan || "" } }) });
@@ -128,6 +149,7 @@ function hapusPenjualan(s, user, alasan){
     const now = sekarang();
     antre("batal", [[String(s.id), s.no, now.tgl, now.jam, user.nama, s.total]]); // di sheet tercatat batal
   }
+  hapusProduksiJual(s.no);
   run("DELETE FROM sale_items WHERE sale_id = ?", [s.id]);
   run("DELETE FROM sales WHERE id = ?", [s.id]);
 }

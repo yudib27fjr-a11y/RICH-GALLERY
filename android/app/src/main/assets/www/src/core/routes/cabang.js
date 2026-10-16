@@ -134,7 +134,7 @@ function terapkan(p, d, alat){
     case "jual": {
       const items = (Array.isArray(x.items) ? x.items : []).map(i => {
         const b = idBarang("produk", i.kode);
-        return b ? { product_id: b.id, harga: i.harga, qty: i.qty, ready: i.ready } : { nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty };
+        return b ? { product_id: b.id, harga: i.harga, qty: i.qty, ready: i.ready, pembuat: i.pembuat } : { nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty, pembuat: i.pembuat };
       });
       return panggil("POST", "/api/penjualan", { items, diskon: x.diskon, ongkir: x.ongkir, metode: x.metode, bayar: x.bayar, pelanggan: x.pelanggan, hp: x.hp, catatan: x.catatan, kartu: x.kartu, pesanan: x.pesanan || null },
         user, { tgl: x.tgl || w?.tgl, jam: x.jam || w?.jam }, { no: x.no, tgl: x.tgl, jam: x.jam });
@@ -232,7 +232,7 @@ function penjualanTerbaru(sejak){
     FROM sales WHERE tgl >= ? OR (ambil_tgl IS NOT NULL AND diambil_at IS NULL AND batal_at IS NULL) ORDER BY id DESC LIMIT ${BATAS_JUAL}`, [sejak]);
   if (!sales.length) return [];
   const per = new Map(sales.map(x => [x.id, (x.items = [], x)]));
-  for (const it of all(`SELECT sale_id, kode, nama, kategori, harga, qty, hpp, ready FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE tgl >= ? OR (ambil_tgl IS NOT NULL AND diambil_at IS NULL AND batal_at IS NULL))`, [sejak])) {
+  for (const it of all(`SELECT sale_id, kode, nama, kategori, harga, qty, hpp, ready, pembuat FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE tgl >= ? OR (ambil_tgl IS NOT NULL AND diambil_at IS NULL AND batal_at IS NULL))`, [sejak])) {
     const x = per.get(it.sale_id); if (x) { delete it.sale_id; x.items.push(it); }
   }
   return sales.map(x => { delete x.id; return x; });

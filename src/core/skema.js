@@ -277,6 +277,9 @@ ALTER TABLE perangkat ADD COLUMN absen INTEGER NOT NULL DEFAULT 0;`,
 
 /* 7: kartu ucapan memakai huruf "Grown" (permintaan toko). */
 `UPDATE settings SET nilai = '"grown"' WHERE kunci = 'kartu_huruf';`,
+
+/* 8: pembuat barang custom / pesanan di transaksi (otomatis tercatat di produksi & insentif). */
+`ALTER TABLE sale_items ADD COLUMN pembuat TEXT;`,
 ];
 
 export const DEFAULT_SETTINGS = {

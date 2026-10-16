@@ -241,3 +241,5 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 .opsi-cetak:hover,.opsi-cetak:focus-visible{border-color:var(--brand,#a8325e);outline:none}
 .opsi-cetak .ik{font-size:26px;line-height:1}
 .opsi-cetak small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
+.pembuat-baris{display:flex;align-items:center;gap:8px;flex-basis:100%;margin-top:2px}
+.pembuat-baris select{flex:1;min-width:0;padding:6px 8px;font-size:14px}
