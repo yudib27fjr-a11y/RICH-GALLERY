@@ -204,7 +204,7 @@ function lihatStruk(s, setelahBatal){
     <div class="actions">
       ${!s.batal_at && isAdmin() ? `<button class="btn danger" id="voidBtn">Batalkan transaksi</button>` : ""}
       ${isAdmin() ? `<button class="btn" id="koreksiBtn" type="button">Koreksi</button><button class="btn danger" id="hapusBtn" type="button">Hapus</button>` : ""}
-      <button class="btn" id="notaBtn" type="button">📄 Nota A4</button>
+      <button class="btn" id="notaBtn" type="button">📄 Nota</button>
       <a class="btn" href="${waLink(s)}" target="_blank" rel="noopener">Kirim WA</a>
       <button class="btn" data-close>Tutup</button>
       <button class="btn pri" id="printBtn">Cetak struk</button>
@@ -243,7 +243,7 @@ async function gambarNota(d){
   const W = 1414, rowH = 78, baris = d.rows.filter(r => r.desc || r.harga);
   if (d.ongkir) baris.push({ desc: "Ongkir", harga: d.ongkir, qty: "", ongkir: 1 });
   const tTop = 380, rTop = tTop + 88, rEnd = rTop + Math.max(1, baris.length) * rowH;
-  const H = rEnd + 60 + 100 + 88 + 230;
+  const H = rEnd + 40 + 100 + 88 + 205; // 1 baris ± setengah A4 (148 mm), bertambah mengikuti jumlah barang
   const c = document.createElement("canvas"); c.width = W; c.height = H;
   const g = c.getContext("2d");
   const SANS = '"Helvetica Neue", Arial, sans-serif', ABU = "#3f3f3f", PINK = "#f9d0ec";
@@ -286,9 +286,9 @@ async function gambarNota(d){
     teks(rpNota(jml), 1326, y + 58, { size: 32, bold: true, rata: "right" });
     garis(0, y + rowH, W - 10, y + rowH);
   });
-  garis(0, rEnd + 60, W, rEnd + 60);
+  garis(0, rEnd + 40, W, rEnd + 40);
   // Ringkasan
-  const yS = rEnd + 60;
+  const yS = rEnd + 40;
   teks("Subtotal :", 1112, yS + 26, { size: 23, bold: true, warna: "#555", font: '"Arial Black", ' + SANS });
   teks(rpNota(sub), 1355, yS + 26, { size: 23, bold: true, warna: "#555", rata: "right" });
   teks("Disc", 1114, yS + 56, { size: 23, bold: true, warna: "#555", font: '"Arial Black", ' + SANS }); teks(":", 1194, yS + 56, { size: 23, bold: true, warna: "#555" });
@@ -302,17 +302,47 @@ async function gambarNota(d){
   if (d.dibayar != null && d.dibayar < total) teks(`Dibayar ${rpNota(d.dibayar)} · Sisa ${rpNota(total - d.dibayar)}`, 1355, yB + 120, { size: 22, bold: true, warna: "#b45309", rata: "right" });
   // Rekening & tanda tangan
   String(d.bank || "").split("\n").slice(0, 4).forEach((b, i) => teks(b, 86, yB + 145 + i * 33, { size: 25, bold: true, warna: ABU, font: '"Arial Black", ' + SANS, maks: 620 }));
-  const yT = yB + 190;
+  const yT = yB + 175;
   if (ttd) {
     const s = Math.min(280 / ttd.width, 100 / ttd.height);
     g.drawImage(ttd, 1232 - ttd.width * s / 2, yT - 8 - ttd.height * s, ttd.width * s, ttd.height * s);
   } else {
-    teks(d.ttdNama, 1232, yT - 22, { size: 42, warna: "#1e2a5a", rata: "center", font: '"Brush Script MT", "Segoe Script", "Snell Roundhand", cursive', maks: 300 });
+    const fontTtd = '"Brush Script MT", "Segoe Script", "Snell Roundhand", "Dancing Script", cursive';
+    let uk = 44; g.font = `400 ${uk}px ${fontTtd}`;
+    while (uk > 18 && g.measureText(d.ttdNama || "").width > 300) { uk -= 2; g.font = `400 ${uk}px ${fontTtd}`; }
+    teks(d.ttdNama, 1232, yT - 22, { size: uk, warna: "#1e2a5a", rata: "center", font: fontTtd });
   }
   garis(1082, yT, 1380, yT, 2.5, "#444");
   teks(d.ttdJabatan || "", 1232, yT + 34, { size: 27, rata: "center", warna: "#222", maks: 300 });
   if (d.ttdNama) teks("TTE: " + d.ttdNama, 1232, yT + 60, { size: 16, rata: "center", warna: "#777", maks: 330 });
   return c;
+}
+/** Ukuran kertas nota (mm): lebar setengah A4 mendatar (210 mm), tinggi sebanding isi. */
+const ukuranNota = c => [210, Math.round(210 * c.height / c.width * 10) / 10];
+/** PDF satu halaman berisi gambar (JPEG) — tanpa pustaka tambahan. Ukuran halaman dalam mm. */
+function buatPdf(kanvas, lebarMm, tinggiMm){
+  const jpg = atob(kanvas.toDataURL("image/jpeg", 0.92).split(",")[1]);
+  const W = (lebarMm / 25.4 * 72).toFixed(2), H = (tinggiMm / 25.4 * 72).toFixed(2);
+  const isi = `q ${W} 0 0 ${H} 0 0 cm /Im0 Do Q`;
+  const obj = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`,
+    `<< /Type /XObject /Subtype /Image /Width ${kanvas.width} /Height ${kanvas.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpg.length} >>\nstream\n${jpg}\nendstream`,
+    `<< /Length ${isi.length} >>\nstream\n${isi}\nendstream`,
+  ];
+  let pdf = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n"; const pos = [];
+  obj.forEach((o, i) => { pos.push(pdf.length); pdf += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${obj.length + 1}\n0000000000 65535 f \n` + pos.map(p => String(p).padStart(10, "0") + " 00000 n \n").join("");
+  pdf += `trailer\n<< /Size ${obj.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return pdf; // string biner (1 karakter = 1 byte)
+}
+function simpanPdf(nama, biner){
+  if (NATIVE && NATIVE.simpanFile) { const lok = NATIVE.simpanFile(nama, "application/pdf", btoa(biner)); toast(lok ? `PDF tersimpan di ${lok}` : "Gagal menyimpan PDF"); return; }
+  const u8 = new Uint8Array(biner.length); for (let i = 0; i < biner.length; i++) u8[i] = biner.charCodeAt(i);
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([u8], { type: "application/pdf" })); a.download = nama;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
 /** Data nota awal dari transaksi (semua bisa diubah di layar nota). */
 function dataNota(s){
@@ -342,7 +372,7 @@ function bukaNota(s){
       ${d.ttdImg ? "" : `<p class="small muted" style="margin:0">Tanda tangan elektronik belum dibuat — nama ditulis miring. Buat tanda tangan di Pengaturan → Nota / Invoice.</p>`}
     </div>
     <div class="nota-pratinjau"><canvas id="nCv"></canvas></div>
-    <div class="actions" style="flex-wrap:wrap"><button class="btn" data-close>Tutup</button><button class="btn" id="nUnduh" type="button">Unduh gambar</button><button class="btn pri" id="nCetak" type="button">Cetak A4</button></div>`, m => {
+    <div class="actions" style="flex-wrap:wrap"><button class="btn" data-close>Tutup</button><button class="btn" id="nUnduh" type="button">Unduh gambar</button><button class="btn" id="nPdf" type="button">Unduh PDF</button><button class="btn pri" id="nCetak" type="button">Cetak nota</button></div>`, m => {
     m.closest(".modal")?.classList.add("modal-lebar");
     let kanvas = null, t;
     const baca = () => {
@@ -369,13 +399,20 @@ function bukaNota(s){
       if (NATIVE && NATIVE.simpanFile) { const lok = NATIVE.simpanFile(nama, "image/png", url.split(",")[1]); toast(lok ? `Tersimpan di ${lok}` : "Gagal menyimpan gambar"); return; }
       const a = document.createElement("a"); a.href = url; a.download = nama; document.body.appendChild(a); a.click(); a.remove();
     };
+    $("#nPdf", m).onclick = async () => {
+      await gambar();
+      const [pw, ph] = ukuranNota(kanvas), nama = `nota-${(d.no || "rich-gallery").replace(/[^\w-]+/g, "-")}.pdf`;
+      simpanPdf(nama, buatPdf(kanvas, pw, ph));
+    };
     $("#nCetak", m).onclick = async () => {
       await gambar();
-      if (NATIVE && versiApi() < 6) return toast("Cetak A4 butuh aplikasi versi 1.7.0. Untuk sementara pakai Unduh gambar lalu cetak dari galeri.");
-      $("#page-style").textContent = "@page{size:A4 landscape;margin:8mm}";
-      $("#print-area").innerHTML = `<img src="${kanvas.toDataURL("image/png")}" alt="" style="width:100%;display:block">`;
+      // Setengah A4: lebar 210 mm, tinggi mengikuti isi nota (± 148 mm untuk 1 barang)
+      const [pw, ph] = ukuranNota(kanvas);
+      if (NATIVE && !NATIVE.cetakUkuran) return toast("Cetak nota butuh aplikasi versi terbaru (1.8.0). Sementara pakai Unduh PDF.");
+      $("#page-style").textContent = `@page{size:${pw}mm ${ph}mm;margin:0}`;
+      $("#print-area").innerHTML = `<img src="${kanvas.toDataURL("image/png")}" alt="" style="width:${pw}mm;height:${ph}mm;display:block">`;
       $("#print-area").classList.add("a4");
-      setTimeout(() => { if (NATIVE && NATIVE.cetak) NATIVE.cetak(210); else window.print(); setTimeout(() => $("#print-area").classList.remove("a4"), 1500); }, 120);
+      setTimeout(() => { if (NATIVE) NATIVE.cetakUkuran(pw, ph); else window.print(); setTimeout(() => $("#print-area").classList.remove("a4"), 1500); }, 120);
     };
     gambar();
   });
@@ -1945,8 +1982,8 @@ async function aturKartu(){
 async function aturNota(){
   const s = await coba(() => api("GET", "/api/pengaturan")); if (!s || !$("#aNota")) return;
   const pusat = LOKAL && B.cabang;
-  $("#aNota").innerHTML = `<h3 style="font-size:17px">📄 Nota / Invoice A4</h3>
-    <p class="small muted" style="margin:0">Format nota seperti invoice toko. Dibuka dari struk transaksi → <b>📄 Nota A4</b>; isinya bisa diedit sebelum diunduh / dicetak.</p>
+  $("#aNota").innerHTML = `<h3 style="font-size:17px">📄 Nota / Invoice (setengah A4)</h3>
+    <p class="small muted" style="margin:0">Format nota seperti invoice toko. Dibuka dari struk transaksi → <b>📄 Nota</b>; isinya bisa diedit sebelum diunduh (gambar / PDF) atau dicetak. Lebar setengah A4 (210 mm), tingginya mengikuti jumlah barang.</p>
     ${pusat ? `<p class="note" style="margin:0">Diatur di server (browser), lalu otomatis ikut ke perangkat ini.</p>` : ""}
     <label class="f">Keterangan di bawah nama toko<input type="text" id="ivTag" value="${esc(s.inv_tagline)}" ${pusat ? "disabled" : ""}></label>
     <label class="f">Info rekening (kiri bawah)<textarea id="ivBank" rows="2" ${pusat ? "disabled" : ""}>${esc(s.inv_bank)}</textarea></label>
