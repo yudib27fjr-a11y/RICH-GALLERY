@@ -519,7 +519,8 @@ function drawCart(){
     <div class="cart-body">
     <div class="seg" id="cJenis" role="group" aria-label="Jenis pelanggan"><button type="button" data-j="baru" class="${cart.lama ? "" : "on"}">Pelanggan baru</button><button type="button" data-j="lama" class="${cart.lama ? "on" : ""}">Pelanggan lama</button></div>
     ${cart.lama ? `<div class="cari-pel"><input type="search" id="cCariPel" placeholder="Cari nama / no HP pelanggan…" autocomplete="off" aria-label="Cari pelanggan"><div class="list" id="cPelList"><div class="empty small">Memuat daftar pelanggan…</div></div></div>` : ""}
-    <div class="row"><label class="f grow">Pelanggan<input type="text" id="cCust" value="${esc(cart.pelanggan)}" placeholder="CUSTOMER" autocomplete="off"></label><label class="f grow">No HP / WA<input type="tel" id="cHp" value="${esc(cart.hp)}" placeholder="08…"></label></div>
+    <div class="row"><label class="f grow">Pelanggan<input type="text" id="cCust" value="${esc(cart.pelanggan)}" placeholder="CUSTOMER" autocomplete="off"></label><label class="f grow">No HP / WA<input type="tel" id="cHp" value="${esc(cart.hp)}" placeholder="08…" autocomplete="off"></label></div>
+    <div class="list saran-pel" id="cSaran" hidden></div>
     <div class="cart-lines">${cart.items.length ? cart.items.map((it, i) => `
       <div class="line" data-i="${i}">
         <div><div class="nm">${esc(it.nama)}</div><div class="code">${it.manual ? "manual" : it.kode}</div></div>
@@ -545,10 +546,13 @@ function drawCart(){
       ${saleTerakhir ? `<button class="btn ghost sm" id="reprint" type="button" style="align-self:center">Cetak ulang struk terakhir (${esc(saleTerakhir.no)})</button>` : ""}
     </div>`;
   const upd = () => { saveCart(); const t = cartTotal(); $("#cTot").textContent = rp(t); $("#cbTotal").textContent = rp(t); hitKembali(); };
-  $("#cCust", el).oninput = e => { cart.pelanggan = e.target.value; saveCart(); };
+  $("#cCust", el).oninput = e => { cart.pelanggan = e.target.value; saveCart(); saranPelanggan(el, e.target.value, "nama"); };
+  $("#cCust", el).onfocus = () => ambilPelanggan().catch(() => {});
   $$("#cJenis button", el).forEach(b => b.onclick = () => { cart.lama = b.dataset.j === "lama"; saveCart(); const sc = $(".cart-body", el).scrollTop; drawCart(); $(".cart-body", el).scrollTop = sc; if (cart.lama) $("#cCariPel")?.focus(); });
   if (cart.lama) pasangCariPelanggan(el);
-  $("#cHp", el).oninput = e => { cart.hp = e.target.value; saveCart(); };
+  $("#cHp", el).oninput = e => { cart.hp = e.target.value; saveCart(); saranPelanggan(el, e.target.value, "hp"); };
+  $("#cHp", el).onfocus = () => ambilPelanggan().catch(() => {});
+  [$("#cCust", el), $("#cHp", el)].forEach(i => i.addEventListener("blur", () => setTimeout(() => { const s = $("#cSaran", el); if (s && !s.contains(document.activeElement)) s.hidden = true; }, 200)));
   $("#cDisc", el).oninput = e => { cart.diskon = num(e.target.value); upd(); };
   $("#cOng", el).oninput = e => { cart.ongkir = num(e.target.value); upd(); };
   $("#cBayar", el).oninput = e => { cart.bayar = num(e.target.value); saveCart(); hitKembali(); };
@@ -589,6 +593,28 @@ let daftarPel = null, daftarPelWaktu = 0;
 async function ambilPelanggan(paksa){
   if (!daftarPel || paksa || Date.now() - daftarPelWaktu > 60_000) { daftarPel = await api("GET", "/api/pelanggan"); daftarPelWaktu = Date.now(); }
   return daftarPel;
+}
+/** Saran otomatis saat mengetik nama / no HP: pelanggan yang pernah belanja. Ketuk untuk mengisi nama & no HP sekaligus. */
+async function saranPelanggan(el, teks, jenis){
+  const kotak = $("#cSaran", el); if (!kotak) return;
+  const q = String(teks || "").trim().toUpperCase(), qd = q.replace(/\D/g, "").replace(/^62/, "0");
+  if (jenis === "nama" ? q.length < 2 : qd.length < 3) { kotak.hidden = true; return; }
+  try { await ambilPelanggan(); } catch { return; }
+  const hpNorm = h => String(h || "").replace(/\D/g, "").replace(/^62/, "0");
+  const cocok = (daftarPel || []).filter(p => jenis === "nama"
+      ? p.nama.includes(q) && p.nama !== q
+      : hpNorm(p.hp).includes(qd) && hpNorm(p.hp) !== qd)
+    .sort((a, b) => (jenis === "nama" ? (b.nama.startsWith(q) - a.nama.startsWith(q)) : 0) || b.transaksi - a.transaksi).slice(0, 5);
+  if (!cocok.length) { kotak.hidden = true; return; }
+  kotak.innerHTML = cocok.map((p, i) => `<button type="button" class="li click" data-i="${i}" style="width:100%;text-align:left;border:0;background:none;font:inherit;color:inherit">
+    <div class="main"><div class="t">${esc(p.nama || "TANPA NAMA")}</div><div class="small muted">${esc(p.hp || "tanpa no HP")} · ${p.transaksi}× belanja</div></div></button>`).join("");
+  kotak.hidden = false;
+  kotak.onmousedown = e => e.preventDefault(); // kolom ketik tetap fokus, saran tidak tertutup sebelum diketuk
+  $$("button", kotak).forEach(b => b.onclick = () => {
+    const p = cocok[+b.dataset.i];
+    cart.pelanggan = p.nama === "CUSTOMER" ? "" : p.nama; if (p.hp) cart.hp = p.hp; saveCart();
+    $("#cCust", el).value = cart.pelanggan; $("#cHp", el).value = cart.hp; kotak.hidden = true;
+  });
 }
 function pasangCariPelanggan(el){
   const kotak = $("#cPelList", el), cari = $("#cCariPel", el);

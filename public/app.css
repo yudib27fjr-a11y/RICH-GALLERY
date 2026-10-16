@@ -214,3 +214,5 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 .cari-pel .list{max-height:240px;overflow:auto}
 .cart-body>*{flex-shrink:0}
 #cJenis{display:flex}#cJenis button{flex:1}
+.saran-pel{margin-top:-4px;max-height:220px;overflow:auto;box-shadow:0 6px 16px rgba(0,0,0,.18)}
+.saran-pel[hidden]{display:none}
