@@ -243,3 +243,20 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 .opsi-cetak small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
 .pembuat-baris{display:flex;align-items:center;gap:8px;flex-basis:100%;margin-top:2px}
 .pembuat-baris select{flex:1;min-width:0;padding:6px 8px;font-size:14px}
+
+/* Warna aksi cetak/kirim — kontras & mudah dibedakan */
+.opsi-cetak .ik{width:48px;height:48px;border-radius:12px;display:grid;place-items:center;flex:0 0 48px;color:#fff;font-size:0}
+.opsi-cetak{border-width:1.5px}
+.w-struk .ik{background:#0f766e}.w-struk{border-color:#0f766e55}
+.w-nota .ik{background:#1d4ed8}.w-nota{border-color:#1d4ed855}
+.w-pdf .ik{background:#c2410c}.w-pdf{border-color:#c2410c55}
+.w-kartu .ik{background:#be185d}.w-kartu{border-color:#be185d55}
+.w-wa .ik{background:#15803d}.w-wa{border-color:#15803d55}
+.w-lihat .ik{background:#475569}.w-lihat{border-color:#47556955}
+.opsi-cetak:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.12)}
+.btn.bk{display:inline-flex;align-items:center;gap:6px;color:#fff;border-color:transparent;font-weight:700;text-decoration:none}
+.btn.bk svg{flex:0 0 auto}
+.b-struk{background:#0f766e}.b-nota{background:#1d4ed8}.b-pdf{background:#c2410c}.b-wa{background:#15803d}
+.b-koreksi{background:#b45309}.b-hapus{background:#b91c1c}
+.btn.b-batal{background:transparent;color:#b91c1c;border:1.5px solid #b91c1c}
+.btn.bk:hover{filter:brightness(1.1)}

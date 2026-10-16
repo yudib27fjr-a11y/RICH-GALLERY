@@ -237,13 +237,13 @@ function lihatStruk(s, setelahBatal){
     ${s.kartu ? `<div class="pesanan-isi stack" style="margin-bottom:8px"><b>Kartu ucapan</b><div style="white-space:pre-wrap">${esc(s.kartu)}</div>${tombolKartu(s.id)}</div>` : ""}
     ${s.batal_at ? `<p class="small muted">Dibatalkan oleh ${esc(s.batal_oleh || "-")}${s.batal_alasan ? ": " + esc(s.batal_alasan) : ""}</p>` : ""}
     <div class="actions">
-      ${!s.batal_at && isAdmin() ? `<button class="btn danger" id="voidBtn">Batalkan transaksi</button>` : ""}
-      ${isAdmin() ? `<button class="btn" id="koreksiBtn" type="button">Koreksi</button><button class="btn danger" id="hapusBtn" type="button">Hapus</button>` : ""}
-      <button class="btn" id="notaBtn" type="button">📄 Nota</button>
-      <button class="btn" id="pdfStrukBtn" type="button">PDF struk</button>
-      <a class="btn" href="${waLink(s)}" target="_blank" rel="noopener">Kirim WA</a>
-      <button class="btn" data-close>Tutup</button>
-      <button class="btn pri" id="printBtn">Cetak struk</button>
+      ${!s.batal_at && isAdmin() ? `<button class="btn bk b-batal" id="voidBtn" type="button">${ikon("batal", 18)}Batalkan</button>` : ""}
+      ${isAdmin() ? `<button class="btn bk b-koreksi" id="koreksiBtn" type="button">${ikon("koreksi", 18)}Koreksi</button><button class="btn bk b-hapus" id="hapusBtn" type="button">${ikon("hapus", 18)}Hapus</button>` : ""}
+      <button class="btn bk b-nota" id="notaBtn" type="button">${ikon("nota", 18)}Nota</button>
+      <button class="btn bk b-pdf" id="pdfStrukBtn" type="button">${ikon("pdf", 18)}PDF struk</button>
+      <a class="btn bk b-wa" href="${waLink(s)}" target="_blank" rel="noopener">${ikon("wa", 18)}Kirim WA</a>
+      <button class="btn" data-close type="button">Tutup</button>
+      <button class="btn bk b-struk" id="printBtn" type="button">${ikon("struk", 18)}Cetak struk</button>
     </div>`, m => {
       $("#printBtn", m).onclick = () => cetak(s);
       $("#notaBtn", m).onclick = () => bukaNota(s);
@@ -1122,6 +1122,21 @@ function kirimWA(s){
   return true;
 }
 
+/* Ikon aksi cetak/kirim: bentuk & warna berbeda supaya tidak tertukar. */
+const IKON_AKSI = {
+  struk: '<path d="M6 3h12v18l-2-1.5L14 21l-2-1.5L10 21l-2-1.5L6 21z"/><path d="M9 8h6M9 11.5h6M9 15h4"/>',
+  nota: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/><path d="M15 17l1.5 1.5L19 16"/>',
+  pdf: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6M9.5 14.5L12 17l2.5-2.5"/>',
+  kartu: '<path d="M12 20s-7-4.4-7-9.6A4.1 4.1 0 0 1 12 8a4.1 4.1 0 0 1 7 2.4C19 15.6 12 20 12 20z"/>',
+  wa: '<path d="M4 20l1.3-3.8A8 8 0 1 1 8 19z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1.2-1.3-1.8-1-1 .8a4 4 0 0 1-2.4-2.4l.8-1-1-1.8z"/>',
+  lihat: '<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  koreksi: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+  hapus: '<path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  batal: '<circle cx="12" cy="12" r="9"/><path d="M8.5 8.5l7 7"/>',
+  cetak: '<path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/>',
+};
+const ikon = (k, ukuran = 20) => `<svg viewBox="0 0 24 24" width="${ukuran}" height="${ukuran}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IKON_AKSI[k]}</svg>`;
+
 /** Setelah Bayar & Cetak: pilih cara mencetak (tidak langsung membuka dialog print). */
 function pilihCetak(s){
   const mode = { langsung: "printer bawaan iMin", rawbt: "aplikasi RawBT", chrome: NATIVE ? "layanan cetak Android" : "printer komputer" }[D.modeCetak] || (NATIVE ? "layanan cetak Android" : "printer komputer");
@@ -1135,7 +1150,7 @@ function pilihCetak(s){
   ];
   modal(`<h3>✅ Tersimpan: ${esc(s.no)}</h3>
     <p class="small muted" style="margin:0 0 8px">Total ${rp(s.total)}${s.bayar > s.total && s.metode === "Tunai" ? ` · Kembali <b>${rp(s.bayar - s.total)}</b>` : s.bayar < s.total ? ` · Sisa <b>${rp(s.total - s.bayar)}</b>` : ""}. Mau dicetak dengan cara apa?</p>
-    <div class="pilih-cetak">${opsi.map(([k, ik, judul, ket]) => `<button type="button" class="opsi-cetak" data-c="${k}"><span class="ik">${ik}</span><span><b>${judul}</b><small>${esc(ket)}</small></span></button>`).join("")}</div>
+    <div class="pilih-cetak">${opsi.map(([k, , judul, ket]) => `<button type="button" class="opsi-cetak w-${k}" data-c="${k}"><span class="ik">${ikon(k, 26)}</span><span><b>${judul}</b><small>${esc(ket)}</small></span></button>`).join("")}</div>
     <div class="actions"><button class="btn" data-close>Lewati (tidak dicetak)</button></div>`, m => {
     $$(".opsi-cetak", m).forEach(b => b.onclick = () => {
       const c = b.dataset.c;
