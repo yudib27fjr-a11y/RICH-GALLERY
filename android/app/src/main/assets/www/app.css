@@ -61,7 +61,7 @@ nav.tabs button.on{color:var(--accent)}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;min-width:0}
 label.f.grow{flex:1 1 180px}
-input[type=text],input[type=password],input[type=number],input[type=date],input[type=tel],input[type=url],input[type=month],input[type=search],select,textarea{
+input[type=text],input[type=password],input[type=number],input[type=date],input[type=time],input[type=tel],input[type=url],input[type=month],input[type=search],select,textarea{
   width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font-size:15px;text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink)}
 textarea{min-height:70px;resize:vertical}
 input:focus,select:focus,textarea:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--accent-soft)}
@@ -216,3 +216,6 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 #cJenis{display:flex}#cJenis button{flex:1}
 .saran-pel{margin-top:-4px;max-height:220px;overflow:auto;box-shadow:0 6px 16px rgba(0,0,0,.18)}
 .saran-pel[hidden]{display:none}
+.pesanan-cek{gap:8px;align-items:center;flex-wrap:wrap}
+.pesanan-isi{border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--surface-2)}
+#cCara{display:flex}#cCara button{flex:1}

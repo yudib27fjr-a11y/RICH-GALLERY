@@ -136,7 +136,7 @@ function terapkan(p, d, alat){
         const b = idBarang("produk", i.kode);
         return b ? { product_id: b.id, harga: i.harga, qty: i.qty, ready: i.ready } : { nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty };
       });
-      return panggil("POST", "/api/penjualan", { items, diskon: x.diskon, ongkir: x.ongkir, metode: x.metode, bayar: x.bayar, pelanggan: x.pelanggan, hp: x.hp, catatan: x.catatan },
+      return panggil("POST", "/api/penjualan", { items, diskon: x.diskon, ongkir: x.ongkir, metode: x.metode, bayar: x.bayar, pelanggan: x.pelanggan, hp: x.hp, catatan: x.catatan, pesanan: x.pesanan || null },
         user, { tgl: x.tgl || w?.tgl, jam: x.jam || w?.jam }, { no: x.no, tgl: x.tgl, jam: x.jam });
     }
     case "batal": {
@@ -144,6 +144,18 @@ function terapkan(p, d, alat){
       if (!s) throw bad(`Transaksi ${x.no} tidak ada di server`);
       if (s.batal_at) return { ok: true };
       return panggil("POST", `/api/penjualan/${s.id}/batal`, { alasan: x.alasan }, user, w);
+    }
+    case "lunasi": {
+      const s = one("SELECT id, total, bayar, batal_at FROM sales WHERE no = ?", [String(x.no || "")]);
+      if (!s) throw bad(`Transaksi ${x.no} tidak ada di server`);
+      if (s.batal_at || s.bayar >= s.total) return { ok: true }; // sudah lunas (mis. dilunasi di perangkat lain)
+      return panggil("POST", `/api/penjualan/${s.id}/lunasi`, { nominal: x.nominal == null ? undefined : Math.min(x.nominal, s.total - s.bayar), metode: x.metode }, user, w);
+    }
+    case "diambil": {
+      const s = one("SELECT id, batal_at FROM sales WHERE no = ?", [String(x.no || "")]);
+      if (!s) throw bad(`Transaksi ${x.no} tidak ada di server`);
+      if (s.batal_at) return { ok: true };
+      return panggil("POST", `/api/penjualan/${s.id}/diambil`, { batal: !!x.batal }, user, w);
     }
     case "hapus_jual": {
       const nos = Array.isArray(x.nos) ? x.nos.slice(0, 100000) : [];
@@ -213,11 +225,13 @@ route("POST", "/api/cabang/kirim", false, ({ body }) => {
 /** Riwayat penjualan 40 hari terakhir (semua perangkat), supaya daftar transaksi & laporan di perangkat sama dengan server. */
 const BATAS_JUAL = 5000;
 function penjualanTerbaru(sejak){
-  const sales = all(`SELECT id, no, tgl, jam, kasir, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan, batal_at, batal_oleh, batal_alasan
-    FROM sales WHERE tgl >= ? ORDER BY id DESC LIMIT ${BATAS_JUAL}`, [sejak]);
+  // Termasuk pesanan lama yang belum diambil, supaya pengingatnya tetap ada di perangkat.
+  const sales = all(`SELECT id, no, tgl, jam, kasir, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan, batal_at, batal_oleh, batal_alasan,
+    ambil_tgl, ambil_jam, ambil_cara, request, diambil_at, diambil_oleh, lunas_at, lunas_metode, lunas_oleh
+    FROM sales WHERE tgl >= ? OR (ambil_tgl IS NOT NULL AND diambil_at IS NULL AND batal_at IS NULL) ORDER BY id DESC LIMIT ${BATAS_JUAL}`, [sejak]);
   if (!sales.length) return [];
   const per = new Map(sales.map(x => [x.id, (x.items = [], x)]));
-  for (const it of all(`SELECT sale_id, kode, nama, kategori, harga, qty, hpp, ready FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE tgl >= ?)`, [sejak])) {
+  for (const it of all(`SELECT sale_id, kode, nama, kategori, harga, qty, hpp, ready FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE tgl >= ? OR (ambil_tgl IS NOT NULL AND diambil_at IS NULL AND batal_at IS NULL))`, [sejak])) {
     const x = per.get(it.sale_id); if (x) { delete it.sale_id; x.items.push(it); }
   }
   return sales.map(x => { delete x.id; return x; });

@@ -155,12 +155,16 @@ export function terapkanSnapshot(snap){
     for (const x of Array.isArray(snap.penjualan) ? snap.penjualan : []) {
       if (!x || !x.no) continue;
       const lokal = one("SELECT id, batal_at FROM sales WHERE no = ?", [x.no]);
+      const pes = [x.bayar, x.ambil_tgl ?? null, x.ambil_jam ?? null, x.ambil_cara ?? null, x.request ?? null, x.diambil_at ?? null, x.diambil_oleh ?? null, x.lunas_at ?? null, x.lunas_metode ?? null, x.lunas_oleh ?? null];
       if (lokal) {
         if (x.batal_at && !lokal.batal_at) run("UPDATE sales SET batal_at = ?, batal_oleh = ?, batal_alasan = ? WHERE id = ?", [x.batal_at, x.batal_oleh, x.batal_alasan, lokal.id]);
+        // Pelunasan & status pengambilan pesanan mengikuti server
+        if (x.bayar !== undefined) run("UPDATE sales SET bayar = ?, ambil_tgl = ?, ambil_jam = ?, ambil_cara = ?, request = ?, diambil_at = ?, diambil_oleh = ?, lunas_at = ?, lunas_metode = ?, lunas_oleh = ? WHERE id = ?", [...pes, lokal.id]);
         continue;
       }
-      const id = Number(run(`INSERT INTO sales(no, tgl, jam, kasir, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan, batal_at, batal_oleh, batal_alasan)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [x.no, x.tgl, x.jam, x.kasir, x.pelanggan, x.hp || "", x.subtotal, x.diskon || 0, x.ongkir || 0, x.total, x.metode, x.bayar, x.catatan || "", x.batal_at, x.batal_oleh, x.batal_alasan]).lastInsertRowid);
+      const id = Number(run(`INSERT INTO sales(no, tgl, jam, kasir, pelanggan, hp, subtotal, diskon, ongkir, total, metode, catatan, batal_at, batal_oleh, batal_alasan,
+        bayar, ambil_tgl, ambil_jam, ambil_cara, request, diambil_at, diambil_oleh, lunas_at, lunas_metode, lunas_oleh)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?,?,?)`, [x.no, x.tgl, x.jam, x.kasir, x.pelanggan, x.hp || "", x.subtotal, x.diskon || 0, x.ongkir || 0, x.total, x.metode, x.catatan || "", x.batal_at, x.batal_oleh, x.batal_alasan, ...pes]).lastInsertRowid);
       for (const it of Array.isArray(x.items) ? x.items : []) {
         const p = it.kode ? one("SELECT id FROM products WHERE kode = ? AND dihapus IS NULL", [it.kode]) : null;
         run("INSERT INTO sale_items(sale_id, product_id, kode, nama, kategori, harga, qty, hpp, ready) VALUES (?,?,?,?,?,?,?,?,?)",

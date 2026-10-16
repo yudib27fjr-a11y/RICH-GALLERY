@@ -54,11 +54,19 @@ route("POST", "/api/penjualan", "semua", ({ body, user, ctx }) => tx(() => {
   const pelanggan = teks(body.pelanggan, { max: 80, upper: true, nama: "Pelanggan" }) || "CUSTOMER";
   const hp = teks(body.hp, { max: 30, nama: "No HP" });
   const catatan = teks(body.catatan, { max: 500, nama: "Catatan" });
+  // Pesanan: diambil / diantar nanti, dengan catatan khusus (request)
+  const ps = body.pesanan && typeof body.pesanan === "object" && body.pesanan.tgl ? body.pesanan : null;
+  const pesanan = ps ? {
+    tgl: tanggal(ps.tgl, { nama: "Tanggal ambil" }),
+    jam: /^([01]\d|2[0-3]):[0-5]\d$/.test(String(ps.jam || "")) ? ps.jam : "",
+    cara: ps.cara === "antar" ? "antar" : "ambil",
+    request: teks(ps.request, { max: 1000, nama: "Catatan pesanan" }),
+  } : null;
 
   const no = kiriman && kiriman.no ? nomorKiriman(kiriman.no) : nomorBerikutnya(s);
   const jam = kiriman && kiriman.jam ? kiriman.jam : now.jam;
-  const saleId = Number(run(`INSERT INTO sales(no, tgl, jam, user_id, kasir, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [no, tgl, jam, user.id, user.nama, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan]).lastInsertRowid);
+  const saleId = Number(run(`INSERT INTO sales(no, tgl, jam, user_id, kasir, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan, ambil_tgl, ambil_jam, ambil_cara, request) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [no, tgl, jam, user.id, user.nama, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan, pesanan?.tgl ?? null, pesanan?.jam ?? null, pesanan?.cara ?? null, pesanan?.request ?? null]).lastInsertRowid);
   for (const it of items) {
     run(`INSERT INTO sale_items(sale_id, product_id, kode, nama, kategori, harga, qty, hpp, ready) VALUES (?,?,?,?,?,?,?,?,?)`,
       [saleId, it.product_id, it.kode, it.nama, it.kategori, it.harga, it.qty, it.hpp, it.ready]);
@@ -69,6 +77,7 @@ route("POST", "/api/penjualan", "semua", ({ body, user, ctx }) => tx(() => {
   return sembunyikanHpp(muatPenjualan("id = ?", [saleId])[0], user);
 }), { cabang: ({ hasil: x }) => ({ aksi: "jual", data: {
   no: x.no, tgl: x.tgl, jam: x.jam, pelanggan: x.pelanggan, hp: x.hp, diskon: x.diskon, ongkir: x.ongkir, metode: x.metode, bayar: x.bayar, catatan: x.catatan,
+  pesanan: x.ambil_tgl ? { tgl: x.ambil_tgl, jam: x.ambil_jam, cara: x.ambil_cara, request: x.request } : null,
   items: x.items.map(i => ({ kode: i.kode, nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty, ready: i.ready })),
 } }) });
 
@@ -141,6 +150,41 @@ route("POST", "/api/penjualan/hapus-rentang", "admin", ({ body, user }) => tx(()
   for (const s of daftarJual) hapusPenjualan(s, user, "Hapus data uji coba");
   return { ok: true, jumlah: daftarJual.length, nos: daftarJual.map(s => s.no) };
 }), { cabang: ({ hasil }) => hasil.nos.length ? { aksi: "hapus_jual", data: { nos: hasil.nos } } : null });
+
+/* ---- Pesanan: pelunasan sisa DP & tandai sudah diambil/diantar ---- */
+route("POST", "/api/penjualan/:id/lunasi", "semua", ({ params, body, user }) => tx(() => {
+  const s = one("SELECT * FROM sales WHERE id = ?", [+params.id]);
+  if (!s) throw notFound("Transaksi tidak ditemukan");
+  if (s.batal_at) throw bad("Transaksi ini sudah dibatalkan");
+  const sisa = s.total - s.bayar;
+  if (sisa <= 0) throw bad("Transaksi ini sudah lunas");
+  const nominal = angka(body.nominal, { min: 1, max: 1e11, bulat: true, nama: "Nominal" }) ?? sisa;
+  const metode = pilihan(body.metode || "Tunai", METODE, "Metode bayar");
+  const bayar = Math.min(s.total, s.bayar + nominal), lunas = bayar >= s.total;
+  run("UPDATE sales SET bayar = ?, lunas_at = ?, lunas_metode = ?, lunas_oleh = ? WHERE id = ?",
+    [bayar, lunas ? sekarang().tgl + " " + sekarang().jam : s.lunas_at, metode, user.nama, s.id]);
+  return { ok: true, bayar, lunas };
+}), { cabang: ({ params, body }) => ({ aksi: "lunasi", data: { no: one("SELECT no FROM sales WHERE id = ?", [+params.id]).no, nominal: body.nominal ?? null, metode: body.metode || "Tunai" } }) });
+
+route("POST", "/api/penjualan/:id/diambil", "semua", ({ params, body, user }) => tx(() => {
+  const s = one("SELECT * FROM sales WHERE id = ?", [+params.id]);
+  if (!s) throw notFound("Transaksi tidak ditemukan");
+  if (s.batal_at) throw bad("Transaksi ini sudah dibatalkan");
+  if (body.batal) { run("UPDATE sales SET diambil_at = NULL, diambil_oleh = NULL WHERE id = ?", [s.id]); return { ok: true }; }
+  if (s.diambil_at) return { ok: true };
+  run("UPDATE sales SET diambil_at = ?, diambil_oleh = ? WHERE id = ?", [sekarang().tgl + " " + sekarang().jam, user.nama, s.id]);
+  return { ok: true };
+}), { cabang: ({ params, body }) => ({ aksi: "diambil", data: { no: one("SELECT no FROM sales WHERE id = ?", [+params.id]).no, batal: !!body.batal } }) });
+
+/** Daftar pesanan: yang belum diambil (urut tanggal ambil), atau yang sudah selesai (terbaru dulu). */
+route("GET", "/api/pesanan", "semua", ({ query, user }) => {
+  const selesai = query.status === "selesai";
+  const rows = selesai
+    ? muatPenjualan("ambil_tgl IS NOT NULL AND batal_at IS NULL AND diambil_at IS NOT NULL", [], 300)
+    : muatPenjualan("ambil_tgl IS NOT NULL AND batal_at IS NULL AND diambil_at IS NULL", [], 1000)
+        .sort((a, b) => (a.ambil_tgl + (a.ambil_jam || "99")).localeCompare(b.ambil_tgl + (b.ambil_jam || "99")));
+  return rows.map(s => sembunyikanHpp(s, user));
+});
 
 /** Data pelanggan, dikumpulkan dari riwayat transaksi (tidak perlu didaftarkan terpisah).
  *  Satu pelanggan = satu nomor HP; tanpa nomor HP dikelompokkan menurut nama. */

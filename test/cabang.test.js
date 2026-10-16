@@ -321,6 +321,38 @@ test("absensi sidik jari: mesin kirim scan → rekap di server & di cabang", asy
   assert.equal((await cabang("POST", "/api/absen/manual", { user_id: eva.id, tgl: hari, jam: "17:00" })).status, 409, "diatur di server pusat");
 });
 
+test("pesanan: DP di cabang, pelunasan di pusat, diambil di cabang — status sama di kedua sisi", async () => {
+  await segarkan();
+  const p = BC.produk.find(x => x.kode === "RG009");
+  const besok = new Date(Date.now() + 7 * 3600e3 + 86400e3).toISOString().slice(0, 10);
+  const j = await cabang("POST", "/api/penjualan", { items: [{ product_id: p.id, harga: 100000, qty: 1 }], pelanggan: "bu rina", hp: "08123", bayar: 40000,
+    pesanan: { tgl: besok, jam: "15:00", cara: "antar", request: "Pita merah, kartu: Selamat ulang tahun" } });
+  assert.equal(j.status, 200, JSON.stringify(j.data));
+  assert.equal(j.data.ambil_tgl, besok); assert.equal(j.data.ambil_cara, "antar"); assert.match(j.data.request, /Pita merah/);
+  await sinkron();
+  let ps = (await pusat("GET", "/api/pesanan")).data.find(x => x.no === j.data.no);
+  assert.ok(ps, "pesanan sampai di pusat"); assert.equal(ps.bayar, 40000); assert.equal(ps.ambil_jam, "15:00"); assert.match(ps.request, /kartu/);
+  // Dilunasi di pusat (QRIS) → cabang ikut lunas
+  assert.equal((await pusat("POST", `/api/penjualan/${ps.id}/lunasi`, { metode: "QRIS" })).status, 200);
+  assert.equal((await pusat("POST", `/api/penjualan/${ps.id}/lunasi`, { metode: "QRIS" })).status, 400, "sudah lunas");
+  await sinkron();
+  let pc = (await cabang("GET", "/api/pesanan")).data.find(x => x.no === j.data.no);
+  assert.equal(pc.bayar, 100000); assert.equal(pc.lunas_metode, "QRIS"); assert.ok(pc.lunas_at);
+  // Diantar (dicatat di cabang) → pusat ikut selesai
+  assert.equal((await cabang("POST", `/api/penjualan/${pc.id}/diambil`, {})).status, 200);
+  const st = await sinkron();
+  assert.equal(st.ditolak, 0, JSON.stringify(st.ditolakDaftar));
+  assert.ok(!(await pusat("GET", "/api/pesanan")).data.some(x => x.no === j.data.no), "tidak lagi di daftar aktif pusat");
+  assert.ok((await pusat("GET", "/api/pesanan?status=selesai")).data.find(x => x.no === j.data.no).diambil_at);
+  assert.ok((await cabang("GET", "/api/pesanan?status=selesai")).data.some(x => x.no === j.data.no));
+  // Pelunasan sebagian dari cabang
+  const j2 = await cabang("POST", "/api/penjualan", { items: [{ product_id: p.id, harga: 50000, qty: 1 }], bayar: 10000, pesanan: { tgl: besok } });
+  const id2 = j2.data.id;
+  assert.equal((await cabang("POST", `/api/penjualan/${id2}/lunasi`, { nominal: 15000, metode: "Transfer" })).status, 200);
+  await sinkron();
+  assert.equal((await pusat("GET", "/api/pesanan")).data.find(x => x.no === j2.data.no).bayar, 25000);
+});
+
 test("server mati: transaksi menunggu, lalu terkirim saat server hidup lagi", async () => {
   const pusatProc = procs[0];
   pusatProc.kill(); await new Promise(r => pusatProc.on("exit", r));

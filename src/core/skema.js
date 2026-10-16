@@ -228,6 +228,18 @@ CREATE TABLE absen(
 );
 CREATE INDEX absen_tgl ON absen(tgl);
 CREATE UNIQUE INDEX absen_scan ON absen(mesin, pin, tgl, jam) WHERE sumber = 'mesin';`,
+
+/* 4: pesanan (diambil / diantar nanti) dengan catatan khusus, pelunasan DP, dan status pengambilan. */
+`ALTER TABLE sales ADD COLUMN ambil_tgl TEXT;
+ALTER TABLE sales ADD COLUMN ambil_jam TEXT;
+ALTER TABLE sales ADD COLUMN ambil_cara TEXT;
+ALTER TABLE sales ADD COLUMN request TEXT;
+ALTER TABLE sales ADD COLUMN diambil_at TEXT;
+ALTER TABLE sales ADD COLUMN diambil_oleh TEXT;
+ALTER TABLE sales ADD COLUMN lunas_at TEXT;
+ALTER TABLE sales ADD COLUMN lunas_metode TEXT;
+ALTER TABLE sales ADD COLUMN lunas_oleh TEXT;
+CREATE INDEX sales_pesanan ON sales(ambil_tgl) WHERE ambil_tgl IS NOT NULL;`,
 ];
 
 export const DEFAULT_SETTINGS = {
