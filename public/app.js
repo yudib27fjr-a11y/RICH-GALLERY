@@ -630,9 +630,10 @@ const ICON = {
   laporan: '<path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/>',
   pesanan: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/><path d="M9 15l2 2 4-4"/>',
   absen: '<path d="M8.5 20c1-2 1.5-4.5 1.5-8a2 2 0 0 1 4 0c0 2.5-.3 4.8-1 7"/><path d="M5.5 17c.7-1.6 1-3.3 1-5a5.5 5.5 0 0 1 11 0c0 1.2-.1 2.4-.3 3.5"/><path d="M4 9.5A8.5 8.5 0 0 1 20 9"/><path d="M12 12c0 3.5-.6 6.3-2 8.5"/>',
+  gaji: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/><path d="M16 3.5l-4 2.5-4-2.5"/>',
   atur: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
 };
-const SEMUA_VIEW = [["kasir", "Kasir"], ["pesanan", "Pesanan"], ["riwayat", "Transaksi"], ["produksi", "Produksi"], ["stok", "Stok"], ["mutasi", "Masuk/Keluar"], ["opname", "Opname"], ["biaya", "Pengeluaran", 1], ["laporan", "Laporan", 1], ["absen", "Absensi", 1], ["atur", "Pengaturan"]];
+const SEMUA_VIEW = [["kasir", "Kasir"], ["pesanan", "Pesanan"], ["riwayat", "Transaksi"], ["produksi", "Produksi"], ["stok", "Stok"], ["mutasi", "Masuk/Keluar"], ["opname", "Opname"], ["biaya", "Pengeluaran", 1], ["laporan", "Laporan", 1], ["absen", "Absensi", 1], ["gaji", "Gaji", 1], ["atur", "Pengaturan"]];
 const daftarView = () => SEMUA_VIEW.filter(v => (!v[2] || isAdmin()) && (v[0] !== "absen" || (B && B.toko.absen_aktif)));
 let view = "kasir";
 function shell(){
@@ -675,7 +676,7 @@ function render(){
   if (!daftarView().some(v => v[0] === view)) view = "kasir";
   renderNav();
   $("#cartbar").hidden = view !== "kasir";
-  return ({ kasir: vKasir, pesanan: vPesanan, riwayat: vRiwayat, produksi: vProduksi, stok: vStok, mutasi: vMutasi, opname: vOpname, biaya: vBiaya, laporan: vLaporan, absen: vAbsen, atur: vAtur })[view]();
+  return ({ kasir: vKasir, pesanan: vPesanan, riwayat: vRiwayat, produksi: vProduksi, stok: vStok, mutasi: vMutasi, opname: vOpname, biaya: vBiaya, laporan: vLaporan, absen: vAbsen, gaji: vGaji, atur: vAtur })[view]();
 }
 
 /* ================= KASIR ================= */
@@ -1561,6 +1562,154 @@ const JENIS_LAIN = { kurir: "🛵 Jasa kurir non online", lapangan: "🧑‍🔧
 const jarakM = (lat1, lng1, lat2, lng2) => { const R = 6371000, r = x => x * Math.PI / 180; const a = Math.sin(r(lat2 - lat1) / 2) ** 2 + Math.cos(r(lat1)) * Math.cos(r(lat2)) * Math.sin(r(lng2 - lng1) / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(a)); };
 const cabangAktifDiSini = () => !!(B && B.cabang);
 
+/* ================= GAJI KARYAWAN (admin) =================
+   Gaji kotor = gaji pokok + insentif produksi + insentif lain + lembur + bonus; gaji bersih = kotor − potong kasbon. */
+let gPer = null;
+async function vGaji(){
+  if (!gPer) gPer = periodeDari(today(), B.toko.periode_mulai);
+  const [a] = gPer;
+  $("#main").innerHTML = `<div class="view-head"><h2>Gaji karyawan</h2></div>
+    <div class="row" style="margin-bottom:12px"><button class="btn sm" id="gPrev" type="button" aria-label="Periode sebelumnya">‹</button><div style="flex:1;text-align:center" id="gJudul"><b>Memuat…</b></div><button class="btn sm" id="gNext" type="button" aria-label="Periode berikutnya">›</button></div>
+    <div id="gIsi"><div class="empty">Memuat…</div></div>`;
+  $("#gPrev").onclick = () => { gPer = geserPeriode(a, -1, B.toko.periode_mulai); vGaji(); };
+  $("#gNext").onclick = () => { gPer = geserPeriode(a, 1, B.toko.periode_mulai); vGaji(); };
+  const [G, K] = await Promise.all([coba(() => api("GET", `/api/gaji?tgl=${a}`)), api("GET", "/api/kasbon").catch(() => null)]);
+  if (view !== "gaji") return;
+  if (!G) { $("#gIsi").innerHTML = `<div class="empty">Data gaji belum bisa dimuat${LOKAL ? " (diambil dari server pusat, butuh internet)" : ""}.</div>`; return; }
+  const ro = !!G.dariPusat; // di perangkat cabang: hanya lihat
+  $("#gJudul").innerHTML = `<div class="small muted" style="text-transform:uppercase;letter-spacing:.05em;font-weight:700">Periode gaji</div><b>${tglID(G.dari)} – ${tglID(G.sampai)}</b><div class="small">Gajian: <b>${tglID(G.tgl_gajian)}</b></div>`;
+  const tot = k => G.rows.reduce((t, r) => t + (r[k] || 0), 0);
+  const belum = G.rows.filter(r => !r.bayar && r.kotor > 0);
+  $("#gIsi").innerHTML = `
+    ${ro ? `<p class="note" style="margin:0 0 12px">Data gaji dari server pusat. Pembayaran gaji, gaji pokok & kasbon diatur dari server (browser).</p>` : ""}
+    <div class="kpis" style="margin-bottom:12px">
+      <div class="kpi"><div class="l">Total gaji kotor</div><div class="v num">${rp(tot("kotor"))}</div></div>
+      <div class="kpi"><div class="l">Potong kasbon</div><div class="v num">${rp(tot("potong_hutang"))}</div></div>
+      <div class="kpi"><div class="l">Total gaji bersih</div><div class="v num">${rp(tot("bersih"))}</div><div class="small muted">${belum.length ? belum.length + " karyawan belum dibayar" : "semua sudah dibayar"}</div></div>
+    </div>
+    <div class="tbl-wrap"><table><thead><tr><th>Nama</th><th class="r">Pokok</th><th class="r">Insentif</th><th class="r">Lembur</th><th class="r">Kotor</th><th class="r">Kasbon</th><th class="r">Bersih</th><th>Status</th><th></th></tr></thead><tbody>
+    ${G.rows.map(r => `<tr><td><b>${esc(r.nama)}</b><div class="small muted">${r.hadir} hari hadir${r.terlambat ? ` · ${r.terlambat}× telat` : ""}</div></td>
+      <td class="r num">${rp(r.pokok)}</td>
+      <td class="r num">${rp(r.ins_produksi + r.ins_lain)}${r.insentif_terpisah ? `<div class="small muted">sudah dibayar terpisah</div>` : ""}</td>
+      <td class="r num">${r.lembur_menit ? `${rp(r.lembur)}<div class="small muted">${jamMenit(r.lembur_menit)}</div>` : "-"}</td>
+      <td class="r num">${rp(r.kotor)}${r.bonus ? `<div class="small muted">bonus ${rp(r.bonus)}</div>` : ""}</td>
+      <td class="r num">${r.bayar ? (r.potong_hutang ? "−" + rp(r.potong_hutang) : "-") : r.hutang ? `<span style="color:var(--bad)">hutang ${rp(r.hutang)}</span>` : "-"}</td>
+      <td class="r num" style="font-weight:700">${rp(r.bersih)}</td>
+      <td>${r.bayar ? `<span class="pill ok">DIBAYAR</span><div class="small muted">${tglPendek(r.bayar.tgl)} · ${esc(r.bayar.metode)}</div>` : r.kotor ? `<span class="pill warn">BELUM</span>` : ""}</td>
+      <td class="r" style="white-space:nowrap">${r.bayar ? `<button class="btn sm" data-slip="${r.user_id}" type="button">Slip</button>${ro ? "" : ` <button class="btn sm ghost" data-batal="${r.bayar.id}" type="button">Batalkan</button>`}`
+        : r.kotor && !ro ? `<button class="btn sm pri" data-bayar="${r.user_id}" type="button">Bayar</button>` : ""}</td></tr>`).join("") || `<tr><td colspan="9" class="empty">Belum ada karyawan.</td></tr>`}
+    </tbody></table></div>
+    <p class="small muted" style="margin:8px 0 0">Kotor = gaji pokok + insentif produksi + insentif lain + lembur (${rp(G.lembur_per_jam)}/jam) + bonus. Bersih = kotor − potongan kasbon. Setiap pembayaran otomatis tercatat di Pengeluaran (kategori Gaji Karyawan).</p>
+
+    <div class="grid2" style="align-items:start;margin-top:18px">
+      <section class="panel stack" id="gPokok"><h3 style="font-size:17px">Gaji pokok</h3>
+        <p class="small muted" style="margin:0">Gaji pokok per periode (per bulan) tiap karyawan.</p>
+        <div class="stack">${G.rows.map(r => `<div class="row" style="align-items:center"><span style="flex:1">${esc(r.nama)}</span><input type="number" data-pokok="${r.user_id}" value="${r.gaji_pokok ?? r.pokok ?? 0}" min="0" step="50000" inputmode="numeric" style="width:150px" ${ro ? "disabled" : ""}></div>`).join("")}</div>
+        ${ro ? "" : `<button class="btn pri" id="gPokokSimpan" type="button">Simpan gaji pokok</button>`}
+      </section>
+      <section class="panel stack"><h3 style="font-size:17px">Kasbon / hutang karyawan</h3>
+        ${K ? `${K.saldo.length ? `<div class="list">${K.saldo.map(x => `<div class="li"><div class="main"><div class="t">${esc(x.nama)}</div><div class="small muted">sisa hutang</div></div><b class="num" style="color:var(--bad)">${rp(x.sisa)}</b></div>`).join("")}</div>` : `<p class="small muted" style="margin:0">Tidak ada hutang karyawan.</p>`}
+          ${ro ? "" : `<div class="row"><button class="btn" id="gKasbon" type="button">+ Kasbon baru</button><button class="btn" id="gCicil" type="button">Bayar cicilan</button></div>`}
+          <details><summary class="small"><b>Riwayat kasbon</b></summary><div class="list" style="margin-top:8px">${K.rows.length ? K.rows.map(x => `<div class="li"><div class="main"><div class="t">${esc(x.nama)} · ${x.jenis === "pinjam" ? "Kasbon" : x.jenis === "bayar" ? "Bayar cicilan" : "Potong gaji"}</div><div class="small muted">${tglPendek(x.tgl)} · ${esc(x.ket)}${x.metode ? " · " + esc(x.metode) : ""} · ${esc(x.oleh)}</div></div>
+            <b class="num" style="color:${x.jenis === "pinjam" ? "var(--bad)" : "var(--ok)"}">${x.jenis === "pinjam" ? "+" : "−"}${rp(x.nominal)}</b>${ro || x.jenis === "potong" ? "" : `<button class="btn ghost sm" data-hapus-kasbon="${x.id}" type="button">Hapus</button>`}</div>`).join("") : `<div class="empty">Belum ada catatan.</div>`}</div></details>`
+          : `<p class="small muted" style="margin:0">Data kasbon belum bisa dimuat.</p>`}
+      </section>
+    </div>`;
+  $$("[data-bayar]").forEach(b => b.onclick = () => bayarGaji(G, G.rows.find(r => r.user_id === +b.dataset.bayar)));
+  $$("[data-slip]").forEach(b => b.onclick = () => slipGaji(G, G.rows.find(r => r.user_id === +b.dataset.slip)));
+  $$("[data-batal]").forEach(b => b.onclick = () => konfirmasi("Batalkan pembayaran gaji?", "Pengeluaran gaji & potongan kasbonnya ikut dibatalkan, lalu gaji bisa dibayar ulang dengan angka yang benar.", "Batalkan",
+    () => coba(async () => { await api("DELETE", `/api/gaji/${b.dataset.batal}`); toast("Pembayaran gaji dibatalkan"); vGaji(); })));
+  const sp = $("#gPokokSimpan"); if (sp) sp.onclick = e => coba(async () => {
+    await api("PUT", "/api/gaji/pokok", { pokok: $$("[data-pokok]").map(i => ({ user_id: +i.dataset.pokok, gaji_pokok: num(i.value) })) });
+    toast("Gaji pokok tersimpan"); vGaji();
+  }, e.target);
+  const kb = $("#gKasbon"); if (kb) kb.onclick = () => formKasbon("pinjam", G, K);
+  const kc = $("#gCicil"); if (kc) kc.onclick = () => formKasbon("bayar", G, K);
+  $$("[data-hapus-kasbon]").forEach(b => b.onclick = () => konfirmasi("Hapus catatan kasbon?", "Catatan ini (dan pengeluarannya, bila kasbon baru) dihapus.", "Hapus",
+    () => coba(async () => { await api("DELETE", `/api/kasbon/${b.dataset.hapusKasbon}`); toast("Catatan kasbon dihapus"); vGaji(); })));
+}
+function formKasbon(jenis, G, K){
+  const sisa = new Map((K.saldo || []).map(x => [x.user_id, x.sisa]));
+  const orang = jenis === "bayar" ? G.rows.filter(r => sisa.get(r.user_id) > 0) : G.rows;
+  if (!orang.length) return toast(jenis === "bayar" ? "Tidak ada karyawan yang punya hutang" : "Belum ada karyawan");
+  let metode = "Tunai";
+  modal(`<h3>${jenis === "pinjam" ? "Kasbon baru" : "Bayar cicilan kasbon"}</h3>
+    <p class="small muted" style="margin:0">${jenis === "pinjam" ? "Uang yang dipinjam karyawan. Otomatis tercatat di Pengeluaran (Kasbon Karyawan) dan bisa dipotong dari gaji." : "Karyawan mengembalikan hutang di luar potong gaji."}</p>
+    <div class="stack">
+      <label class="f">Karyawan<select id="kbU">${orang.map(r => `<option value="${r.user_id}">${esc(r.nama)}${sisa.get(r.user_id) ? " — hutang " + rp(sisa.get(r.user_id)) : ""}</option>`).join("")}</select></label>
+      <div class="row"><label class="f grow">Tanggal<input type="date" id="kbT" value="${today()}" max="${today()}"></label><label class="f grow">Nominal (Rp)<input type="number" id="kbN" min="0" step="10000" inputmode="numeric"></label></div>
+      <label class="f">Keterangan singkat (wajib)<input type="text" id="kbK" maxlength="150" placeholder="${jenis === "pinjam" ? "Contoh: keperluan sekolah anak" : "Contoh: cicilan ke-1"}"></label>
+      <div class="seg" id="kbM" style="display:flex"><button type="button" data-m="Tunai" style="flex:1" class="on">💵 Tunai</button><button type="button" data-m="Transfer" style="flex:1">🏦 Transfer</button></div>
+    </div>
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="kbOk" type="button">Simpan</button></div>`, m => {
+    $$("#kbM button", m).forEach(b => b.onclick = () => { metode = b.dataset.m; $$("#kbM button", m).forEach(x => x.classList.toggle("on", x === b)); });
+    $("#kbOk", m).onclick = e => {
+      const nominal = num($("#kbN", m).value), ket = $("#kbK", m).value.trim();
+      if (!nominal) return toast("Isi nominal"); if (!ket) return toast("Tulis keterangan singkat");
+      coba(async () => { const r = await api("POST", "/api/kasbon", { user_id: +$("#kbU", m).value, jenis, tgl: $("#kbT", m).value, nominal, ket, metode });
+        closeModal(); toast(`Tersimpan. Sisa hutang ${rp(r.sisa)}`); vGaji(); }, e.target);
+    };
+  });
+}
+function bayarGaji(G, r){
+  let metode = "Transfer";
+  const tglBayar = G.tgl_gajian <= today() ? G.tgl_gajian : today();
+  modal(`<h3>Bayar gaji ${esc(r.nama)}</h3><p class="muted" style="margin:0">Periode ${tglID(G.dari)} – ${tglID(G.sampai)}</p>
+    <div class="list">
+      <div class="li"><div class="main">Gaji pokok</div><b class="num">${rp(r.pokok)}</b></div>
+      <div class="li"><div class="main">Insentif produksi <span class="small muted">${fq(r.qty || 0)} pcs</span></div><b class="num">${rp(r.ins_produksi)}</b></div>
+      ${(r.lainDetail || []).map(d => `<div class="li"><div class="main">${esc(d.label)} <span class="small muted">${d.kali}×</span></div><b class="num">${rp(d.nominal)}</b></div>`).join("")}
+      <div class="li"><div class="main">Lembur <span class="small muted">${jamMenit(r.lembur_menit)} × ${rp(G.lembur_per_jam)}/jam</span></div><b class="num">${rp(r.lembur)}</b></div>
+      ${r.insentif_terpisah ? `<div class="li"><div class="main small muted">Insentif periode ini sudah dibayar terpisah (${rp(r.insentif_terpisah)}), tidak dihitung lagi.</div></div>` : ""}
+    </div>
+    <div class="stack">
+      <div class="row"><label class="f" style="width:150px">Bonus (Rp)<input type="number" id="gbB" value="0" min="0" step="10000" inputmode="numeric"></label><label class="f grow">Keterangan bonus<input type="text" id="gbBK" maxlength="120" placeholder="Contoh: bonus target"></label></div>
+      <label class="f">Potong kasbon / hutang (Rp)${r.hutang ? ` — sisa hutang <b>${rp(r.hutang)}</b>` : ""}<input type="number" id="gbP" value="${Math.min(r.hutang, r.kotor)}" min="0" max="${r.hutang}" step="10000" inputmode="numeric" ${r.hutang ? "" : "disabled"}></label>
+      <div class="list" id="gbHit"></div>
+      <div class="seg" id="gbM" style="display:flex"><button type="button" data-m="Tunai" style="flex:1">💵 Tunai</button><button type="button" data-m="Transfer" style="flex:1" class="on">🏦 Transfer</button></div>
+      <div class="row"><label class="f grow">Tanggal bayar<input type="date" id="gbT" value="${tglBayar}" max="${today()}"></label><label class="f grow">Catatan<input type="text" id="gbK" maxlength="200"></label></div>
+    </div>
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="gbOk" type="button">Bayar gaji</button></div>`, m => {
+    const hitung = () => {
+      const bonus = num($("#gbB", m).value) || 0, potong = Math.min(num($("#gbP", m).value) || 0, r.hutang), kotor = r.kotor + bonus;
+      $("#gbHit", m).innerHTML = `<div class="li"><div class="main"><b>Gaji kotor</b></div><b class="num">${rp(kotor)}</b></div>
+        ${potong ? `<div class="li"><div class="main">Potong kasbon <span class="small muted">sisa hutang jadi ${rp(r.hutang - potong)}</span></div><b class="num" style="color:var(--bad)">−${rp(potong)}</b></div>` : ""}
+        <div class="li"><div class="main"><b>Gaji bersih diterima</b></div><b class="num" style="font-size:18px">${rp(kotor - potong)}</b></div>`;
+    };
+    hitung(); $("#gbB", m).oninput = hitung; $("#gbP", m).oninput = hitung;
+    $$("#gbM button", m).forEach(b => b.onclick = () => { metode = b.dataset.m; $$("#gbM button", m).forEach(x => x.classList.toggle("on", x === b)); });
+    $("#gbOk", m).onclick = e => coba(async () => {
+      const g = await api("POST", "/api/gaji/bayar", { user_id: r.user_id, periode_dari: G.dari, bonus: num($("#gbB", m).value) || 0, bonus_ket: $("#gbBK", m).value.trim(),
+        potong_hutang: num($("#gbP", m).value) || 0, metode, tgl: $("#gbT", m).value, ket: $("#gbK", m).value.trim() });
+      closeModal(); toast(`Gaji ${r.nama} dibayar ${rp(g.bersih)} (${metode})`);
+      const G2 = await api("GET", `/api/gaji?tgl=${G.dari}`); vGaji();
+      const r2 = G2.rows.find(x => x.user_id === r.user_id); if (r2) slipGaji(G2, r2);
+    }, e.target);
+  });
+}
+function slipGajiLines(G, r){
+  const w = lebar(), garis = "-".repeat(w), L = [], b = r.bayar || {};
+  L.push({ t: center(B.toko.nama_toko, w), b: 1 }, { t: center("SLIP GAJI", w), b: 1 }, { t: garis });
+  L.push({ t: lr("Nama", r.nama, w) }, { t: lr("Periode", tglPendek(G.dari) + "-" + tglPendek(G.sampai), w) }, { t: lr("Hadir", r.hadir + " hari", w) }, { t: garis });
+  L.push({ t: lr("Gaji pokok", angka(r.pokok), w) }, { t: lr(`Insentif produksi ${fq(r.qty || 0)}pcs`, angka(r.ins_produksi), w) });
+  if (r.ins_lain) L.push({ t: lr("Insentif lain", angka(r.ins_lain), w) });
+  if (r.lembur_menit) L.push({ t: lr("Lembur " + jamMenit(r.lembur_menit), angka(r.lembur), w) });
+  if (r.bonus) { L.push({ t: lr("Bonus", angka(r.bonus), w) }); if (b.bonus_ket) wrap("  " + b.bonus_ket, w).forEach(l => L.push({ t: l })); }
+  L.push({ t: garis }, { t: lr("GAJI KOTOR", "Rp" + angka(r.kotor), w), b: 1 });
+  if (r.potong_hutang) L.push({ t: lr("Potong kasbon", "-" + angka(r.potong_hutang), w) });
+  L.push({ t: lr("GAJI BERSIH", "Rp" + angka(r.bersih), w), b: 1 }, { t: garis });
+  if (r.bayar) L.push({ t: lr("Dibayar " + tglPendek(b.tgl), b.metode, w) });
+  if (r.hutang) L.push({ t: lr("Sisa hutang", "Rp" + angka(r.hutang), w) });
+  if (b.ket) wrap(b.ket, w).forEach(l => L.push({ t: l }));
+  L.push({ t: "" }, { t: lr("Penerima", "Dibayar oleh", w) }, { t: "" }, { t: "" }, { t: lr("(" + r.nama + ")", "(" + (b.oleh || B.me.nama) + ")", w) });
+  return L;
+}
+function slipGaji(G, r){
+  const L = slipGajiLines(G, r);
+  modal(`<h3>Slip gaji ${esc(r.nama)}</h3><pre class="receipt-prev">${esc(L.map(l => l.t).join("\n"))}</pre>
+    <div class="actions"><button class="btn" data-close>Tutup</button><button class="btn pri" id="sgP">Cetak slip</button></div>`, m => $("#sgP", m).onclick = () => cetakBaris(L));
+}
+
 /* ================= PRODUKSI & INSENTIF ================= */
 let pPer = null, pOleh = null;
 async function vProduksi(){
@@ -1584,7 +1733,7 @@ async function vProduksi(){
         <h3 style="font-size:17px">Insentif lain</h3>
         <div class="seg" id="ilJ" style="display:flex;flex-wrap:wrap">${Object.entries(JENIS_LAIN).map(([k, t], i) => `<button type="button" data-j="${k}" style="flex:1" class="${i ? "" : "on"}">${t}</button>`).join("")}</div>
         <div class="row"><label class="f grow">Tanggal<input type="date" id="ilT" value="${today()}" max="${today()}"></label><label class="f grow">Karyawan<select id="ilU">${pembuatList.map(s => `<option value="${s.id}" ${s.id === pOleh ? "selected" : ""}>${esc(s.nama)}</option>`).join("")}</select></label></div>
-        <div class="row"><label class="f" style="width:140px">Nominal (Rp)<input type="number" id="ilN" min="0" step="500" inputmode="numeric"></label><label class="f grow">Keterangan<input type="text" id="ilK" placeholder="Contoh: antar ke Jatibarang / video reels"></label></div>
+        <div class="row">${isAdmin() ? `<label class="f" style="width:140px">Nominal (Rp)<input type="number" id="ilN" min="0" step="500" inputmode="numeric"></label>` : ""}<label class="f grow">Keterangan<input type="text" id="ilK" placeholder="Contoh: antar ke Jatibarang / video reels"></label></div>
         <button class="btn pri" id="ilSave" type="button">Simpan insentif lain</button>
       </section>
       <section class="stack" style="min-width:0">
@@ -1598,15 +1747,15 @@ async function vProduksi(){
     <div id="ilLog"><div class="empty">Memuat…</div></div>`;
   let ilJenis = "kurir";
   const tarifLain = j => Number(B.toko["ins_" + j]) || 0;
-  const isiNominal = () => { $("#ilN").value = tarifLain(ilJenis) || ""; };
+  const isiNominal = () => { if ($("#ilN")) $("#ilN").value = tarifLain(ilJenis) || ""; };
   isiNominal();
   $$("#ilJ button").forEach(bt => bt.onclick = () => { ilJenis = bt.dataset.j; $$("#ilJ button").forEach(x => x.classList.toggle("on", x === bt)); isiNominal(); });
   $("#ilSave").onclick = e => {
-    const tgl = $("#ilT").value || today(), nominal = num($("#ilN").value);
-    if (!nominal) return toast("Isi nominal insentif");
+    const tgl = $("#ilT").value || today(), nominal = $("#ilN") ? num($("#ilN").value) : null;
+    if (isAdmin() && !nominal) return toast("Isi nominal insentif");
     coba(async () => {
       await api("POST", "/api/insentif-lain", { tgl, user_id: +$("#ilU").value, jenis: ilJenis, nominal, ket: $("#ilK").value.trim() });
-      toast(`${JENIS_LAIN[ilJenis].replace(/^\S+ /, "")} ${rp(nominal)} dicatat`);
+      toast(`${JENIS_LAIN[ilJenis].replace(/^\S+ /, "")}${nominal ? " " + rp(nominal) : ""} dicatat`);
       pPer = periodeDari(tgl, B.toko.periode_mulai); vProduksi();
     }, e.target);
   };
@@ -1638,9 +1787,15 @@ async function vProduksi(){
     }, e.target);
   };
   coba(async () => {
-    const [rek, log, lain] = await Promise.all([api("GET", `/api/insentif?tgl=${a}`), api("GET", `/api/produksi?dari=${a}&sampai=${b}`), api("GET", `/api/insentif-lain?dari=${a}&sampai=${b}`)]);
+    const [rek, log, lain] = await Promise.all([isAdmin() ? api("GET", `/api/insentif?tgl=${a}`) : null, api("GET", `/api/produksi?dari=${a}&sampai=${b}`), api("GET", `/api/insentif-lain?dari=${a}&sampai=${b}`)]);
     if (view !== "produksi") return;
-    const rows = rek.rows.filter(r => isAdmin() || r.pembuat_id === B.me.id);
+    if (!isAdmin()) {
+      const saya = log.filter(x => x.pembuat_id === B.me.id).reduce((t, x) => t + x.qty, 0);
+      $("#pRekap").innerHTML = `<div class="kpis"><div class="kpi"><div class="l">Produksi saya periode ini</div><div class="v num">${fq(saya)} pcs</div></div></div>
+        <p class="small muted" style="margin:8px 0 0">Rincian insentif & gaji hanya bisa dilihat admin.</p>`;
+    }
+    const rows = rek ? rek.rows : [];
+    if (rek) {
     const totQ = rows.reduce((x, r) => x + r.qty, 0), totI = rows.reduce((x, r) => x + r.total, 0);
     $("#pRekap").innerHTML = `<div class="kpis" style="margin-bottom:10px"><div class="kpi"><div class="l">${isAdmin() ? "Total produksi" : "Produksi saya"}</div><div class="v num">${fq(totQ)}</div></div><div class="kpi"><div class="l">${isAdmin() ? "Total insentif" : "Insentif saya"}</div><div class="v num">${rp(totI)}</div></div></div>
       <div class="tbl-wrap"><table><thead><tr><th>Nama</th><th class="r">Produksi</th><th class="r">Lain</th><th class="r">Lembur</th><th class="r">Total</th><th>Status</th><th></th></tr></thead><tbody>
@@ -1648,26 +1803,54 @@ async function vProduksi(){
         <td class="r num">${r.lain ? rp(r.lain) : "-"}</td><td class="r num">${r.lembur_menit ? `${r.lembur_rp ? rp(r.lembur_rp) : ""}<div class="small muted">${jamMenit(r.lembur_menit)}</div>` : "-"}</td>
         <td class="r num" style="font-weight:700">${rp(r.total)}</td>
         <td>${r.bayar ? `<span class="pill ok">DIBAYAR</span><div class="small muted">${tglPendek(r.bayar.tgl)}${r.bayar.nominal !== r.total ? " · " + rp(r.bayar.nominal) : ""}</div>` : r.total ? `<span class="pill warn">BELUM</span>` : ""}</td>
-        <td class="r" style="white-space:nowrap">${r.qty || r.total ? `<button class="btn sm" data-slip="${r.pembuat_id}" type="button">Slip</button> ${!r.bayar && isAdmin() ? `<button class="btn sm pri" data-bayar="${r.pembuat_id}" type="button">Bayar</button>` : ""}` : ""}</td></tr>`).join("") || `<tr><td colspan="7" class="empty">Belum ada data.</td></tr>`}
+        <td class="r" style="white-space:nowrap">${r.qty || r.total ? `<button class="btn sm" data-slip="${r.pembuat_id}" type="button">Slip</button>` : ""}</td></tr>`).join("") || `<tr><td colspan="7" class="empty">Belum ada data.</td></tr>`}
       </tbody></table></div>
       ${rek.lemburTersedia === false ? `<p class="note" style="margin:8px 0 0">Lembur belum ikut dihitung: data absen ada di server pusat dan perangkat ini sedang offline.</p>` : ""}
-      <p class="small muted" style="margin:8px 0 0">Total = insentif produksi + insentif lain + lembur (${B.toko.lembur_per_jam ? rp(B.toko.lembur_per_jam) + "/jam" : "upah lembur belum diatur"}). Tarif ${rp(B.toko.insentif)} per produk, periode tanggal ${B.toko.periode_mulai} s/d ${B.toko.periode_mulai - 1 || "akhir bulan"}.${isAdmin() ? " Ubah di Pengaturan; tarif khusus per produk diisi di menu Stok." : ""}</p>`;
+      <p class="small" style="margin:8px 0 0">Insentif & lembur dibayarkan bersama gaji tanggal ${B.toko.periode_mulai} lewat menu <a href="#gaji" id="keGaji"><b>Gaji</b></a>.</p>
+      <p class="small muted" style="margin:4px 0 0">Total = insentif produksi + insentif lain + lembur (${B.toko.lembur_per_jam ? rp(B.toko.lembur_per_jam) + "/jam" : "upah lembur belum diatur"}). Tarif ${rp(B.toko.insentif)} per produk, periode tanggal ${B.toko.periode_mulai} s/d ${B.toko.periode_mulai - 1 || "akhir bulan"}.${isAdmin() ? " Ubah di Pengaturan; tarif khusus per produk diisi di menu Stok." : ""}</p>`;
     $$("[data-slip]").forEach(bt => bt.onclick = () => slipInsentif(rek, rows.find(r => r.pembuat_id === +bt.dataset.slip)));
-    $$("[data-bayar]").forEach(bt => bt.onclick = () => bayarInsentif(rek, rows.find(r => r.pembuat_id === +bt.dataset.bayar)));
-    $("#pLog").innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>Tanggal</th><th>Barang</th><th class="r">Qty</th><th>Pembuat</th><th class="r">Insentif</th><th></th></tr></thead><tbody>
+    $("#keGaji").onclick = e => { e.preventDefault(); gPer = pPer; pindah("gaji"); };
+    }
+    $("#pLog").innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>Tanggal</th><th>Barang</th><th class="r">Qty</th><th>Pembuat</th>${isAdmin() ? `<th class="r">Insentif</th>` : ""}<th></th></tr></thead><tbody>
       ${log.length ? log.map(x => { const bolehHapus = !x.dibayar && (isAdmin() || (x.user_id === B.me.id && x.tgl === today()));
-        return `<tr><td class="small">${tglPendek(x.tgl)}</td><td>${esc(x.nama)} <span class="code">${x.kode}</span>${x.restock ? "" : ' <span class="pill mut">pesanan</span>'}</td><td class="r num">${fq(x.qty)}</td><td>${esc(x.pembuat)}</td><td class="r num">${rp(x.qty * x.tarif)}</td><td class="r">${bolehHapus ? `<button class="btn ghost sm" data-del="${x.id}" type="button">Hapus</button>` : ""}</td></tr>`; }).join("")
+        return `<tr><td class="small">${tglPendek(x.tgl)}</td><td>${esc(x.nama)} <span class="code">${x.kode || ""}</span>${x.restock ? "" : ' <span class="pill mut">pesanan</span>'}</td><td class="r num">${fq(x.qty)}</td><td>${esc(x.pembuat)}</td>${isAdmin() ? `<td class="r num">${rp(x.qty * x.tarif)}</td>` : ""}
+          <td class="r" style="white-space:nowrap">${bolehHapus ? `<button class="btn sm" data-ubah="${x.id}" type="button">Ubah</button> <button class="btn ghost sm" data-del="${x.id}" type="button">Hapus</button>` : x.dibayar ? `<span class="small muted">dibayar</span>` : ""}</td></tr>`; }).join("")
         : `<tr><td colspan="6" class="empty">Belum ada catatan produksi di periode ini.</td></tr>`}</tbody></table></div>`;
+    $$("[data-ubah]").forEach(bt => bt.onclick = () => ubahProduksi(log.find(p => p.id === +bt.dataset.ubah)));
     $$("[data-del]").forEach(bt => bt.onclick = () => { const x = log.find(p => p.id === +bt.dataset.del);
       konfirmasi("Hapus catatan produksi?", `${x.nama} ×${fq(x.qty)} oleh ${x.pembuat}.${x.restock ? " Stok ready ikut dikurangi." : ""}`, "Hapus",
         () => coba(async () => { await api("DELETE", `/api/produksi/${x.id}`); await muatUlang(); vProduksi(); })); });
-    $("#ilLog").innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>Tanggal</th><th>Jenis</th><th>Karyawan</th><th>Keterangan</th><th class="r">Nominal</th><th></th></tr></thead><tbody>
+    $("#ilLog").innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>Tanggal</th><th>Jenis</th><th>Karyawan</th><th>Keterangan</th>${isAdmin() ? `<th class="r">Nominal</th>` : ""}<th></th></tr></thead><tbody>
       ${lain.length ? lain.map(x => { const bolehHapus = !x.dibayar && (isAdmin() || (x.oleh_id === B.me.id && x.tgl === today()));
-        return `<tr><td class="small">${tglPendek(x.tgl)}</td><td>${JENIS_LAIN[x.jenis] || esc(x.jenis)}</td><td>${esc(x.nama)}</td><td class="small">${esc(x.ket || "")}</td><td class="r num">${rp(x.nominal)}</td><td class="r">${bolehHapus ? `<button class="btn ghost sm" data-del-lain="${x.id}" type="button">Hapus</button>` : ""}</td></tr>`; }).join("")
+        return `<tr><td class="small">${tglPendek(x.tgl)}</td><td>${JENIS_LAIN[x.jenis] || esc(x.jenis)}</td><td>${esc(x.nama)}</td><td class="small">${esc(x.ket || "")}</td>${isAdmin() ? `<td class="r num">${rp(x.nominal)}</td>` : ""}<td class="r">${bolehHapus ? `<button class="btn ghost sm" data-del-lain="${x.id}" type="button">Hapus</button>` : ""}</td></tr>`; }).join("")
         : `<tr><td colspan="6" class="empty">Belum ada insentif lain di periode ini.</td></tr>`}</tbody></table></div>`;
     $$("[data-del-lain]").forEach(bt => bt.onclick = () => { const x = lain.find(p => p.id === +bt.dataset.delLain);
-      konfirmasi("Hapus insentif lain?", `${(JENIS_LAIN[x.jenis] || x.jenis).replace(/^\S+ /, "")} ${rp(x.nominal)} untuk ${x.nama}.`, "Hapus",
+      konfirmasi("Hapus insentif lain?", `${(JENIS_LAIN[x.jenis] || x.jenis).replace(/^\S+ /, "")}${x.nominal != null ? " " + rp(x.nominal) : ""} untuk ${x.nama}.`, "Hapus",
         () => coba(async () => { await api("DELETE", `/api/insentif-lain/${x.id}`); vProduksi(); })); });
+  });
+}
+/** Ubah catatan produksi yang salah input: produk, pembuat, atau jumlah (stok ready ikut dikoreksi). */
+function ubahProduksi(x){
+  if (!x) return;
+  modal(`<h3>Ubah catatan produksi</h3><p class="small muted" style="margin:0">${tglID(x.tgl)}${x.restock ? " · stok ready ikut dikoreksi otomatis" : ""}</p>
+    <div class="stack">
+      <label class="f">Produk<input type="text" id="upI" list="prodList" value="${x.kode ? esc(x.kode + " · " + x.nama) : esc(x.nama)}" autocomplete="off" ${x.kode ? "" : "disabled"}></label>
+      ${x.kode ? "" : `<p class="small muted" style="margin:0">Barang custom dari kasir: nama barang tidak bisa diganti di sini, tapi pembuat & jumlahnya bisa.</p>`}
+      <div class="row"><label class="f grow">Pembuat<select id="upO">${B.staf.map(s => `<option value="${s.id}" ${s.id === x.pembuat_id ? "selected" : ""}>${esc(s.nama)}</option>`).join("")}</select></label>
+        <label class="f" style="width:100px">Qty<input type="number" id="upQ" value="${x.qty}" min="0" step="1" inputmode="numeric"></label></div>
+    </div>
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="upOk" type="button">Simpan perubahan</button></div>`, m => {
+    $("#upOk", m).onclick = e => {
+      const body = { pembuat_id: +$("#upO", m).value, qty: num($("#upQ", m).value) };
+      if (!body.qty) return toast("Isi jumlah");
+      if (x.kode) {
+        const v = $("#upI", m).value.trim(), kode = v.split("·")[0].trim().toUpperCase();
+        const pr = B.produk.find(p => p.kode === kode) || cariScan(v)?.x;
+        if (!pr || !B.produk.includes(pr)) return toast(`Produk "${v}" tidak ditemukan. Pilih dari daftar.`);
+        body.product_id = pr.id;
+      }
+      coba(async () => { await api("PUT", `/api/produksi/${x.id}`, body); closeModal(); toast("Catatan produksi diubah"); await muatUlang(); vProduksi(); }, e.target);
+    };
   });
 }
 function slipLines(rek, r){
@@ -1903,11 +2086,11 @@ let bBulan = "";
 function vBiaya(){
   if (!bBulan) bBulan = today().slice(0, 7);
   $("#main").innerHTML = `
-    <div class="view-head"><h2>Pengeluaran</h2><span class="sp"></span><input type="month" id="bB" value="${bBulan}" style="width:auto" aria-label="Bulan"></div>
+    <div class="view-head"><h2>Pengeluaran</h2><span class="sp"></span><input type="month" id="bB" value="${bBulan}" style="width:auto" aria-label="Bulan"><button class="btn sm" id="bCsv" type="button">Unduh CSV</button></div>
     <div class="grid2" style="align-items:start">
       <section class="panel stack">
         <div class="row"><label class="f grow">Tanggal<input type="date" id="xT" value="${today()}"></label><label class="f grow">Kategori<select id="xK">${B.katPengeluaran.map(k => `<option>${k}</option>`).join("")}</select></label></div>
-        <label class="f">Keterangan<input type="text" id="xD" placeholder="Contoh: beli mawar merah 2 ikat"></label>
+        <label class="f">Keterangan singkat (wajib)<input type="text" id="xD" maxlength="200" placeholder="Contoh: beli mawar merah 2 ikat"></label>
         <label class="f">Nominal (Rp)<input type="number" id="xN" min="0" step="500" inputmode="numeric"></label>
         <button class="btn pri big" id="xSave" type="button">Simpan pengeluaran</button>
       </section>
@@ -1916,6 +2099,7 @@ function vBiaya(){
   $("#bB").onchange = e => { bBulan = e.target.value || today().slice(0, 7); vBiaya(); };
   $("#xSave").onclick = e => coba(async () => {
     const nominal = num($("#xN").value); if (!nominal) return toast("Isi nominal");
+    if (!$("#xD").value.trim()) return toast("Tulis keterangan singkat pengeluaran");
     await api("POST", "/api/pengeluaran", { tgl: $("#xT").value, kategori: $("#xK").value, ket: $("#xD").value, nominal });
     toast("Pengeluaran tersimpan"); vBiaya();
   }, e.target);
@@ -1926,7 +2110,8 @@ function vBiaya(){
     list.forEach(e => perKat[e.kategori] = (perKat[e.kategori] || 0) + e.nominal);
     $("#bList").innerHTML = `<div class="kpi"><div class="l">Total ${BULAN[+bBulan.slice(5) - 1]} ${bBulan.slice(0, 4)}</div><div class="v num">${rp(total)}</div>
         <div class="stack small" style="margin-top:8px;gap:6px">${Object.entries(perKat).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div><div class="row" style="justify-content:space-between"><span>${esc(k)}</span><span class="num">${rp(v)}</span></div><div class="hbar"><i style="width:${(v / total * 100).toFixed(1)}%"></i></div></div>`).join("")}</div></div>
-      <div class="list">${list.length ? list.map(e => `<div class="li"><div class="main"><div class="t">${esc(e.ket || e.kategori)}</div><div class="small muted">${tglPendek(e.tgl)} · ${esc(e.kategori)} · ${esc(e.oleh)}</div></div><div class="num" style="font-weight:700">${rp(e.nominal)}</div><button class="btn ghost sm" data-id="${e.id}" type="button">Hapus</button></div>`).join("") : `<div class="empty">Belum ada pengeluaran bulan ini.</div>`}</div>`;
+      <div class="list">${list.length ? list.map(e => `<div class="li"><div class="main"><div class="t">${esc(e.ket || e.kategori)}</div><div class="small muted">${tglPendek(e.tgl)} · ${esc(e.kategori)} · ${esc(e.oleh)}${e.sumber ? ` · <span class="pill mut">otomatis dari ${e.sumber === "gaji" ? "Gaji" : e.sumber === "kasbon" ? "Kasbon" : "Insentif"}</span>` : ""}</div></div><div class="num" style="font-weight:700">${rp(e.nominal)}</div>${e.sumber ? "" : `<button class="btn ghost sm" data-id="${e.id}" type="button">Hapus</button>`}</div>`).join("") : `<div class="empty">Belum ada pengeluaran bulan ini.</div>`}</div>`;
+    $("#bCsv").onclick = () => unduhCSV(`pengeluaran-${bBulan}.csv`, [["Tanggal", "Kategori", "Keterangan", "Nominal", "Dicatat oleh"], ...list.slice().reverse().map(e => [e.tgl, e.kategori, e.ket, e.nominal, e.oleh])]);
     $$("#bList [data-id]").forEach(b => b.onclick = () => konfirmasi("Hapus pengeluaran?", "Catatan ini akan dihapus.", "Hapus", () => coba(async () => { await api("DELETE", `/api/pengeluaran/${b.dataset.id}`); vBiaya(); })));
   });
 }

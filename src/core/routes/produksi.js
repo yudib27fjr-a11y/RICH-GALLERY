@@ -71,6 +71,49 @@ route("DELETE", "/api/produksi/:id", "semua", ({ params, user }) => tx(() => {
   },
 });
 
+/* Ubah catatan produksi yang salah input (produk, pembuat, atau jumlah).
+   Stok ready ikut dikoreksi (bila catatan ini menambah stok), jadi jumlah produksi & stok tetap pas. */
+route("PUT", "/api/produksi/:id", "semua", ({ params, body, user }) => tx(() => {
+  const s = getSettings();
+  const r = one("SELECT * FROM produksi WHERE id = ?", [+params.id]);
+  if (!r) throw notFound("Catatan produksi tidak ditemukan");
+  if (user.peran !== "admin" && !(r.user_id === user.id && r.tgl === sekarang().tgl)) throw new HttpError(403, "Karyawan hanya bisa mengubah catatan yang ia buat hari ini");
+  if (sudahDibayar(r.pembuat_id, r.tgl)) throw bad("Insentif periode ini sudah dibayar, catatan tidak bisa diubah");
+  const pembuat = body.pembuat_id != null && +body.pembuat_id !== r.pembuat_id ? one("SELECT id, nama FROM users WHERE id = ? AND aktif = 1", [+body.pembuat_id]) : one("SELECT id, nama FROM users WHERE id = ?", [r.pembuat_id]);
+  if (!pembuat) throw bad("Pilih pembuat");
+  if (pembuat.id !== r.pembuat_id && sudahDibayar(pembuat.id, r.tgl)) throw bad(`Insentif ${pembuat.nama} untuk periode ini sudah dibayar`);
+  const gantiProduk = body.product_id != null && +body.product_id !== r.product_id;
+  const p = gantiProduk ? ambilItem("produk", +body.product_id) : null;
+  const qty = body.qty != null ? angka(body.qty, { min: 0.01, max: 100000, wajib: true, nama: "Jumlah" }) : r.qty;
+  const kode = p ? p.kode : r.kode, nama = p ? p.nama : r.nama, tarif = p ? (p.insentif ?? s.insentif) : r.tarif, productId = p ? p.id : r.product_id;
+  if (!gantiProduk && qty === r.qty && pembuat.id === r.pembuat_id) return { ok: true, berubah: false };
+  // Koreksi stok ready: batalkan jumlah lama, tambahkan jumlah baru.
+  if (r.restock) {
+    const ket = `Ubah catatan produksi ${pembuat.nama}`;
+    if (gantiProduk) {
+      const lama = r.product_id ? one("SELECT * FROM products WHERE id = ?", [r.product_id]) : null;
+      if (lama) ubahStok({ jenis: "produk", item: lama, delta: -r.qty, tipe: "koreksi", ket, user });
+      ubahStok({ jenis: "produk", item: p, delta: qty, tipe: "koreksi", ket, user });
+    } else if (qty !== r.qty && r.product_id) {
+      const item = one("SELECT * FROM products WHERE id = ?", [r.product_id]);
+      if (item) ubahStok({ jenis: "produk", item, delta: qty - r.qty, tipe: "koreksi", ket, user });
+    }
+  }
+  run("UPDATE produksi SET product_id = ?, kode = ?, nama = ?, qty = ?, pembuat_id = ?, tarif = ? WHERE id = ?", [productId, kode, nama, qty, pembuat.id, tarif, r.id]);
+  const lamaNama = (one("SELECT nama FROM users WHERE id = ?", [r.pembuat_id]) || {}).nama || "";
+  antre("hapus_produksi", [[r.tgl, r.kode, r.nama, r.qty, lamaNama, sekarang().tgl, user.nama]]);
+  antre("produksi", [[r.tgl, kode, nama, qty, pembuat.nama, tarif, Math.round(qty * tarif), r.restock ? "RESTOCK" : "PESANAN", user.nama + " (ubah)"]]);
+  return { ok: true, berubah: true };
+}), {
+  pra: ({ params }) => one("SELECT uid FROM produksi WHERE id = ?", [+params.id]),
+  cabang: ({ pra, body }) => {
+    if (!pra || !pra.uid) throw new HttpError(409, "Catatan ini dibuat sebelum perangkat tersambung ke server pusat. Ubah catatan ini dari server pusat.");
+    return { aksi: "ubah_produksi", data: { uid: pra.uid, qty: body.qty,
+      pembuat: body.pembuat_id != null ? (one("SELECT nama FROM users WHERE id = ?", [+body.pembuat_id]) || {}).nama || "" : "",
+      kode: body.product_id != null ? (one("SELECT kode FROM products WHERE id = ?", [+body.product_id]) || {}).kode || "" : "" } };
+  },
+});
+
 /* ================= Insentif lain =================
    Selain insentif produksi: jasa kurir non online, kerja lapangan, dan buat konten.
    Nominal bawaan per kegiatan diatur admin (Pengaturan → Jam kerja, lembur & insentif lain) dan bisa diubah saat dicatat. */
@@ -82,7 +125,8 @@ route("GET", "/api/insentif-lain", "semua", ({ query, user }) => {
   if (user.peran !== "admin") { where += " AND (l.user_id = ? OR l.oleh_id = ?)"; prm.push(user.id, user.id); }
   return all(`SELECT l.id, l.tgl, l.user_id, u.nama, l.jenis, l.nominal, l.ket, l.oleh, l.oleh_id,
     EXISTS (SELECT 1 FROM insentif_bayar b WHERE b.pembuat_id = l.user_id AND l.tgl BETWEEN b.periode_dari AND b.periode_sampai) dibayar
-    FROM insentif_lain l JOIN users u ON u.id = l.user_id WHERE ${where} ORDER BY l.tgl DESC, l.id DESC LIMIT 1000`, prm);
+    FROM insentif_lain l JOIN users u ON u.id = l.user_id WHERE ${where} ORDER BY l.tgl DESC, l.id DESC LIMIT 1000`, prm)
+    .map(x => user.peran === "admin" ? x : { ...x, nominal: null }); // nominal (bagian gaji) hanya untuk admin
 });
 
 route("POST", "/api/insentif-lain", "semua", ({ body, user }) => tx(() => {
@@ -94,7 +138,7 @@ route("POST", "/api/insentif-lain", "semua", ({ body, user }) => tx(() => {
   if (!k) throw bad("Pilih karyawan");
   if (!JENIS_LAIN[body.jenis]) throw bad("Pilih jenis insentif");
   if (sudahDibayar(k.id, tgl)) throw bad(`Insentif ${k.nama} untuk periode ini sudah dibayar. Pilih tanggal di periode berikutnya.`);
-  const nominal = angka(body.nominal ?? s["ins_" + body.jenis], { min: 0, max: 1e9, bulat: true, wajib: true, nama: "Nominal" });
+  const nominal = angka(user.peran === "admin" && body.nominal != null && body.nominal !== "" ? body.nominal : s["ins_" + body.jenis], { min: 0, max: 1e9, bulat: true, wajib: true, nama: "Nominal" });
   const ket = teks(body.ket, { max: 200, nama: "Keterangan" });
   const uid = body.uid ? teks(body.uid, { max: 80, nama: "uid" }) : null;
   const id = Number(run("INSERT INTO insentif_lain(tgl, user_id, jenis, nominal, ket, uid, oleh, oleh_id) VALUES (?,?,?,?,?,?,?,?)",
@@ -146,7 +190,8 @@ export function rekapInsentif(tglDalam, hanyaUser = null, lembur = undefined){
   return { dari, sampai, rows, lemburTersedia: lembur !== null };
 }
 
-route("GET", "/api/insentif", "semua", async ({ query, user }) => {
+/* Rekap insentif = bagian dari gaji → hanya admin. */
+route("GET", "/api/insentif", "admin", async ({ query }) => {
   const tgl = tanggal(query.tgl || sekarang().tgl);
   let lembur;
   // Perangkat cabang: data absen ada di server pusat, jadi lembur diambil dari sana (bila sedang offline, lembur tidak ditampilkan).
@@ -154,7 +199,7 @@ route("GET", "/api/insentif", "semua", async ({ query, user }) => {
     const [dari, sampai] = periodeDari(tgl, getSettings().periode_mulai);
     try { lembur = (await mintaPusat("/api/cabang/lembur", { dari, sampai })).lembur; } catch { lembur = null; }
   }
-  return rekapInsentif(tgl, user.peran === "admin" ? null : user.id, lembur);
+  return rekapInsentif(tgl, null, lembur);
 });
 
 route("POST", "/api/insentif/bayar", "admin", ({ body, user }) => tx(() => {

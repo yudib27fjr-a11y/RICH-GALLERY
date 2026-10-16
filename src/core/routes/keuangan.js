@@ -7,12 +7,17 @@ import { KAT_PENGELUARAN, tambahHari } from "../../../public/shared.js";
 /* ---- Pengeluaran (admin) ---- */
 route("GET", "/api/pengeluaran", "admin", ({ query }) => {
   const dari = tanggal(query.dari), sampai = tanggal(query.sampai);
-  return all("SELECT id, tgl, kategori, ket, nominal, oleh FROM expenses WHERE dihapus IS NULL AND tgl BETWEEN ? AND ? ORDER BY tgl DESC, id DESC", [dari, sampai]);
+  // sumber: pengeluaran otomatis dari pembayaran gaji / kasbon / insentif (dihapus lewat menunya masing-masing)
+  return all(`SELECT e.id, e.tgl, e.kategori, e.ket, e.nominal, e.oleh,
+    CASE WHEN EXISTS (SELECT 1 FROM gaji_bayar g WHERE g.expense_id = e.id) THEN 'gaji'
+      WHEN EXISTS (SELECT 1 FROM kasbon k WHERE k.expense_id = e.id) THEN 'kasbon'
+      WHEN EXISTS (SELECT 1 FROM insentif_bayar b WHERE b.expense_id = e.id) THEN 'insentif' ELSE '' END sumber
+    FROM expenses e WHERE e.dihapus IS NULL AND e.tgl BETWEEN ? AND ? ORDER BY e.tgl DESC, e.id DESC`, [dari, sampai]);
 });
 route("POST", "/api/pengeluaran", "admin", ({ body, user }) => tx(() => {
   const tgl = tanggal(body.tgl);
   const kategori = pilihan(body.kategori, KAT_PENGELUARAN, "Kategori");
-  const ket = teks(body.ket, { max: 200, nama: "Keterangan" });
+  const ket = teks(body.ket, { max: 200, wajib: true, nama: "Keterangan singkat" });
   const nominal = angka(body.nominal, { min: 1, max: 1e11, bulat: true, wajib: true, nama: "Nominal" });
   const uid = body.uid ? teks(body.uid, { max: 80, nama: "uid" }) : null;
   const id = Number(run("INSERT INTO expenses(tgl, kategori, ket, nominal, user_id, oleh, uid) VALUES (?,?,?,?,?,?,?)", [tgl, kategori, ket, nominal, user.id, user.nama, uid]).lastInsertRowid);
@@ -23,6 +28,8 @@ route("DELETE", "/api/pengeluaran/:id", "admin", ({ params, user }) => tx(() => 
   const e = one("SELECT * FROM expenses WHERE id = ? AND dihapus IS NULL", [+params.id]);
   if (!e) throw notFound("Pengeluaran tidak ditemukan");
   if (one("SELECT 1 x FROM insentif_bayar WHERE expense_id = ?", [e.id])) throw bad("Pengeluaran ini tercatat dari pembayaran insentif dan tidak bisa dihapus di sini");
+  if (one("SELECT 1 x FROM gaji_bayar WHERE expense_id = ? AND batal_at IS NULL", [e.id])) throw bad("Pengeluaran ini dari pembayaran gaji. Batalkan pembayarannya di menu Gaji.");
+  if (one("SELECT 1 x FROM kasbon WHERE expense_id = ? AND dihapus IS NULL", [e.id])) throw bad("Pengeluaran ini dari kasbon karyawan. Hapus kasbonnya di menu Gaji.");
   run("UPDATE expenses SET dihapus = datetime('now') WHERE id = ?", [e.id]);
   antre("hapus_pengeluaran", [[String(e.id), hariIni(), user.nama]]);
   return { ok: true };

@@ -381,6 +381,31 @@ test("insentif lain (kurir, lapangan, konten): dicatat di cabang/pusat, ikut ke 
   const sesudah = (await pusat("GET", "/api/insentif")).data.rows.find(r => r.nama === "IZA");
   assert.equal(sesudah.bayar.nominal, iza.total);
   assert.equal((await pusat("POST", "/api/insentif-lain", { user_id: iza.pembuat_id, jenis: "konten", nominal: 1000 })).status, 400, "periode sudah dibayar");
+  // Gaji di perangkat: dilihat dari server pusat, pembayaran hanya di server
+  const GC = await cabang("GET", `/api/gaji?tgl=${hari}`);
+  assert.equal(GC.status, 200, JSON.stringify(GC.data)); assert.equal(GC.data.dariPusat, true);
+  assert.equal(GC.data.rows.find(r => r.nama === "IZA").bayar, null, "insentif dibayar terpisah, gaji belum");
+  assert.equal((await cabang("POST", "/api/gaji/bayar", { user_id: izaC.id, periode_dari: GC.data.dari, metode: "Tunai" })).status, 409);
+  assert.equal((await cabang("GET", "/api/kasbon")).status, 200);
+});
+
+test("ubah catatan produksi di cabang (salah pembuat & jumlah) → ikut berubah di pusat, stok pas", async () => {
+  await segarkan();
+  const hari = BC.hariIni;
+  const eva = BC.staf.find(s => s.nama === "EVA"), manu = BC.staf.find(s => s.nama === "MANU");
+  const p = BC.produk.find(x => x.kode === "RG011") || BC.produk[5];
+  assert.equal((await cabang("POST", "/api/produksi", { pembuat_id: eva.id, restock: true, items: [{ product_id: p.id, qty: 2 }] })).status, 200);
+  await sinkron(); await segarkan();
+  const stokP0 = BP.produk.find(x => x.kode === p.kode).stok;
+  const c = (await cabang("GET", `/api/produksi?dari=${hari}&sampai=${hari}`)).data.find(x => x.kode === p.kode && x.pembuat === "EVA" && x.qty === 2);
+  assert.equal((await cabang("PUT", `/api/produksi/${c.id}`, { pembuat_id: manu.id, qty: 6 })).status, 200);
+  const st = await sinkron();
+  assert.equal(st.ditolak, 0, JSON.stringify(st.ditolakDaftar));
+  await segarkan();
+  const prodP = (await pusat("GET", `/api/produksi?dari=${hari}&sampai=${hari}`)).data.filter(x => x.kode === p.kode && x.qty === 6);
+  assert.equal(prodP.length, 1); assert.equal(prodP[0].pembuat, "MANU");
+  assert.equal(BP.produk.find(x => x.kode === p.kode).stok, stokP0 + 4, "stok pusat ikut dikoreksi");
+  assert.equal(BC.produk.find(x => x.kode === p.kode).stok, stokP0 + 4, "stok cabang sama");
 });
 
 test("pesanan: DP di cabang, pelunasan di pusat, diambil di cabang — status sama di kedua sisi", async () => {

@@ -298,6 +298,52 @@ CREATE TABLE insentif_lain(
 );
 CREATE INDEX insentif_lain_tgl ON insentif_lain(tgl);
 CREATE UNIQUE INDEX insentif_lain_uid ON insentif_lain(uid) WHERE uid IS NOT NULL;`,
+
+/* 10: penggajian (gaji pokok + insentif + lembur + bonus − kasbon) & catatan kasbon/hutang karyawan. */
+`ALTER TABLE users ADD COLUMN gaji_pokok INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE kasbon(
+  id INTEGER PRIMARY KEY,
+  tgl TEXT NOT NULL,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  jenis TEXT NOT NULL CHECK (jenis IN ('pinjam','bayar','potong')),
+  nominal INTEGER NOT NULL CHECK (nominal > 0),
+  ket TEXT NOT NULL DEFAULT '',
+  metode TEXT NOT NULL DEFAULT '',
+  expense_id INTEGER,
+  gaji_id INTEGER,
+  oleh TEXT NOT NULL DEFAULT '',
+  dihapus TEXT,
+  dibuat TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX kasbon_user ON kasbon(user_id);
+CREATE TABLE gaji_bayar(
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  periode_dari TEXT NOT NULL,
+  periode_sampai TEXT NOT NULL,
+  tgl TEXT NOT NULL,
+  pokok INTEGER NOT NULL DEFAULT 0,
+  ins_produksi INTEGER NOT NULL DEFAULT 0,
+  qty REAL NOT NULL DEFAULT 0,
+  ins_lain INTEGER NOT NULL DEFAULT 0,
+  lembur_menit INTEGER NOT NULL DEFAULT 0,
+  lembur INTEGER NOT NULL DEFAULT 0,
+  bonus INTEGER NOT NULL DEFAULT 0,
+  bonus_ket TEXT NOT NULL DEFAULT '',
+  kotor INTEGER NOT NULL,
+  potong_hutang INTEGER NOT NULL DEFAULT 0,
+  bersih INTEGER NOT NULL,
+  metode TEXT NOT NULL,
+  ket TEXT NOT NULL DEFAULT '',
+  expense_id INTEGER,
+  insentif_bayar_id INTEGER,
+  oleh TEXT NOT NULL DEFAULT '',
+  batal_at TEXT,
+  batal_oleh TEXT,
+  dibuat TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX gaji_aktif ON gaji_bayar(user_id, periode_dari) WHERE batal_at IS NULL;
+UPDATE settings SET nilai = '4300' WHERE kunci = 'lembur_per_jam' AND nilai = '0';`,
 ];
 
 export const DEFAULT_SETTINGS = {
@@ -353,7 +399,7 @@ export const DEFAULT_SETTINGS = {
   jam_buka: "09:00",
   jam_tutup: "21:00",
   shifts: [{ nama: "Shift 1", masuk: "09:00", pulang: "17:00" }, { nama: "Shift 2", masuk: "12:00", pulang: "21:00" }],
-  lembur_per_jam: 0,
+  lembur_per_jam: 4300,
   lembur_bulat: 30,
   ins_kurir: 0,
   ins_lapangan: 0,

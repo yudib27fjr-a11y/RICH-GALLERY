@@ -25,13 +25,15 @@ const HEADERS = {
   produksi:  ['Tanggal','Kode','Nama Barang','Qty','Pembuat','Tarif Insentif','Insentif','Jenis','Dicatat Oleh'],
   hapus_produksi: ['Tanggal Produksi','Kode','Nama Barang','Qty','Pembuat','Tanggal Hapus','Oleh'],
   insentif:  ['Tanggal Bayar','Nama','Periode Dari','Periode Sampai','Total Produksi','Insentif Dihitung','Dibayar','Catatan','Oleh'],
-  insentif_lain: ['Tanggal','Nama','Jenis','Nominal','Keterangan','Dicatat Oleh']
+  insentif_lain: ['Tanggal','Nama','Jenis','Nominal','Keterangan','Dicatat Oleh'],
+  gaji: ['Tanggal Bayar','Nama','Periode Dari','Periode Sampai','Gaji Pokok','Insentif Produksi','Insentif Lain','Lembur','Bonus','Gaji Kotor','Potong Kasbon','Gaji Bersih','Metode','Keterangan','Oleh'],
+  kasbon: ['Tanggal','Nama','Jenis','Nominal','Sisa Hutang','Metode','Keterangan','Oleh']
 };
 const TAB = {
   penjualan: 'APP PENJUALAN', batal: 'APP PENJUALAN BATAL', masuk: 'APP BARANG MASUK', keluar: 'APP BARANG KELUAR',
   opname: 'APP STOK OPNAME', pengeluaran: 'APP PENGELUARAN', hapus_pengeluaran: 'APP PENGELUARAN DIHAPUS',
   produksi: 'APP PRODUKSI KARYAWAN', hapus_produksi: 'APP PRODUKSI DIHAPUS', insentif: 'APP INSENTIF DIBAYAR',
-  insentif_lain: 'APP INSENTIF LAIN'
+  insentif_lain: 'APP INSENTIF LAIN', gaji: 'APP GAJI KARYAWAN', kasbon: 'APP KASBON KARYAWAN'
 };
 
 function doPost(e) {

@@ -9,6 +9,7 @@ import { HttpError, bad, notFound, teks, denganWaktu, tanggal } from "../util.js
 import { cekPassword, cekBatasLogin, catatGagal, resetGagal } from "../auth.js";
 import { muatPenjualan, hapusPenjualan } from "./penjualan.js";
 import { rekapAbsen, terimaAbsen, fotoAbsen, cekLokasi, lemburPeriode } from "./absen.js";
+import { rekapGaji, daftarKasbon } from "./gaji.js";
 import { statusCabang, sinkronCabang, sambungCabang, putusCabang, gantiNamaPerangkat } from "../cabang-perangkat.js";
 
 /* ================= di perangkat ================= */
@@ -176,13 +177,22 @@ function terapkan(p, d, alat){
       const items = daftarBarang("produk", x.items, i => ({ qty: i.qty })).map(i => ({ product_id: i.id, qty: i.qty }));
       return panggil("POST", "/api/produksi", { uid: x.uid, tgl: x.tgl, pembuat_id: pembuat.id, restock: x.restock, items }, user, w);
     }
+    case "ubah_produksi": {
+      const r = barisUid("produksi", x.uid);
+      if (!r) throw bad("Catatan produksi yang diubah tidak ada di server");
+      const pembuat = x.pembuat ? userNama(x.pembuat) : null;
+      if (x.pembuat && !pembuat) throw bad(`Pembuat ${x.pembuat} tidak ada atau tidak aktif di server`);
+      const b = x.kode ? idBarang("produk", x.kode) : null;
+      if (x.kode && !b) throw bad(`Produk ${x.kode} tidak ada di server`);
+      return panggil("PUT", `/api/produksi/${r.id}`, { pembuat_id: pembuat ? pembuat.id : undefined, product_id: b ? b.id : undefined, qty: x.qty }, user, w);
+    }
     case "hapus_produksi": {
       const r = barisUid("produksi", x.uid);
       if (!r) throw bad("Catatan produksi yang dihapus tidak ada di server");
       return panggil("DELETE", `/api/produksi/${r.id}`, {}, user, w);
     }
     case "pengeluaran":
-      return panggil("POST", "/api/pengeluaran", { uid: x.uid, tgl: x.tgl, kategori: x.kategori, ket: x.ket, nominal: x.nominal }, user, w);
+      return panggil("POST", "/api/pengeluaran", { uid: x.uid, tgl: x.tgl, kategori: x.kategori, ket: x.ket || x.kategori, nominal: x.nominal }, user, w);
     case "hapus_pengeluaran": {
       const r = barisUid("expenses", x.uid);
       if (!r || r.dihapus) return { ok: true };
@@ -299,6 +309,10 @@ route("POST", "/api/cabang/absen", false, ({ body }) => {
   const dari = tanggal(body.dari), sampai = tanggal(body.sampai || body.dari);
   return rekapAbsen(dari, sampai);
 });
+
+/* Rekap gaji & kasbon untuk admin di perangkat cabang (data gaji ada di server pusat). */
+route("POST", "/api/cabang/gaji", false, ({ body }) => { perangkatDariToken(body.token); return rekapGaji(tanggal(body.tgl)); });
+route("POST", "/api/cabang/kasbon", false, ({ body }) => { perangkatDariToken(body.token); return daftarKasbon(); });
 
 /* Lembur per karyawan dalam satu periode (untuk rekap insentif di perangkat cabang). */
 route("POST", "/api/cabang/lembur", false, ({ body }) => {

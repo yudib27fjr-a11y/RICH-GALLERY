@@ -130,8 +130,7 @@ test("produksi & insentif: rekap, karyawan hanya lihat miliknya, bayar mengunci 
   const rek = (await admin("GET", "/api/insentif")).data;
   assert.equal(rek.rows.find(r => r.nama === "IZA").insentif, 7500);
   assert.equal(rek.rows.find(r => r.nama === "EVA").insentif, 10000);
-  const rekK = (await kasir("GET", "/api/insentif")).data;
-  assert.deepEqual(rekK.rows.map(r => r.nama), ["IZA"]);
+  assert.equal((await kasir("GET", "/api/insentif")).status, 403, "rekap insentif (bagian gaji) hanya admin");
   assert.equal((await kasir("POST", "/api/insentif/bayar", { pembuat_id: iza.id, periode_dari: rek.dari })).status, 403);
   assert.equal((await admin("POST", "/api/insentif/bayar", { pembuat_id: iza.id, periode_dari: rek.dari, catat_pengeluaran: true })).status, 200);
   assert.equal((await admin("POST", "/api/insentif/bayar", { pembuat_id: iza.id, periode_dari: rek.dari })).status, 400);
@@ -237,6 +236,64 @@ test("batas percobaan login", async () => {
   assert.equal((await k("POST", "/api/login", { nama: "eva", password: "salah" })).status, 429);
 });
 
+test("gaji: ubah produksi (stok ikut), kasbon, gaji kotor/bersih, pengeluaran otomatis, batal", async () => {
+  const boot = (await admin("GET", "/api/bootstrap")).data;
+  const rina = boot.staf.find(s => s.nama === "RINA");
+  const pA = boot.produk.find(x => x.kode === "RG003"), pB = boot.produk.find(x => x.kode === "RG900");
+  const stok = async kode => (await admin("GET", "/api/bootstrap")).data.produk.find(x => x.kode === kode).stok;
+  const a0 = await stok("RG003"), b0 = await stok("RG900");
+  assert.equal((await tamu("GET", "/api/gaji")).status, 401);
+  assert.equal((await admin("GET", "/api/jam-kerja")).data.lembur_per_jam, 4300, "lembur Rp4.300/jam");
+  // Produksi salah input → diubah: jumlah & produk, stok ready mengikuti
+  assert.equal((await admin("POST", "/api/produksi", { pembuat_id: rina.id, restock: true, items: [{ product_id: pA.id, qty: 2 }] })).status, 200);
+  const hari = boot.hariIni;
+  const cat = (await admin("GET", `/api/produksi?dari=${hari}&sampai=${hari}`)).data.find(x => x.kode === "RG003" && x.pembuat === "RINA");
+  assert.equal(await stok("RG003"), a0 + 2);
+  assert.equal((await admin("PUT", `/api/produksi/${cat.id}`, { qty: 5 })).status, 200);
+  assert.equal(await stok("RG003"), a0 + 5);
+  assert.equal((await admin("PUT", `/api/produksi/${cat.id}`, { product_id: pB.id, qty: 4 })).status, 200);
+  assert.equal(await stok("RG003"), a0); assert.equal(await stok("RG900"), b0 + 4);
+  const cat2 = (await admin("GET", `/api/produksi?dari=${hari}&sampai=${hari}`)).data.find(x => x.id === cat.id);
+  assert.equal(cat2.kode, "RG900"); assert.equal(cat2.qty, 4);
+  // Gaji pokok & kasbon
+  assert.equal((await admin("PUT", "/api/gaji/pokok", { pokok: [{ user_id: rina.id, gaji_pokok: 1500000 }] })).status, 200);
+  assert.equal((await admin("POST", "/api/kasbon", { user_id: rina.id, jenis: "pinjam", nominal: 300000 })).status, 400, "keterangan wajib");
+  assert.equal((await admin("POST", "/api/kasbon", { user_id: rina.id, jenis: "pinjam", nominal: 300000, ket: "keperluan keluarga", metode: "Tunai" })).status, 200);
+  assert.equal((await admin("POST", "/api/kasbon", { user_id: rina.id, jenis: "bayar", nominal: 999999, ket: "x" })).status, 400);
+  assert.equal((await admin("POST", "/api/kasbon", { user_id: rina.id, jenis: "bayar", nominal: 50000, ket: "cicilan 1" })).data.sisa, 250000);
+  let G = (await admin("GET", `/api/gaji?tgl=${hari}`)).data;
+  let r = G.rows.find(x => x.nama === "RINA");
+  assert.equal(r.pokok, 1500000); assert.equal(r.hutang, 250000); assert.equal(r.ins_produksi, 4 * cat2.tarif);
+  assert.equal(r.kotor, r.pokok + r.ins_produksi + r.ins_lain + r.lembur);
+  // Bayar: bonus wajib berketerangan, potong kasbon, transfer
+  const bayar = b => admin("POST", "/api/gaji/bayar", { user_id: rina.id, periode_dari: G.dari, metode: "Transfer", bonus: 50000, bonus_ket: "bonus target", potong_hutang: 100000, ...b });
+  assert.equal((await bayar({ bonus_ket: "" })).status, 400);
+  assert.equal((await bayar({ potong_hutang: 300000 })).status, 400, "potongan melebihi hutang");
+  assert.equal((await bayar({ metode: "Cek" })).status, 400);
+  const g = await bayar({});
+  assert.equal(g.status, 200, JSON.stringify(g.data));
+  assert.equal(g.data.kotor, r.kotor + 50000); assert.equal(g.data.bersih, r.kotor + 50000 - 100000);
+  assert.equal((await bayar({})).status, 400, "tidak bisa dibayar dua kali");
+  G = (await admin("GET", `/api/gaji?tgl=${hari}`)).data; r = G.rows.find(x => x.nama === "RINA");
+  assert.equal(r.bayar.metode, "Transfer"); assert.equal(r.hutang, 150000); assert.equal(r.bersih, g.data.bersih);
+  const peng = (await admin("GET", `/api/pengeluaran?dari=${hari}&sampai=${hari}`)).data;
+  const pg = peng.find(e => e.kategori === "Gaji Karyawan"), pk = peng.find(e => e.kategori === "Kasbon Karyawan");
+  assert.equal(pg.nominal, g.data.bersih); assert.equal(pg.sumber, "gaji"); assert.match(pg.ket, /Gaji RINA .*Transfer.*pokok Rp1\.500\.000.*bonus Rp50\.000.*kasbon Rp100\.000/);
+  assert.equal(pk.nominal, 300000); assert.match(pk.ket, /Kasbon RINA: keperluan keluarga \(Tunai\)/);
+  assert.equal((await admin("DELETE", `/api/pengeluaran/${pg.id}`)).status, 400, "dihapus lewat menu Gaji");
+  assert.equal((await admin("PUT", `/api/produksi/${cat.id}`, { qty: 1 })).status, 400, "periode sudah digaji → produksi terkunci");
+  // Batal: pengeluaran & potongan kasbon kembali, periode terbuka lagi
+  assert.equal((await admin("DELETE", `/api/gaji/${r.bayar.id}`)).status, 200);
+  G = (await admin("GET", `/api/gaji?tgl=${hari}`)).data; r = G.rows.find(x => x.nama === "RINA");
+  assert.equal(r.bayar, null); assert.equal(r.hutang, 250000);
+  assert.ok(!(await admin("GET", `/api/pengeluaran?dari=${hari}&sampai=${hari}`)).data.some(e => e.kategori === "Gaji Karyawan"));
+  assert.equal((await admin("PUT", `/api/produksi/${cat.id}`, { qty: 3 })).status, 200);
+  assert.equal(await stok("RG900"), b0 + 3);
+  assert.equal((await admin("POST", "/api/pengeluaran", { tgl: hari, kategori: "Operasional", nominal: 1000 })).status, 400, "keterangan pengeluaran wajib");
+  // Baris sheet gaji & kasbon ikut terkirim (jumlah kolom dicek di tes berikutnya)
+  assert.equal((await admin("POST", "/api/gaji/bayar", { user_id: rina.id, periode_dari: G.dari, metode: "Tunai" })).status, 200);
+});
+
 test("sinkron: antrean terkirim ke Apps Script (lewat redirect 302) dengan jumlah kolom sesuai tab sheet", async () => {
   const { createServer } = await import("node:http");
   const { DatabaseSync } = await import("node:sqlite");
@@ -259,7 +316,7 @@ test("sinkron: antrean terkirim ke Apps Script (lewat redirect 302) dengan jumla
   assert.equal(r.data.menunggu, 0);
   assert.ok(diterima.length > 10);
   const tipe = new Set(diterima.map(i => i.type));
-  for (const t of ["penjualan", "batal", "masuk", "keluar", "opname", "produksi", "insentif", "pengeluaran"]) assert.ok(tipe.has(t), "tidak ada baris " + t);
+  for (const t of ["penjualan", "batal", "masuk", "keluar", "opname", "produksi", "insentif", "pengeluaran", "gaji", "kasbon"]) assert.ok(tipe.has(t), "tidak ada baris " + t);
   for (const i of diterima) assert.equal(i.row.length, kolom[i.type], `kolom ${i.type}: kirim ${i.row.length}, sheet ${kolom[i.type]}`);
 });
 
