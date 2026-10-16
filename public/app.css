@@ -210,3 +210,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 .btn.danger-teks{color:var(--bad,#b3261e)}
 /* kasir: kolom cari & kategori tetap di atas saat daftar produk digulir */
 .kasir-atas{position:-webkit-sticky;position:sticky;top:-16px;z-index:6;background:var(--bg);margin-top:-16px;padding-top:16px;padding-bottom:8px;display:flex;flex-direction:column;gap:10px;box-shadow:0 8px 8px -8px rgba(0,0,0,.25)}
+.cari-pel{display:flex;flex-direction:column;gap:6px}
+.cari-pel .list{max-height:240px;overflow:auto}
+.cart-body>*{flex-shrink:0}
+#cJenis{display:flex}#cJenis button{flex:1}

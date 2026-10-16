@@ -191,6 +191,26 @@ test("impor cadangan aplikasi versi lama", async () => {
   assert.equal(s.data.no, "RG/SC/000001300");
 });
 
+test("data pelanggan dari riwayat transaksi & pesan WhatsApp", async () => {
+  B = (await admin("GET", "/api/bootstrap")).data;
+  const p = B.produk[0];
+  for (const [pelanggan, hp] of [["bu sinta", "0812-3456-7890"], ["Bu Sinta", "+62 812 3456 7890"], ["pak budi", ""], ["", ""]]) {
+    assert.equal((await admin("POST", "/api/penjualan", { items: [{ product_id: p.id, harga: 10000, qty: 1 }], pelanggan, hp })).status, 200);
+  }
+  const semua = (await admin("GET", "/api/pelanggan?semua=1")).data;
+  const sinta = semua.find(x => x.nama === "BU SINTA");
+  assert.equal(sinta.transaksi, 2, "nomor HP sama (0812… dan +62812…) = satu pelanggan");
+  assert.equal(sinta.total, 20000);
+  assert.ok(semua.find(x => x.nama === "PAK BUDI"), "tanpa HP dikelompokkan menurut nama");
+  assert.ok(!semua.find(x => x.nama === "CUSTOMER"), "pelanggan umum tidak masuk daftar");
+  assert.equal((await admin("GET", "/api/pelanggan?q=3456")).data[0].nama, "BU SINTA", "cari dengan no HP");
+  assert.equal((await kasir("GET", "/api/pelanggan?q=sinta")).data[0].total, undefined, "karyawan tidak melihat total belanja");
+  const s0 = (await admin("GET", "/api/pengaturan")).data;
+  assert.equal((await admin("PUT", "/api/pengaturan", { wa_otomatis: true, wa_template: "Halo {nama}, makasih! {no}", no_berikutnya: s0.no_berikutnya + 100 })).status, 200);
+  const b = (await admin("GET", "/api/bootstrap")).data;
+  assert.equal(b.toko.wa_otomatis, true); assert.equal(b.toko.wa_template, "Halo {nama}, makasih! {no}");
+});
+
 test("batas percobaan login", async () => {
   const k = klien();
   for (let i = 0; i < 5; i++) await k("POST", "/api/login", { nama: "eva", password: "salah" });

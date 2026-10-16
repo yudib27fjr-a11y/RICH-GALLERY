@@ -142,4 +142,25 @@ route("POST", "/api/penjualan/hapus-rentang", "admin", ({ body, user }) => tx(()
   return { ok: true, jumlah: daftarJual.length, nos: daftarJual.map(s => s.no) };
 }), { cabang: ({ hasil }) => hasil.nos.length ? { aksi: "hapus_jual", data: { nos: hasil.nos } } : null });
 
+/** Data pelanggan, dikumpulkan dari riwayat transaksi (tidak perlu didaftarkan terpisah).
+ *  Satu pelanggan = satu nomor HP; tanpa nomor HP dikelompokkan menurut nama. */
+const hpKunci = hp => { let d = String(hp || "").replace(/\D/g, ""); if (d.startsWith("62")) d = "0" + d.slice(2); return d.length >= 8 ? d : ""; };
+route("GET", "/api/pelanggan", "semua", ({ query, user }) => {
+  const q = teks(query.q, { max: 60, upper: true });
+  const per = new Map();
+  for (const s of all("SELECT pelanggan, hp, tgl, total FROM sales WHERE batal_at IS NULL ORDER BY id DESC LIMIT 30000")) {
+    const nama = String(s.pelanggan || "").trim().toUpperCase(), hp = hpKunci(s.hp);
+    if (!hp && (!nama || nama === "CUSTOMER")) continue;
+    const k = hp || "N:" + nama;
+    let p = per.get(k);
+    if (!p) per.set(k, p = { nama, hp: hp ? s.hp.trim() : "", transaksi: 0, total: 0, terakhir: s.tgl });
+    if (p.nama === "CUSTOMER" && nama && nama !== "CUSTOMER") p.nama = nama;
+    p.transaksi++; p.total += s.total;
+  }
+  let hasil = [...per.values()];
+  if (q) { const qd = q.replace(/\D/g, ""); hasil = hasil.filter(p => p.nama.includes(q) || (qd.length >= 3 && hpKunci(p.hp).includes(qd.replace(/^62/, "0")))); }
+  if (user.peran !== "admin") hasil.forEach(p => delete p.total);
+  return hasil.slice(0, Number(query.semua) && user.peran === "admin" ? 5000 : 300);
+});
+
 export { muatPenjualan, hapusPenjualan };

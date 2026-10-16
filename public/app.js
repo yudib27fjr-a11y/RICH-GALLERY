@@ -190,7 +190,7 @@ function cetakBaris(lines){
 const cetak = s => cetakBaris(strukLines(s));
 /** Di aplikasi Android, window.print tidak tersedia; cetak lewat layanan cetak Android. */
 function cetakHalaman(){ if (NATIVE && NATIVE.cetak) NATIVE.cetak(D.kertas); else window.print(); }
-function waLink(s){ let hp = (s.hp || "").replace(/\D/g, ""); if (hp.startsWith("0")) hp = "62" + hp.slice(1); return `https://wa.me/${hp}?text=` + encodeURIComponent("```\n" + strukText(s) + "\n```"); }
+function waLink(s){ return `https://wa.me/${nomorWA(s.hp)}?text=` + encodeURIComponent(pesanWA(s)); }
 function lihatStruk(s, setelahBatal){
   modal(`<h3>Struk ${esc(s.no)}</h3>
     <pre class="receipt-prev">${esc(strukText(s))}</pre>
@@ -517,6 +517,8 @@ function drawCart(){
   el.innerHTML = `
     <div class="cart-head"><h2 style="font-size:20px;flex:1">Keranjang <span class="muted small num" style="font-family:var(--body);font-weight:600">${fq(qty)} item</span></h2>${cart.items.length ? `<button class="btn ghost sm" id="clr" type="button">Kosongkan</button>` : ""}<button class="btn sm cart-close" id="cclose" type="button">‹ Katalog</button></div>
     <div class="cart-body">
+    <div class="seg" id="cJenis" role="group" aria-label="Jenis pelanggan"><button type="button" data-j="baru" class="${cart.lama ? "" : "on"}">Pelanggan baru</button><button type="button" data-j="lama" class="${cart.lama ? "on" : ""}">Pelanggan lama</button></div>
+    ${cart.lama ? `<div class="cari-pel"><input type="search" id="cCariPel" placeholder="Cari nama / no HP pelanggan…" autocomplete="off" aria-label="Cari pelanggan"><div class="list" id="cPelList"><div class="empty small">Memuat daftar pelanggan…</div></div></div>` : ""}
     <div class="row"><label class="f grow">Pelanggan<input type="text" id="cCust" value="${esc(cart.pelanggan)}" placeholder="CUSTOMER" autocomplete="off"></label><label class="f grow">No HP / WA<input type="tel" id="cHp" value="${esc(cart.hp)}" placeholder="08…"></label></div>
     <div class="cart-lines">${cart.items.length ? cart.items.map((it, i) => `
       <div class="line" data-i="${i}">
@@ -544,6 +546,8 @@ function drawCart(){
     </div>`;
   const upd = () => { saveCart(); const t = cartTotal(); $("#cTot").textContent = rp(t); $("#cbTotal").textContent = rp(t); hitKembali(); };
   $("#cCust", el).oninput = e => { cart.pelanggan = e.target.value; saveCart(); };
+  $$("#cJenis button", el).forEach(b => b.onclick = () => { cart.lama = b.dataset.j === "lama"; saveCart(); const sc = $(".cart-body", el).scrollTop; drawCart(); $(".cart-body", el).scrollTop = sc; if (cart.lama) $("#cCariPel")?.focus(); });
+  if (cart.lama) pasangCariPelanggan(el);
   $("#cHp", el).oninput = e => { cart.hp = e.target.value; saveCart(); };
   $("#cDisc", el).oninput = e => { cart.diskon = num(e.target.value); upd(); };
   $("#cOng", el).oninput = e => { cart.ongkir = num(e.target.value); upd(); };
@@ -580,6 +584,53 @@ function hitKembali(){
   k.innerHTML = b > t ? `Kembalian: <b class="num">${rp(b - t)}</b>` : b < t ? `<span class="pill warn">DP / belum lunas</span> Sisa <b class="num">${rp(t - b)}</b>` : "";
 }
 function resetCart(){ cart = cartKosong(); saveCart(); }
+/* ---------- Pelanggan lama: dipilih dari riwayat transaksi ---------- */
+let daftarPel = null, daftarPelWaktu = 0;
+async function ambilPelanggan(paksa){
+  if (!daftarPel || paksa || Date.now() - daftarPelWaktu > 60_000) { daftarPel = await api("GET", "/api/pelanggan"); daftarPelWaktu = Date.now(); }
+  return daftarPel;
+}
+function pasangCariPelanggan(el){
+  const kotak = $("#cPelList", el), cari = $("#cCariPel", el);
+  const gambar = () => {
+    const q = cari.value.trim().toUpperCase(), qd = q.replace(/\D/g, "");
+    const cocok = (daftarPel || []).filter(p => !q || p.nama.includes(q) || (qd.length >= 3 && String(p.hp).replace(/\D/g, "").replace(/^62/, "0").includes(qd.replace(/^62/, "0")))).slice(0, 8);
+    kotak.innerHTML = cocok.length ? cocok.map((p, i) => `<button type="button" class="li click pel" data-i="${i}" style="width:100%;text-align:left;border:0;background:none;font:inherit;color:inherit">
+        <div class="main"><div class="t">${esc(p.nama || "TANPA NAMA")}</div><div class="small muted">${esc(p.hp || "tanpa no HP")} · ${p.transaksi}× belanja · terakhir ${tglPendek(p.terakhir)}</div></div></button>`).join("")
+      : `<div class="empty small">${daftarPel && daftarPel.length ? "Tidak ditemukan. Pilih \"Pelanggan baru\" untuk mengisi manual." : "Belum ada data pelanggan. Pelanggan tersimpan otomatis dari transaksi yang memakai nama atau no HP."}</div>`;
+    $$(".pel", kotak).forEach(b => b.onclick = () => {
+      const p = cocok[+b.dataset.i];
+      cart.pelanggan = p.nama === "CUSTOMER" ? "" : p.nama; cart.hp = p.hp || ""; saveCart();
+      $("#cCust", el).value = cart.pelanggan; $("#cHp", el).value = cart.hp;
+      cari.value = ""; kotak.innerHTML = `<div class="empty small">✓ ${esc(p.nama)}${p.hp ? " · " + esc(p.hp) : ""} dipilih</div>`;
+    });
+  };
+  cari.oninput = gambar;
+  ambilPelanggan().then(gambar).catch(e => { kotak.innerHTML = `<div class="empty small">${esc(e.message)}</div>`; });
+}
+
+/* ---------- Pesan WhatsApp ke pelanggan ---------- */
+/** Isi pesan dari templat di Pengaturan. Kode yang bisa dipakai: {nama} {toko} {no} {tanggal} {total} {barang} {struk} */
+function pesanWA(s){
+  const tpl = (B.toko.wa_template || "").trim();
+  if (!tpl) return "```\n" + strukText(s) + "\n```";
+  const nama = s.pelanggan && s.pelanggan !== "CUSTOMER" ? toTitle(s.pelanggan) : "Kak";
+  const isi = { nama, toko: toTitle(B.toko.nama_toko), no: s.no, tanggal: tglID(s.tgl), total: rp(s.total),
+    barang: s.items.map(i => toTitle(i.nama) + (i.qty != 1 ? " ×" + fq(i.qty) : "")).join(", "), struk: "```\n" + strukText(s) + "\n```" };
+  return tpl.replace(/\{(nama|toko|no|tanggal|total|barang|struk)\}/g, (_, k) => isi[k]);
+}
+function nomorWA(hp){ let d = String(hp || "").replace(/\D/g, ""); if (d.startsWith("0")) d = "62" + d.slice(1); else if (d.startsWith("8")) d = "62" + d; return d.length >= 10 ? d : ""; }
+/** Buka WhatsApp dengan pesan terisi (tinggal tekan kirim). Di aplikasi Android langsung membuka WhatsApp. */
+function kirimWA(s){
+  const no = nomorWA(s.hp);
+  if (!no) return false;
+  const url = `https://wa.me/${no}?text=` + encodeURIComponent(pesanWA(s));
+  if (NATIVE) { location.href = url; return true; } // ditangkap aplikasi → dibuka di WhatsApp
+  const w = window.open(url, "_blank", "noopener");
+  if (!w) toast("Tekan \"Kirim WA\" di struk untuk mengirim ucapan ke pelanggan");
+  return true;
+}
+
 async function simpanTransaksi(print, tombol){
   if (!cart.items.length) return;
   await coba(async () => {
@@ -588,11 +639,13 @@ async function simpanTransaksi(print, tombol){
       bayar: cart.bayar || undefined, diskon: cart.diskon || 0, ongkir: cart.ongkir || 0, catatan: cart.catatan,
       items: cart.items.map(i => ({ product_id: i.product_id, nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty, ready: i.ready })),
     });
-    saleTerakhir = s; resetCart();
+    saleTerakhir = s; resetCart(); daftarPel = null;
     $("#cart")?.classList.remove("open");
     toast(`Tersimpan: ${s.no}`);
     await muatUlang(); drawGrid(); drawCart();
     if (print) { cetak(s); setTimeout(() => lihatStruk(s), 300); }
+    // Ucapan terima kasih otomatis lewat WhatsApp (bila diaktifkan & ada no HP)
+    if (B.toko.wa_otomatis && nomorWA(s.hp)) setTimeout(() => kirimWA(s), print ? 1500 : 300);
     if (isAdmin()) setTimeout(cekSync, 3000);
   }, tombol);
 }
@@ -604,7 +657,7 @@ async function vRiwayat(){
   if (!isAdmin()) rDari = rSampai = today();
   $("#main").innerHTML = `
     <div class="view-head"><h2>Transaksi</h2><span class="sp"></span>
-      ${isAdmin() ? `<input type="date" id="rD" value="${rDari}" style="width:auto" aria-label="Dari"><span class="muted">s/d</span><input type="date" id="rS" value="${rSampai}" style="width:auto" aria-label="Sampai"><button class="btn sm" id="rHari" type="button">Hari ini</button>` : `<span class="muted small">Hari ini, ${tglID(today())}</span>`}</div>
+      ${isAdmin() ? `<input type="date" id="rD" value="${rDari}" style="width:auto" aria-label="Dari"><span class="muted">s/d</span><input type="date" id="rS" value="${rSampai}" style="width:auto" aria-label="Sampai"><button class="btn sm" id="rHari" type="button">Hari ini</button><button class="btn sm" id="rPel" type="button">Data pelanggan</button>` : `<span class="muted small">Hari ini, ${tglID(today())}</span>`}</div>
     <input type="search" id="rQ" placeholder="Cari no invoice, pelanggan, atau barang…" value="${esc(rQ)}" style="margin-bottom:12px">
     <div id="rSum" class="kpis" style="margin-bottom:12px"></div>
     <div id="rList"><div class="empty">Memuat…</div></div>
@@ -616,6 +669,7 @@ async function vRiwayat(){
   }
   let t; $("#rQ").oninput = e => { rQ = e.target.value; clearTimeout(t); t = setTimeout(muatRiwayat, 300); };
   const hs = $("#rHapusSemua"); if (hs) hs.onclick = hapusRentang;
+  const rp_ = $("#rPel"); if (rp_) rp_.onclick = dataPelanggan;
   muatRiwayat();
 }
 async function muatRiwayat(){
@@ -630,6 +684,25 @@ async function muatRiwayat(){
       <div style="text-align:right"><div class="num" style="font-weight:700">${rp(s.total)}</div>${s.batal_at ? `<span class="pill bad">BATAL</span>` : s.bayar < s.total ? `<span class="pill warn">DP</span>` : `<span class="pill mut">${s.metode}</span>`}</div></div>`).join("")}</div>`
       : `<div class="list"><div class="empty">Belum ada transaksi pada periode ini. Transaksi dari menu Kasir akan muncul di sini.</div></div>`;
     $$("#rList .li").forEach(r => r.onclick = () => { const s = rData.find(x => x.id === +r.dataset.id); if (s) lihatStruk(s, () => muatRiwayat()); });
+  });
+}
+
+/** Data pelanggan (admin): dari seluruh riwayat transaksi. */
+async function dataPelanggan(){
+  const semua = await coba(() => api("GET", "/api/pelanggan?semua=1")); if (!semua) return;
+  modal(`<h3>Data pelanggan <span class="muted small">${semua.length} orang</span></h3>
+    <input type="search" id="dpQ" placeholder="Cari nama / no HP…" autocomplete="off">
+    <div class="list" id="dpList" style="max-height:55vh;overflow:auto"></div>
+    <p class="small muted" style="margin:0">Pelanggan tersimpan otomatis dari transaksi yang diberi nama atau no HP${LOKAL && B.cabang ? " (di perangkat ini: transaksi 40 hari terakhir dari server + transaksi perangkat ini)" : ""}.</p>
+    <div class="actions"><button class="btn" id="dpCsv" type="button">Unduh CSV</button><button class="btn" data-close>Tutup</button></div>`, m => {
+    const gambar = () => {
+      const q = $("#dpQ", m).value.trim().toUpperCase(), qd = q.replace(/\D/g, "");
+      const c = semua.filter(p => !q || p.nama.includes(q) || (qd.length >= 3 && String(p.hp).replace(/\D/g, "").includes(qd))).slice(0, 300);
+      $("#dpList", m).innerHTML = c.length ? c.map(p => `<div class="li"><div class="main"><div class="t">${esc(p.nama || "TANPA NAMA")}</div><div class="small muted">${esc(p.hp || "tanpa no HP")} · ${p.transaksi}× · terakhir ${tglPendek(p.terakhir)}</div></div>
+        <div style="text-align:right"><div class="num" style="font-weight:700">${rp(p.total || 0)}</div>${nomorWA(p.hp) ? `<a class="btn sm" href="https://wa.me/${nomorWA(p.hp)}" target="_blank" rel="noopener">WA</a>` : ""}</div></div>`).join("") : `<div class="empty">Tidak ada.</div>`;
+    };
+    $("#dpQ", m).oninput = gambar; gambar();
+    $("#dpCsv", m).onclick = () => unduhCSV(`pelanggan-${today()}.csv`, [["Nama", "No HP", "Jumlah belanja", "Total belanja", "Terakhir"], ...semua.map(p => [p.nama, p.hp, p.transaksi, p.total || 0, p.terakhir])]);
   });
 }
 
@@ -1213,9 +1286,21 @@ async function aturToko(){
     <div class="row"><label class="f grow">Awalan no invoice<input type="text" id="tP" value="${esc(s.prefix)}"></label><label class="f grow">No berikutnya<input type="number" id="tNo" value="${s.no_berikutnya}" min="1"></label></div>
     <label class="f">HPP otomatis (% dari harga jual)<input type="number" id="tH" value="${s.hpp_persen}" min="0" max="100"></label>
     <div class="row"><label class="f grow">Insentif produksi per pcs (Rp)<input type="number" id="tI" value="${s.insentif}" min="0" step="500"></label><label class="f grow">Periode insentif mulai tanggal<input type="number" id="tPm" value="${s.periode_mulai}" min="1" max="28"></label></div>
+    <hr class="sep"><h3 style="font-size:16px;margin:0">Pesan WhatsApp ke pelanggan</h3>
+    <label class="row"><input type="checkbox" id="tWaAuto" ${s.wa_otomatis ? "checked" : ""}> <b>Kirim ucapan terima kasih otomatis setelah transaksi</b></label>
+    <p class="small muted" style="margin:0">Bila No HP pelanggan diisi, WhatsApp langsung terbuka dengan pesan ini, tinggal tekan kirim. Tombol "Kirim WA" di struk juga memakai pesan ini.</p>
+    <label class="f">Isi pesan<textarea id="tWa" rows="8">${esc(s.wa_template)}</textarea></label>
+    <p class="small muted" style="margin:0">Kode otomatis: <code>{nama}</code> nama pelanggan · <code>{toko}</code> · <code>{no}</code> no nota · <code>{tanggal}</code> · <code>{total}</code> · <code>{barang}</code> daftar barang · <code>{struk}</code> struk lengkap.</p>
+    <button class="btn sm" id="tWaLihat" type="button">Lihat contoh pesan</button>
     <button class="btn pri" id="tSave" type="button">Simpan pengaturan toko</button>`;
+  $("#tWaLihat").onclick = () => {
+    const simpan = B.toko.wa_template; B.toko.wa_template = $("#tWa").value;
+    const contoh = pesanWA({ no: B.toko.prefix + "000001234", tgl: today(), jam: "10:00", kasir: B.me.nama, pelanggan: "BU ANI", hp: "0812", items: [{ nama: "BUKET BUNGA 100K", harga: 100000, qty: 1 }], subtotal: 100000, diskon: 0, ongkir: 0, total: 100000, metode: "Tunai", bayar: 100000, catatan: "" });
+    B.toko.wa_template = simpan;
+    modal(`<h3>Contoh pesan</h3><pre class="receipt-prev" style="white-space:pre-wrap">${esc(contoh)}</pre><div class="actions"><button class="btn" data-close>Tutup</button></div>`);
+  };
   $("#tSave").onclick = e => coba(async () => {
-    await api("PUT", "/api/pengaturan", { nama_toko: $("#tN").value, alamat: $("#tA").value, telp: $("#tT").value, footer: $("#tF").value, prefix: $("#tP").value, no_berikutnya: $("#tNo").value, hpp_persen: $("#tH").value, insentif: $("#tI").value, periode_mulai: $("#tPm").value });
+    await api("PUT", "/api/pengaturan", { nama_toko: $("#tN").value, alamat: $("#tA").value, telp: $("#tT").value, footer: $("#tF").value, prefix: $("#tP").value, no_berikutnya: $("#tNo").value, hpp_persen: $("#tH").value, insentif: $("#tI").value, periode_mulai: $("#tPm").value, wa_template: $("#tWa").value, wa_otomatis: $("#tWaAuto").checked });
     await muatUlang(); shell(); render(); toast("Pengaturan toko tersimpan");
   }, e.target);
 }

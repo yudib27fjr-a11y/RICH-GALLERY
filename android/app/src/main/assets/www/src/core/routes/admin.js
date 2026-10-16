@@ -22,6 +22,8 @@ route("PUT", "/api/pengaturan", "admin", ({ body }) => tx(() => {
     periode_mulai: b.periode_mulai != null ? angka(b.periode_mulai, { min: 1, max: 28, bulat: true, nama: "Tanggal mulai periode" }) : undefined,
     sync_url: b.sync_url != null ? teks(b.sync_url, { max: 300, nama: "URL Apps Script" }) : undefined,
     sheet_id: b.sheet_id != null ? teks(b.sheet_id, { max: 120, nama: "ID sheet" }) : undefined,
+    wa_template: b.wa_template != null ? teks(b.wa_template, { max: 2000, nama: "Pesan WhatsApp" }) : undefined,
+    wa_otomatis: b.wa_otomatis != null ? !!b.wa_otomatis : undefined,
   };
   if (v.sync_url && !/^https:\/\/script\.google(usercontent)?\.com\//.test(v.sync_url)) throw bad("URL Apps Script harus diawali https://script.google.com/");
   const prefix = v.prefix ?? s.prefix, no = v.no_berikutnya ?? s.no_berikutnya;

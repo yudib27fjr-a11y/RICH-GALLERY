@@ -248,6 +248,9 @@ export const DEFAULT_SETTINGS = {
   cabang_kode: "",
   cabang_nama: "",
   impor_oleh: "",
+  // Pesan WhatsApp ke pelanggan setelah transaksi
+  wa_otomatis: false,
+  wa_template: "Halo {nama}, terima kasih sudah berbelanja di {toko} 🌸\n\nNo. nota: {no}\nTanggal: {tanggal}\nPesanan: {barang}\nTotal: {total}\n\nSemoga suka dengan pesanannya. Ditunggu kedatangannya kembali!",
   // Absensi sidik jari
   absen_aktif: false,
   absen_token: "",
