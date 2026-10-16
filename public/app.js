@@ -1208,7 +1208,7 @@ window.rgPembaruan = (jenis, teks) => {
   b.innerHTML = jenis === "web"
     ? `<span><b>Pembaruan siap.</b> ${teks ? esc(teks) + ". " : ""}Muat ulang untuk memakai versi terbaru.</span><button class="btn sm" id="sbOk" type="button">Muat ulang</button><button class="btn ghost sm" id="sbX" type="button" aria-label="Nanti">Nanti</button>`
     : `<span><b>Aplikasi versi ${esc(teks)} tersedia.</b> Pasang untuk fitur terbaru; data tetap aman.</span><button class="btn sm" id="sbOk" type="button">Pasang</button><button class="btn ghost sm" id="sbX" type="button" aria-label="Nanti">Nanti</button>`;
-  $("#sbOk", b).onclick = () => { if (jenis === "web") location.reload(); else { NATIVE?.pasangApk?.(); b.remove(); } };
+  $("#sbOk", b).onclick = () => { b.remove(); if (jenis === "web") location.reload(); else NATIVE?.pasangApk?.(); };
   $("#sbX", b).onclick = () => b.remove();
 };
 
@@ -1250,7 +1250,18 @@ async function mulai(){
 }
 /** Halaman berhasil tampil: konfirmasi ke aplikasi (jaring pengaman pembaruan), lalu tampilkan pembaruan yang menunggu. */
 function halamanTampil(){
-  try { NATIVE?.webSiap?.(); const s = NATIVE?.statusPembaruan?.(); if (s) { const o = JSON.parse(s); window.rgPembaruan(o.jenis, o.teks); } } catch {}
+  try { NATIVE?.webSiap?.(); const s = NATIVE?.statusPembaruan?.(); if (s) { const o = JSON.parse(s); if (o.jenis === "web") tawarkanWebBila(o.teks); else window.rgPembaruan(o.jenis, o.teks); } } catch {}
+}
+/** Aplikasi mengingat pesan "pembaruan siap" sampai ditutup. Setelah dimuat ulang, halaman ini sudah versi terbaru:
+ *  bandingkan versi halaman ini dengan versi yang aktif di aplikasi, jangan tawarkan lagi bila sudah sama. */
+async function tawarkanWebBila(teks){
+  try {
+    const aktif = Number(JSON.parse(NATIVE.info()).web || 0);
+    const r = await fetch("/versi-web.json", { cache: "no-store" });
+    const halaman = Number((await r.json()).web || 0);
+    if (halaman && aktif && halaman >= aktif) return; // sudah memakai versi terbaru
+  } catch { /* tidak bisa memastikan: tetap tawarkan */ }
+  window.rgPembaruan("web", teks);
 }
 mulai();
 /* ================= data selalu terbaru =================
