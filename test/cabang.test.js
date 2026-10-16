@@ -365,6 +365,7 @@ test("absen PIN + selfie: hanya perangkat yang diizinkan & di lokasi toko", asyn
   // Belum aktif
   let k = (await cabang("GET", "/api/absen/kiosk")).data;
   assert.equal(k.boleh, false); assert.match(k.alasan, /belum diaktifkan/);
+  assert.equal((await pusat("GET", "/api/absen/pengaturan")).data.lat, "-6.3377069", "koordinat toko bawaan");
   // Server pusat menolak absen PIN langsung (bukan perangkat kasir)
   assert.equal((await pusat("PUT", "/api/absen/pengaturan", { pin_aktif: true, lat: DI_TOKO.lat, lng: DI_TOKO.lng, radius: 100 })).status, 200);
   assert.equal((await pusat("POST", "/api/absen/pin", { user_id: 1, pin: "x" })).status, 403);

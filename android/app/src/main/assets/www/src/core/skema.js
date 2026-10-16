@@ -325,7 +325,7 @@ export const DEFAULT_SETTINGS = {
   inv_ttd_jabatan: "Financial Manager",
   // Absen PIN + selfie di perangkat kasir
   absen_pin_aktif: false,
-  absen_lat: "",
-  absen_lng: "",
+  absen_lat: "-6.3377069", // Rich Gallery, Jl. Olahraga No.27 Sport Center - Indramayu (Google Maps)
+  absen_lng: "108.3319216",
   absen_radius: 100,
 };
