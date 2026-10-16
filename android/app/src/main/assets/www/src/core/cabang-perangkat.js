@@ -159,6 +159,15 @@ export function terapkanSnapshot(snap){
           [id, p ? p.id : null, it.kode || "", it.nama, it.kategori, it.harga, it.qty, it.hpp || 0, it.ready || 0]);
       }
     }
+    // Transaksi yang dihapus di server (salah input / uji coba) ikut dihapus di sini. Hanya dalam rentang yang dikirim server,
+    // dan hanya bila daftarnya lengkap (tidak terpotong batas).
+    const sejak = /^\d{4}-\d{2}-\d{2}$/.test(String(snap.sejak || "")) ? snap.sejak : null;
+    if (sejak && Array.isArray(snap.penjualan) && snap.penjualan.length < 5000) {
+      const ada = new Set(snap.penjualan.map(x => x && x.no));
+      for (const r of all("SELECT id, no FROM sales WHERE tgl >= ?", [sejak])) {
+        if (!ada.has(r.no)) { run("DELETE FROM sale_items WHERE sale_id = ?", [r.id]); run("DELETE FROM sales WHERE id = ?", [r.id]); }
+      }
+    }
     salinKeuangan(snap);
     tandaiBerubah();
     return true;

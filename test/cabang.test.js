@@ -231,6 +231,43 @@ test("produksi, pengeluaran & insentif dari pusat masuk ke cabang; versi sama = 
   assert.ok((await cabang("GET", "/api/versi")).data.versi);
 });
 
+test("hapus transaksi (salah input / uji coba) ikut terhapus di kedua sisi, stok kembali", async () => {
+  await segarkan();
+  const hari = BC.hariIni;
+  const p = BC.produk.find(x => x.kode === "RG008");
+  const stok0 = prodP("RG008").stok;
+  // Dari cabang: jual lalu hapus
+  const j1 = await cabang("POST", "/api/penjualan", { items: [{ product_id: p.id, harga: p.harga, qty: 2, ready: true }], pelanggan: "uji hapus" });
+  await sinkron();
+  assert.ok((await pusat("GET", `/api/penjualan?dari=${hari}&sampai=${hari}`)).data.some(x => x.no === j1.data.no));
+  assert.equal((await cabang("DELETE", `/api/penjualan/${j1.data.id}`)).status, 200);
+  let st = await sinkron();
+  assert.equal(st.ditolak, 0, JSON.stringify(st.ditolakDaftar));
+  assert.ok(!(await pusat("GET", `/api/penjualan?dari=${hari}&sampai=${hari}`)).data.some(x => x.no === j1.data.no), "terhapus di pusat");
+  await segarkan();
+  assert.equal(prodP("RG008").stok, stok0, "stok pusat kembali");
+  assert.equal(BC.produk.find(x => x.kode === "RG008").stok, stok0, "stok cabang kembali");
+  // Dari pusat: jual lalu hapus → hilang juga dari cabang
+  const pp = prodP("RG008");
+  const j2 = await pusat("POST", "/api/penjualan", { items: [{ product_id: pp.id, harga: pp.harga, qty: 1, ready: true }] });
+  await sinkron();
+  assert.ok((await cabang("GET", `/api/penjualan?dari=${hari}&sampai=${hari}`)).data.some(x => x.no === j2.data.no));
+  assert.equal((await pusat("DELETE", `/api/penjualan/${j2.data.id}`)).status, 200);
+  await sinkron();
+  assert.ok(!(await cabang("GET", `/api/penjualan?dari=${hari}&sampai=${hari}`)).data.some(x => x.no === j2.data.no), "terhapus di cabang");
+  // Hapus semua transaksi hari ini dari cabang (bersihkan uji coba)
+  assert.equal((await cabang("POST", "/api/penjualan/hapus-rentang", { dari: hari, sampai: hari, konfirmasi: "salah" })).status, 400);
+  const r = await cabang("POST", "/api/penjualan/hapus-rentang", { dari: hari, sampai: hari, konfirmasi: "hapus" });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.ok(r.data.jumlah > 0);
+  st = await sinkron();
+  assert.equal(st.ditolak, 0, JSON.stringify(st.ditolakDaftar));
+  assert.equal((await pusat("GET", `/api/penjualan?dari=${hari}&sampai=${hari}`)).data.length, 0, "pusat bersih");
+  assert.equal((await cabang("GET", `/api/penjualan?dari=${hari}&sampai=${hari}`)).data.length, 0, "cabang bersih");
+  await segarkan();
+  for (const x of BP.produk) assert.equal(BC.produk.find(y => y.kode === x.kode).stok, x.stok, "stok sama " + x.kode);
+});
+
 test("server mati: transaksi menunggu, lalu terkirim saat server hidup lagi", async () => {
   const pusatProc = procs[0];
   pusatProc.kill(); await new Promise(r => pusatProc.on("exit", r));

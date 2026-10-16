@@ -197,11 +197,25 @@ function lihatStruk(s, setelahBatal){
     ${s.batal_at ? `<p class="small muted">Dibatalkan oleh ${esc(s.batal_oleh || "-")}${s.batal_alasan ? ": " + esc(s.batal_alasan) : ""}</p>` : ""}
     <div class="actions">
       ${!s.batal_at && isAdmin() ? `<button class="btn danger" id="voidBtn">Batalkan transaksi</button>` : ""}
+      ${isAdmin() ? `<button class="btn" id="koreksiBtn" type="button">Koreksi</button><button class="btn danger" id="hapusBtn" type="button">Hapus</button>` : ""}
       <a class="btn" href="${waLink(s)}" target="_blank" rel="noopener">Kirim WA</a>
       <button class="btn" data-close>Tutup</button>
       <button class="btn pri" id="printBtn">Cetak struk</button>
     </div>`, m => {
       $("#printBtn", m).onclick = () => cetak(s);
+      const hb = $("#hapusBtn", m);
+      if (hb) hb.onclick = () => konfirmasi(`Hapus ${s.no}?`, `Transaksi dihapus sepenuhnya dari daftar & laporan${s.batal_at ? "" : ", stok produk READY dikembalikan"}. Pakai untuk salah input atau data uji coba. Tidak bisa dibatalkan.`, "Hapus transaksi", () => coba(async () => {
+        await api("DELETE", `/api/penjualan/${s.id}`); toast(`${s.no} dihapus`); await muatUlang(); setelahBatal ? setelahBatal() : render();
+      }));
+      const kb = $("#koreksiBtn", m);
+      if (kb) kb.onclick = () => konfirmasi(`Koreksi ${s.no}?`, `Transaksi ini dihapus${s.batal_at ? "" : " (stok dikembalikan)"}, lalu semua barangnya dimasukkan lagi ke keranjang kasir untuk diperbaiki dan disimpan ulang dengan nomor nota baru.${cart.items.length ? " Isi keranjang sekarang akan diganti." : ""}`, "Hapus & koreksi", () => coba(async () => {
+        await api("DELETE", `/api/penjualan/${s.id}`);
+        await muatUlang();
+        cart = { ...cartKosong(), pelanggan: s.pelanggan === "CUSTOMER" ? "" : s.pelanggan, hp: s.hp || "", diskon: s.diskon || 0, ongkir: s.ongkir || 0, metode: s.metode, catatan: s.catatan || "", tgl: s.tgl !== today() ? s.tgl : "",
+          items: s.items.map(i => { const p = i.kode ? B.produk.find(x => x.kode === i.kode) : null;
+            return { product_id: p ? p.id : null, kode: p ? p.kode : "", nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty, ready: p ? !!i.ready : false }; }) };
+        saveCart(); toast("Perbaiki isi keranjang, lalu simpan lagi"); pindah("kasir");
+      }), false);
       const vb = $("#voidBtn", m);
       if (vb) vb.onclick = () => modal(`<h3>Batalkan ${esc(s.no)}?</h3><p>Transaksi ditandai batal dan stok produk READY dikembalikan.</p>
           <label class="f">Alasan<input type="text" id="alasan" placeholder="Contoh: salah input harga"></label>
@@ -590,13 +604,15 @@ async function vRiwayat(){
       ${isAdmin() ? `<input type="date" id="rD" value="${rDari}" style="width:auto" aria-label="Dari"><span class="muted">s/d</span><input type="date" id="rS" value="${rSampai}" style="width:auto" aria-label="Sampai"><button class="btn sm" id="rHari" type="button">Hari ini</button>` : `<span class="muted small">Hari ini, ${tglID(today())}</span>`}</div>
     <input type="search" id="rQ" placeholder="Cari no invoice, pelanggan, atau barang…" value="${esc(rQ)}" style="margin-bottom:12px">
     <div id="rSum" class="kpis" style="margin-bottom:12px"></div>
-    <div id="rList"><div class="empty">Memuat…</div></div>`;
+    <div id="rList"><div class="empty">Memuat…</div></div>
+    ${isAdmin() ? `<div class="row" style="margin-top:16px"><span class="sp" style="flex:1"></span><button class="btn ghost sm danger-teks" id="rHapusSemua" type="button">Hapus semua transaksi di tanggal ini…</button></div>` : ""}`;
   if (isAdmin()) {
     $("#rD").onchange = e => { rDari = e.target.value; if (rSampai < rDari) rSampai = rDari; vRiwayat(); };
     $("#rS").onchange = e => { rSampai = e.target.value; if (rSampai < rDari) rDari = rSampai; vRiwayat(); };
     $("#rHari").onclick = () => { rDari = rSampai = today(); vRiwayat(); };
   }
   let t; $("#rQ").oninput = e => { rQ = e.target.value; clearTimeout(t); t = setTimeout(muatRiwayat, 300); };
+  const hs = $("#rHapusSemua"); if (hs) hs.onclick = hapusRentang;
   muatRiwayat();
 }
 async function muatRiwayat(){
@@ -611,6 +627,26 @@ async function muatRiwayat(){
       <div style="text-align:right"><div class="num" style="font-weight:700">${rp(s.total)}</div>${s.batal_at ? `<span class="pill bad">BATAL</span>` : s.bayar < s.total ? `<span class="pill warn">DP</span>` : `<span class="pill mut">${s.metode}</span>`}</div></div>`).join("")}</div>`
       : `<div class="list"><div class="empty">Belum ada transaksi pada periode ini. Transaksi dari menu Kasir akan muncul di sini.</div></div>`;
     $$("#rList .li").forEach(r => r.onclick = () => { const s = rData.find(x => x.id === +r.dataset.id); if (s) lihatStruk(s, () => muatRiwayat()); });
+  });
+}
+
+/** Bersihkan data uji coba: hapus semua transaksi pada rentang tanggal yang sedang dilihat. */
+async function hapusRentang(){
+  const semua = await coba(() => api("GET", `/api/penjualan?dari=${rDari}&sampai=${rSampai}`));
+  if (!semua) return;
+  if (!semua.length) return toast("Tidak ada transaksi pada tanggal ini");
+  const aktif = semua.filter(x => !x.batal_at), total = aktif.reduce((a, x) => a + x.total, 0);
+  const rentang = tglID(rDari) + (rDari !== rSampai ? " – " + tglID(rSampai) : "");
+  modal(`<h3>Hapus semua transaksi?</h3>
+    <p><b>${semua.length} transaksi</b> pada ${esc(rentang)} (omzet ${rp(total)}) akan dihapus sepenuhnya dari daftar &amp; laporan. Stok produk READY dikembalikan. Cocok untuk membersihkan data uji coba.</p>
+    <p class="small muted" style="margin:0">Tidak bisa dibatalkan. Simpan cadangan dulu bila ragu (Pengaturan → Cadangan).</p>
+    <label class="f"><span>Ketik <b>HAPUS</b> untuk konfirmasi</span><input type="text" id="hk" autocomplete="off" autocapitalize="characters"></label>
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn danger" id="hok" type="button" disabled>Hapus ${semua.length} transaksi</button></div>`, m => {
+    $("#hk", m).oninput = e => { $("#hok", m).disabled = e.target.value.trim().toUpperCase() !== "HAPUS"; };
+    $("#hok", m).onclick = e => coba(async () => {
+      const r = await api("POST", "/api/penjualan/hapus-rentang", { dari: rDari, sampai: rSampai, konfirmasi: $("#hk", m).value });
+      closeModal(); toast(`${r.jumlah} transaksi dihapus`); await muatUlang(); render();
+    }, e.target);
   });
 }
 

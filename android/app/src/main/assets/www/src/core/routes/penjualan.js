@@ -106,4 +106,40 @@ route("POST", "/api/penjualan/:id/batal", "admin", ({ params, body, user }) => t
   return { ok: true };
 }), { cabang: ({ params, body }) => ({ aksi: "batal", data: { no: one("SELECT no FROM sales WHERE id = ?", [+params.id]).no, alasan: body.alasan || "" } }) });
 
-export { muatPenjualan };
+/** Hapus transaksi sepenuhnya (salah input / data uji coba): stok READY dikembalikan bila belum dibatalkan,
+ *  lalu transaksi hilang dari daftar & laporan. Riwayat stok tetap mencatat pengembaliannya. */
+function hapusPenjualan(s, user, alasan){
+  if (!s.batal_at) {
+    for (const it of s.items) {
+      if (!it.ready || !it.product_id) continue;
+      const p = one("SELECT * FROM products WHERE id = ?", [it.product_id]);
+      if (p) ubahStok({ jenis: "produk", item: p, delta: it.qty, tipe: "batal", ref: s.no, ket: alasan || "Transaksi dihapus", user });
+    }
+    const now = sekarang();
+    antre("batal", [[String(s.id), s.no, now.tgl, now.jam, user.nama, s.total]]); // di sheet tercatat batal
+  }
+  run("DELETE FROM sale_items WHERE sale_id = ?", [s.id]);
+  run("DELETE FROM sales WHERE id = ?", [s.id]);
+}
+
+route("DELETE", "/api/penjualan/:id", "admin", ({ params, body, user }) => tx(() => {
+  const s = muatPenjualan("id = ?", [+params.id])[0];
+  if (!s) throw notFound("Transaksi tidak ditemukan");
+  hapusPenjualan(s, user, teks(body && body.alasan, { max: 200, nama: "Alasan" }));
+  return { ok: true, no: s.no };
+}), {
+  pra: ({ params }) => one("SELECT no FROM sales WHERE id = ?", [+params.id]),
+  cabang: ({ pra }) => pra ? { aksi: "hapus_jual", data: { nos: [pra.no] } } : null,
+});
+
+/** Hapus semua transaksi dalam rentang tanggal (membersihkan data uji coba). Wajib mengetik HAPUS sebagai konfirmasi. */
+route("POST", "/api/penjualan/hapus-rentang", "admin", ({ body, user }) => tx(() => {
+  if (String(body.konfirmasi || "").trim().toUpperCase() !== "HAPUS") throw bad("Ketik HAPUS untuk konfirmasi");
+  const dari = tanggal(body.dari, { nama: "Tanggal awal" }), sampai = tanggal(body.sampai, { nama: "Tanggal akhir" });
+  if (sampai < dari) throw bad("Tanggal akhir sebelum tanggal awal");
+  const daftarJual = muatPenjualan("tgl BETWEEN ? AND ?", [dari, sampai], 100000);
+  for (const s of daftarJual) hapusPenjualan(s, user, "Hapus data uji coba");
+  return { ok: true, jumlah: daftarJual.length, nos: daftarJual.map(s => s.no) };
+}), { cabang: ({ hasil }) => hasil.nos.length ? { aksi: "hapus_jual", data: { nos: hasil.nos } } : null });
+
+export { muatPenjualan, hapusPenjualan };

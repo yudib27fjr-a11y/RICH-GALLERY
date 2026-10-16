@@ -7,6 +7,7 @@ import { hapusData, sisipkanBaris, TABEL_DATA } from "../ekspor.js";
 import { platform } from "../platform.js";
 import { HttpError, bad, notFound, teks, denganWaktu } from "../util.js";
 import { cekPassword, cekBatasLogin, catatGagal, resetGagal } from "../auth.js";
+import { muatPenjualan, hapusPenjualan } from "./penjualan.js";
 import { statusCabang, sinkronCabang, sambungCabang, putusCabang } from "../cabang-perangkat.js";
 
 /* ================= di perangkat ================= */
@@ -141,6 +142,14 @@ function terapkan(p, d, alat){
       if (s.batal_at) return { ok: true };
       return panggil("POST", `/api/penjualan/${s.id}/batal`, { alasan: x.alasan }, user, w);
     }
+    case "hapus_jual": {
+      const nos = Array.isArray(x.nos) ? x.nos.slice(0, 100000) : [];
+      for (const no of nos) {
+        const s = muatPenjualan("no = ?", [String(no)])[0];
+        if (s) denganWaktu(w, () => hapusPenjualan(s, user, "Dihapus di perangkat"));
+      }
+      return { ok: true };
+    }
     case "mutasi":
       return panggil("POST", "/api/mutasi", { tipe: x.tipe, jenis: x.jenis, tgl: x.tgl, ket: x.ket, items: daftarBarang(x.jenis, x.items, i => ({ qty: i.qty })) }, user, w);
     case "opname":
@@ -198,13 +207,14 @@ route("POST", "/api/cabang/kirim", false, ({ body }) => {
   return { hasil };
 }, { batas: 5_000_000 });
 
-/** Riwayat penjualan 31 hari terakhir (semua perangkat), supaya daftar transaksi & laporan di perangkat sama dengan server. */
-function penjualanTerbaru(){
+/** Riwayat penjualan 40 hari terakhir (semua perangkat), supaya daftar transaksi & laporan di perangkat sama dengan server. */
+const BATAS_JUAL = 5000;
+function penjualanTerbaru(sejak){
   const sales = all(`SELECT id, no, tgl, jam, kasir, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan, batal_at, batal_oleh, batal_alasan
-    FROM sales WHERE tgl >= date('now', '-31 days') ORDER BY id DESC LIMIT 3000`);
+    FROM sales WHERE tgl >= ? ORDER BY id DESC LIMIT ${BATAS_JUAL}`, [sejak]);
   if (!sales.length) return [];
   const per = new Map(sales.map(x => [x.id, (x.items = [], x)]));
-  for (const it of all(`SELECT sale_id, kode, nama, kategori, harga, qty, hpp, ready FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE tgl >= date('now', '-31 days'))`)) {
+  for (const it of all(`SELECT sale_id, kode, nama, kategori, harga, qty, hpp, ready FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE tgl >= ?)`, [sejak])) {
     const x = per.get(it.sale_id); if (x) { delete it.sale_id; x.items.push(it); }
   }
   return sales.map(x => { delete x.id; return x; });
@@ -235,7 +245,7 @@ route("POST", "/api/cabang/tarik", false, ({ body }) => {
     bahan: all("SELECT kode, nama, kategori, harga, satuan, stok, stok_min, barcode FROM materials WHERE dihapus IS NULL ORDER BY id"),
     users: all("SELECT nama, nama_key, peran, pass_hash, aktif FROM users ORDER BY id"),
     toko: s,
-    penjualan: penjualanTerbaru(),
+    penjualan: penjualanTerbaru(sejak),
     sejak, ...keuanganTerbaru(sejak),
     versi,
   };
