@@ -1138,7 +1138,8 @@ async function simpanTransaksi(print, tombol){
     await muatUlang(); drawGrid(); drawCart();
     if (print) setTimeout(() => pilihCetak(s), 200);
     // Ucapan terima kasih otomatis lewat WhatsApp (bila diaktifkan & ada no HP)
-    if (B.toko.wa_otomatis && nomorWA(s.hp)) setTimeout(() => kirimWA(s), print ? 1500 : 300);
+    // Bayar & Cetak: WhatsApp hanya jadi salah satu pilihan (tidak dibuka otomatis).
+    if (!print && B.toko.wa_otomatis && nomorWA(s.hp)) setTimeout(() => kirimWA(s), 300);
     if (isAdmin()) setTimeout(cekSync, 3000);
   }, tombol);
 }
