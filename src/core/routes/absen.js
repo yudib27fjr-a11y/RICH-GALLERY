@@ -128,10 +128,38 @@ route("POST", "/api/absen/mesin/:kunci", false, ({ params, body }) => {
   return { ok: true, baru };
 }, { tanpaRG: true, batas: 200_000 });
 
-/** Rekap absensi: jam masuk = scan pertama hari itu, jam pulang = scan terakhir (bila lebih dari satu scan). */
+/* ================= Shift kerja & lembur =================
+   Jam operasional toko 09.00–21.00. Shift diatur admin (bawaan: Shift 1 09.00–17.00, Shift 2 12.00–21.00).
+   Lembur = datang lebih awal dari jam masuk shift + pulang lebih lambat dari jam pulang shift,
+   dibulatkan ke bawah per blok (bawaan 30 menit), dibayar per jam sesuai tarif yang bisa diubah. */
+const menit = j => { const [h, m] = String(j || "0:0").split(":").map(Number); return (h || 0) * 60 + (m || 0); };
+export function daftarShift(s = getSettings()){
+  const a = Array.isArray(s.shifts) ? s.shifts.filter(x => x && JAM.test(x.masuk) && JAM.test(x.pulang) && menit(x.pulang) > menit(x.masuk)) : [];
+  return a.length ? a.map((x, i) => ({ nama: String(x.nama || `Shift ${i + 1}`), masuk: x.masuk, pulang: x.pulang }))
+    : [{ nama: "Normal", masuk: s.absen_jam_masuk || "08:00", pulang: s.absen_jam_pulang || "17:00" }];
+}
+/** Shift karyawan pada hari itu: shift tetap karyawan, atau (otomatis) shift yang jam masuknya paling dekat dengan jam datang. */
+export function pilihShift(shifts, pilihan, masuk){
+  const i = Number(pilihan);
+  if (i >= 1 && i <= shifts.length) return { ...shifts[i - 1], no: i };
+  let k = 0;
+  if (masuk) shifts.forEach((x, j) => { if (Math.abs(menit(x.masuk) - menit(masuk)) < Math.abs(menit(shifts[k].masuk) - menit(masuk))) k = j; });
+  return { ...shifts[k], no: k + 1 };
+}
+/** Menit lembur satu hari (sudah dibulatkan). */
+export function hitungLembur(shift, masuk, pulang, bulat){
+  const awal = masuk ? Math.max(0, menit(shift.masuk) - menit(masuk)) : 0;
+  const akhir = pulang ? Math.max(0, menit(pulang) - menit(shift.pulang)) : 0;
+  const b = Math.max(1, Number(bulat) || 1);
+  return { awal, akhir, menit: Math.floor((awal + akhir) / b) * b };
+}
+export const nilaiLembur = (mnt, perJam) => Math.round(mnt / 60 * (Number(perJam) || 0));
+
+/** Rekap absensi. Jam masuk = absen "masuk" pertama (atau scan pertama), jam pulang = absen "pulang" terakhir
+ *  (atau scan terakhir bila lebih dari satu scan). Terlambat, pulang cepat, dan lembur dihitung dari shift karyawan. */
 export function rekapAbsen(dari, sampai){
-  const s = getSettings();
-  const users = all("SELECT id, nama, peran, aktif, pin_absen FROM users ORDER BY nama");
+  const s = getSettings(), shifts = daftarShift(s);
+  const users = all("SELECT id, nama, nama_key, peran, aktif, pin_absen, shift FROM users ORDER BY nama");
   const perPin = new Map(users.filter(u => u.pin_absen).map(u => [u.pin_absen, u]));
   const perId = new Map(users.map(u => [u.id, u]));
   const scan = all("SELECT id, tgl, jam, pin, user_id, sumber, ket, oleh, jenis, jarak, mesin, foto IS NOT NULL ada_foto FROM absen WHERE dihapus IS NULL AND tgl BETWEEN ? AND ? ORDER BY tgl, jam", [dari, sampai]);
@@ -140,23 +168,38 @@ export function rekapAbsen(dari, sampai){
     const u = a.user_id ? perId.get(a.user_id) : perPin.get(a.pin);
     if (!u) { const t = takDikenal.get(a.pin) || { pin: a.pin, jumlah: 0, terakhir: "" }; t.jumlah++; t.terakhir = `${a.tgl} ${a.jam}`; takDikenal.set(a.pin, t); continue; }
     const k = `${a.tgl}|${u.id}`;
-    if (!hari.has(k)) hari.set(k, { tgl: a.tgl, user_id: u.id, nama: u.nama, scan: [] });
+    if (!hari.has(k)) hari.set(k, { tgl: a.tgl, user_id: u.id, nama: u.nama, nama_key: u.nama_key, pilihanShift: u.shift, scan: [] });
     hari.get(k).scan.push({ id: a.id, jam: a.jam.slice(0, 5), sumber: a.sumber, ket: a.ket, oleh: a.oleh, jenis: a.jenis, jarak: a.jarak, perangkat: a.sumber === "pin" ? a.mesin : "", foto: !!a.ada_foto });
   }
-  const harian = [...hari.values()].map(h => {
-    const masuk = h.scan[0].jam, pulang = h.scan.length > 1 ? h.scan[h.scan.length - 1].jam : "";
-    return { ...h, masuk, pulang, terlambat: masuk > s.absen_jam_masuk, pulangCepat: !!pulang && pulang < s.absen_jam_pulang };
+  const harian = [...hari.values()].map(({ pilihanShift, ...h }) => {
+    const sc = h.scan, akhir = sc[sc.length - 1];
+    const m = sc.find(x => x.jenis === "masuk") || sc.find(x => x.jenis !== "pulang");
+    let p = [...sc].reverse().find(x => x.jenis === "pulang") || (sc.length > 1 && akhir !== m && akhir.jenis !== "masuk" ? akhir : null);
+    if (p && m && p.jam < m.jam) p = null;
+    const masuk = m ? m.jam : "", pulang = p ? p.jam : "";
+    const shift = pilihShift(shifts, pilihanShift, masuk);
+    const l = hitungLembur(shift, masuk, pulang, s.lembur_bulat);
+    return { ...h, masuk, pulang, shift: shift.nama, shift_masuk: shift.masuk, shift_pulang: shift.pulang,
+      terlambat: !!masuk && masuk > shift.masuk, pulangCepat: !!pulang && pulang < shift.pulang,
+      lembur: l.menit, lembur_awal: l.awal, lembur_akhir: l.akhir };
   }).sort((a, b) => b.tgl.localeCompare(a.tgl) || a.nama.localeCompare(b.nama));
   const ringkas = new Map();
   for (const h of harian) {
-    const r = ringkas.get(h.user_id) || { user_id: h.user_id, nama: h.nama, hadir: 0, terlambat: 0, tanpaPulang: 0 };
-    r.hadir++; if (h.terlambat) r.terlambat++; if (!h.pulang) r.tanpaPulang++;
+    const r = ringkas.get(h.user_id) || { user_id: h.user_id, nama: h.nama, nama_key: h.nama_key, hadir: 0, terlambat: 0, tanpaPulang: 0, lembur: 0, lembur_rp: 0 };
+    r.hadir++; if (h.terlambat) r.terlambat++; if (!h.pulang) r.tanpaPulang++; r.lembur += h.lembur;
     ringkas.set(h.user_id, r);
   }
+  for (const r of ringkas.values()) r.lembur_rp = nilaiLembur(r.lembur, s.lembur_per_jam);
   return {
-    dari, sampai, aktif: !!(s.absen_aktif || s.absen_pin_aktif), jam_masuk: s.absen_jam_masuk, jam_pulang: s.absen_jam_pulang,
+    dari, sampai, aktif: !!(s.absen_aktif || s.absen_pin_aktif), shifts, jam_buka: s.jam_buka, jam_tutup: s.jam_tutup,
+    lembur_per_jam: Number(s.lembur_per_jam) || 0, lembur_bulat: Number(s.lembur_bulat) || 0,
     harian, ringkas: [...ringkas.values()].sort((a, b) => a.nama.localeCompare(b.nama)), takDikenal: [...takDikenal.values()],
   };
+}
+
+/** Lembur per karyawan dalam satu periode (untuk rekap insentif). */
+export function lemburPeriode(dari, sampai){
+  return rekapAbsen(dari, sampai).ringkas.filter(r => r.lembur > 0).map(r => ({ nama_key: r.nama_key, user_id: r.user_id, menit: r.lembur, rp: r.lembur_rp }));
 }
 
 route("GET", "/api/absen", "admin", async ({ query }) => {
@@ -174,9 +217,9 @@ route("GET", "/api/absen/pengaturan", "admin", () => {
   let terakhir = null; try { terakhir = s.absen_terakhir ? JSON.parse(s.absen_terakhir) : null; } catch { /* abaikan */ }
   return {
     aktif: !!s.absen_aktif, alamat: s.absen_token ? `/api/absen/mesin/${s.absen_token}` : "", mesin: s.absen_mesin,
-    jam_masuk: s.absen_jam_masuk, jam_pulang: s.absen_jam_pulang, terakhir,
+    shifts: daftarShift(s), terakhir,
     pin_aktif: !!s.absen_pin_aktif, lat: s.absen_lat, lng: s.absen_lng, radius: Number(s.absen_radius) || 100,
-    karyawan: all("SELECT id, nama, peran, aktif, pin_absen FROM users ORDER BY aktif DESC, peran DESC, nama"),
+    karyawan: all("SELECT id, nama, peran, aktif, pin_absen, shift FROM users ORDER BY aktif DESC, peran DESC, nama"),
   };
 });
 
@@ -212,14 +255,51 @@ route("PUT", "/api/absen/pengaturan", "admin", ({ body }) => tx(() => {
   return { ok: true };
 }));
 
-/* Absen manual oleh admin (lupa scan / mesin rusak) dan hapus scan yang keliru. */
+/* Jam kerja, shift, lembur & tarif insentif lain (admin, di server pusat). */
+route("GET", "/api/jam-kerja", "admin", () => {
+  const s = getSettings();
+  return {
+    jam_buka: s.jam_buka, jam_tutup: s.jam_tutup, shifts: daftarShift(s),
+    lembur_per_jam: Number(s.lembur_per_jam) || 0, lembur_bulat: Number(s.lembur_bulat) || 0,
+    ins_kurir: Number(s.ins_kurir) || 0, ins_lapangan: Number(s.ins_lapangan) || 0, ins_konten: Number(s.ins_konten) || 0,
+    karyawan: all("SELECT id, nama, peran, aktif, shift FROM users ORDER BY aktif DESC, peran DESC, nama"),
+  };
+});
+route("PUT", "/api/jam-kerja", "admin", ({ body }) => tx(() => {
+  if (body.jam_buka != null) setSetting("jam_buka", jamValid(body.jam_buka, "Jam buka"));
+  if (body.jam_tutup != null) setSetting("jam_tutup", jamValid(body.jam_tutup, "Jam tutup"));
+  if (body.shifts != null) {
+    if (!Array.isArray(body.shifts) || !body.shifts.length || body.shifts.length > 6) throw bad("Isi 1–6 shift");
+    setSetting("shifts", body.shifts.map((x, i) => {
+      const nama = teks(x && x.nama, { max: 30, nama: "Nama shift" }) || `Shift ${i + 1}`;
+      const masuk = jamValid(x && x.masuk, `Jam masuk ${nama}`), pulang = jamValid(x && x.pulang, `Jam pulang ${nama}`);
+      if (pulang <= masuk) throw bad(`Jam pulang ${nama} harus setelah jam masuk`);
+      return { nama, masuk, pulang };
+    }));
+  }
+  const rp = (k, nama) => { if (body[k] != null) { const n = Number(body[k]); if (!(n >= 0 && n <= 1e8)) throw bad(`${nama} tidak valid`); setSetting(k, Math.round(n)); } };
+  rp("lembur_per_jam", "Upah lembur per jam"); rp("ins_kurir", "Insentif kurir"); rp("ins_lapangan", "Insentif kerja lapangan"); rp("ins_konten", "Insentif buat konten");
+  if (body.lembur_bulat != null) { const b = Number(body.lembur_bulat); if (![1, 15, 30, 60].includes(b)) throw bad("Pembulatan lembur: 1, 15, 30, atau 60 menit"); setSetting("lembur_bulat", b); }
+  if (Array.isArray(body.shift_karyawan)) {
+    const n = daftarShift().length;
+    for (const x of body.shift_karyawan) {
+      const v = String(x && x.shift || "");
+      run("UPDATE users SET shift = ? WHERE id = ?", [Number(v) >= 1 && Number(v) <= n ? String(Number(v)) : "", +x.user_id]);
+    }
+  }
+  return { ok: true };
+}));
+
+/* Absen oleh admin (mis. HP karyawan rusak / mesin mati) dan hapus scan yang keliru.
+   Jam absen selalu jam saat itu juga (tidak bisa diisi manual); admin hanya memilih masuk atau pulang. */
 route("POST", "/api/absen/manual", "admin", ({ body, user }) => {
   const u = one("SELECT id FROM users WHERE id = ?", [+body.user_id]);
   if (!u) throw bad("Pilih karyawan");
-  const tgl = tanggal(body.tgl, { nama: "Tanggal" }), jam = jamValid(body.jam, "Jam");
+  if (body.jenis !== "masuk" && body.jenis !== "pulang") throw bad("Pilih absen masuk atau pulang");
   const ket = teks(body.ket, { max: 120, nama: "Keterangan" });
-  const id = Number(run("INSERT INTO absen(tgl, jam, user_id, sumber, ket, oleh) VALUES (?,?,?, 'manual', ?, ?)", [tgl, jam + ":00", u.id, ket, user.nama]).lastInsertRowid);
-  return { id };
+  const w = sekarang();
+  const id = Number(run("INSERT INTO absen(tgl, jam, user_id, sumber, jenis, ket, oleh) VALUES (?,?,?, 'manual', ?, ?, ?)", [w.tgl, w.jam.slice(0, 5) + ":00", u.id, body.jenis, ket, user.nama]).lastInsertRowid);
+  return { id, tgl: w.tgl, jam: w.jam.slice(0, 5), jenis: body.jenis };
 });
 route("DELETE", "/api/absen/:id", "admin", ({ params, user }) => {
   const a = one("SELECT id FROM absen WHERE id = ? AND dihapus IS NULL", [+params.id]);

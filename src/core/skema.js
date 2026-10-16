@@ -280,6 +280,24 @@ ALTER TABLE perangkat ADD COLUMN absen INTEGER NOT NULL DEFAULT 0;`,
 
 /* 8: pembuat barang custom / pesanan di transaksi (otomatis tercatat di produksi & insentif). */
 `ALTER TABLE sale_items ADD COLUMN pembuat TEXT;`,
+
+/* 9: shift kerja per karyawan & insentif lain (kurir non online, kerja lapangan, buat konten). */
+`ALTER TABLE users ADD COLUMN shift TEXT NOT NULL DEFAULT '';
+CREATE TABLE insentif_lain(
+  id INTEGER PRIMARY KEY,
+  tgl TEXT NOT NULL,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  jenis TEXT NOT NULL,
+  nominal INTEGER NOT NULL,
+  ket TEXT NOT NULL DEFAULT '',
+  uid TEXT,
+  oleh TEXT NOT NULL DEFAULT '',
+  oleh_id INTEGER,
+  dihapus TEXT,
+  dibuat TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX insentif_lain_tgl ON insentif_lain(tgl);
+CREATE UNIQUE INDEX insentif_lain_uid ON insentif_lain(uid) WHERE uid IS NOT NULL;`,
 ];
 
 export const DEFAULT_SETTINGS = {
@@ -331,6 +349,15 @@ export const DEFAULT_SETTINGS = {
   inv_ttd: "",
   inv_ttd_nama: "Siti Nur Khodijah",
   inv_ttd_jabatan: "Financial Manager",
+  // Jam kerja, lembur & insentif lain
+  jam_buka: "09:00",
+  jam_tutup: "21:00",
+  shifts: [{ nama: "Shift 1", masuk: "09:00", pulang: "17:00" }, { nama: "Shift 2", masuk: "12:00", pulang: "21:00" }],
+  lembur_per_jam: 0,
+  lembur_bulat: 30,
+  ins_kurir: 0,
+  ins_lapangan: 0,
+  ins_konten: 0,
   // Absen PIN + selfie di perangkat kasir
   absen_pin_aktif: false,
   absen_lat: "-6.3377069", // Rich Gallery, Jl. Olahraga No.27 Sport Center - Indramayu (Google Maps)

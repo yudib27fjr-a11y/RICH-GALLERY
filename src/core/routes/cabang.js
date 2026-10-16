@@ -8,7 +8,7 @@ import { platform } from "../platform.js";
 import { HttpError, bad, notFound, teks, denganWaktu, tanggal } from "../util.js";
 import { cekPassword, cekBatasLogin, catatGagal, resetGagal } from "../auth.js";
 import { muatPenjualan, hapusPenjualan } from "./penjualan.js";
-import { rekapAbsen, terimaAbsen, fotoAbsen, cekLokasi } from "./absen.js";
+import { rekapAbsen, terimaAbsen, fotoAbsen, cekLokasi, lemburPeriode } from "./absen.js";
 import { statusCabang, sinkronCabang, sambungCabang, putusCabang, gantiNamaPerangkat } from "../cabang-perangkat.js";
 
 /* ================= di perangkat ================= */
@@ -34,7 +34,7 @@ for (const [m, p] of [
   ["POST", "/api/users"], ["PUT", "/api/users/1"], ["POST", "/api/akun/password"],
   ["PUT", "/api/pengaturan"], ["POST", "/api/insentif/bayar"],
   ["POST", "/api/pulihkan"], ["POST", "/api/impor-lama"], ["POST", "/api/sync/tarik"],
-  ["PUT", "/api/absen/pengaturan"], ["POST", "/api/absen/manual"], ["DELETE", "/api/absen/1"],
+  ["PUT", "/api/absen/pengaturan"], ["PUT", "/api/jam-kerja"], ["POST", "/api/absen/manual"], ["DELETE", "/api/absen/1"],
 ]) { const r = cariRoute(m, p); if (r) r.opsi.pusatSaja = true; }
 
 /* ================= di server pusat ================= */
@@ -188,6 +188,16 @@ function terapkan(p, d, alat){
       if (!r || r.dihapus) return { ok: true };
       return panggil("DELETE", `/api/pengeluaran/${r.id}`, {}, user, w);
     }
+    case "insentif_lain": {
+      const k = userNama(x.karyawan);
+      if (!k) throw bad(`Karyawan ${x.karyawan || "-"} tidak ada atau tidak aktif di server`);
+      return panggil("POST", "/api/insentif-lain", { uid: x.uid, tgl: x.tgl, user_id: k.id, jenis: x.jenis, nominal: x.nominal, ket: x.ket }, user, w);
+    }
+    case "hapus_insentif_lain": {
+      const r = barisUid("insentif_lain", x.uid);
+      if (!r || r.dihapus) return { ok: true };
+      return panggil("DELETE", `/api/insentif-lain/${r.id}`, {}, user, w);
+    }
     default: throw bad(`Jenis perintah tidak dikenal: ${p.aksi}`);
   }
 }
@@ -245,6 +255,8 @@ function keuanganTerbaru(sejak){
       FROM produksi p JOIN users u ON u.id = p.pembuat_id WHERE p.tgl >= ? ORDER BY p.id`, [sejak]).map(r => { r.kunci = kunciBaris(r); delete r.id; delete r.uid; return r; }),
     pengeluaran: all("SELECT id, uid, tgl, kategori, ket, nominal, oleh, dihapus, dibuat FROM expenses WHERE tgl >= ? ORDER BY id", [sejak])
       .map(r => { r.kunci = kunciBaris(r); delete r.id; delete r.uid; return r; }),
+    insentif_lain: all(`SELECT l.id, l.uid, l.tgl, u.nama_key karyawan, l.jenis, l.nominal, l.ket, l.oleh, l.dihapus, l.dibuat
+      FROM insentif_lain l JOIN users u ON u.id = l.user_id WHERE l.tgl >= ? ORDER BY l.id`, [sejak]).map(r => { r.kunci = kunciBaris(r); delete r.id; delete r.uid; return r; }),
     insentif: all(`SELECT u.nama_key pembuat, b.periode_dari, b.periode_sampai, b.qty, b.hitung, b.nominal, b.tgl, b.ket, b.oleh
       FROM insentif_bayar b JOIN users u ON u.id = b.pembuat_id WHERE b.periode_sampai >= ?`, [sejak]),
   };
@@ -257,7 +269,7 @@ route("POST", "/api/cabang/tarik", false, ({ body }) => {
   const versi = versiData() || "awal";
   if (body.versi && body.versi === versi) return { tetap: true, versi, perangkat: alat.nama, perangkat_absen: !!alat.absen };
   const sejak = one("SELECT date('now', '+7 hours', '-40 days') d").d;
-  const s = Object.fromEntries(all("SELECT kunci, nilai FROM settings WHERE kunci IN ('nama_toko','alamat','telp','footer','prefix','hpp_persen','insentif','periode_mulai','absen_aktif','absen_jam_masuk','absen_jam_pulang','wa_otomatis','wa_template','canva_url','canva_email','wa_nomor','absen_pin_aktif','absen_lat','absen_lng','absen_radius','kartu_lebar','kartu_tinggi','kartu_huruf','kartu_warna','kartu_area','kartu_latar_kode','kartu_font_kode','inv_tagline','inv_bank','inv_ttd','inv_ttd_nama','inv_ttd_jabatan')").map(r => [r.kunci, JSON.parse(r.nilai)]));
+  const s = Object.fromEntries(all("SELECT kunci, nilai FROM settings WHERE kunci IN ('nama_toko','alamat','telp','footer','prefix','hpp_persen','insentif','periode_mulai','absen_aktif','absen_jam_masuk','absen_jam_pulang','wa_otomatis','wa_template','canva_url','canva_email','wa_nomor','absen_pin_aktif','absen_lat','absen_lng','absen_radius','kartu_lebar','kartu_tinggi','kartu_huruf','kartu_warna','kartu_area','kartu_latar_kode','kartu_font_kode','inv_tagline','inv_bank','inv_ttd','inv_ttd_nama','inv_ttd_jabatan','jam_buka','jam_tutup','shifts','lembur_per_jam','lembur_bulat','ins_kurir','ins_lapangan','ins_konten')").map(r => [r.kunci, JSON.parse(r.nilai)]));
   return {
     produk: all("SELECT kode, nama, kategori, harga, hpp, stok, stok_min, barcode, insentif, aktif FROM products WHERE dihapus IS NULL ORDER BY id"),
     bahan: all("SELECT kode, nama, kategori, harga, satuan, stok, stok_min, barcode FROM materials WHERE dihapus IS NULL ORDER BY id"),
@@ -286,6 +298,12 @@ route("POST", "/api/cabang/absen", false, ({ body }) => {
   perangkatDariToken(body.token);
   const dari = tanggal(body.dari), sampai = tanggal(body.sampai || body.dari);
   return rekapAbsen(dari, sampai);
+});
+
+/* Lembur per karyawan dalam satu periode (untuk rekap insentif di perangkat cabang). */
+route("POST", "/api/cabang/lembur", false, ({ body }) => {
+  perangkatDariToken(body.token);
+  return { lembur: lemburPeriode(tanggal(body.dari), tanggal(body.sampai || body.dari)) };
 });
 
 route("GET", "/api/cabang/perangkat", "admin", () =>

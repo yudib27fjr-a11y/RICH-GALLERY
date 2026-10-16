@@ -1359,25 +1359,26 @@ async function vAbsen(){
   if (!R || view !== "absen") { if (view === "absen" && !R) $("#aIsi").innerHTML = `<div class="empty">Data absensi belum bisa dimuat${LOKAL ? " (perangkat ini mengambilnya dari server pusat, butuh internet)" : ""}.</div>`; return; }
   const satuHari = aDari === aSampai;
   $("#aIsi").innerHTML = `
-    <p class="small muted" style="margin:0 0 12px">Jam masuk ${esc(R.jam_masuk)} · jam pulang ${esc(R.jam_pulang)}. Masuk = scan pertama hari itu, pulang = scan terakhir.</p>
+    <p class="small muted" style="margin:0 0 12px">${(R.shifts || []).map(x => `${esc(x.nama)} ${esc(x.masuk)}–${esc(x.pulang)}`).join(" · ")}. Masuk = absen masuk pertama, pulang = absen pulang terakhir. Datang sebelum jam masuk shift & pulang setelah jam pulang shift dihitung <b>lembur</b>${R.lembur_bulat > 1 ? ` (dibulatkan per ${R.lembur_bulat} menit)` : ""}.</p>
     ${R.takDikenal.length ? `<p class="note" style="margin:0 0 12px">Ada scan dari PIN mesin yang belum dihubungkan ke karyawan: <b>${R.takDikenal.map(t => esc(t.pin) + " (" + t.jumlah + "×)").join(", ")}</b>. Hubungkan di Pengaturan → Absensi sidik jari.</p>` : ""}
     ${!satuHari ? `<section class="panel" style="margin-bottom:12px"><h3 style="font-size:16px;margin:0 0 8px">Ringkasan ${esc(tglID(aDari))} – ${esc(tglID(aSampai))}</h3>
-      ${R.ringkas.length ? `<div class="list">${R.ringkas.map(r => `<div class="li"><div class="main"><div class="t">${esc(r.nama)}</div><div class="small muted">${r.tanpaPulang ? r.tanpaPulang + " hari tanpa scan pulang" : "Lengkap"}</div></div>
+      ${R.ringkas.length ? `<div class="list">${R.ringkas.map(r => `<div class="li"><div class="main"><div class="t">${esc(r.nama)}</div><div class="small muted">${r.tanpaPulang ? r.tanpaPulang + " hari tanpa absen pulang" : "Lengkap"}${r.lembur ? ` · lembur <b>${jamMenit(r.lembur)}</b>${r.lembur_rp ? " = " + rp(r.lembur_rp) : ""}` : ""}</div></div>
         <div style="text-align:right"><div class="num" style="font-weight:700">${r.hadir} hari</div>${r.terlambat ? `<span class="pill warn">${r.terlambat}× terlambat</span>` : `<span class="pill ok">tepat waktu</span>`}</div></div>`).join("")}</div>` : `<div class="empty">Belum ada data.</div>`}</section>` : ""}
     <div class="row" style="margin-bottom:8px"><h3 style="font-size:16px;margin:0;flex:1">${satuHari ? "Kehadiran " + esc(tglID(aDari)) : "Per hari"}</h3>
-      ${LOKAL && B.me ? "" : `<button class="btn sm" id="aManual" type="button">+ Absen manual</button>`}<button class="btn sm" id="aCsv" type="button">Unduh CSV</button></div>
+      ${LOKAL && B.me ? "" : `<button class="btn sm" id="aManual" type="button">+ Absen oleh admin</button>`}<button class="btn sm" id="aCsv" type="button">Unduh CSV</button></div>
     ${R.harian.length ? `<div class="list">${R.harian.map(h => `<div class="li click" data-k="${h.tgl}|${h.user_id}">
       <div class="main"><div class="t">${esc(h.nama)}${satuHari ? "" : ` <span class="small muted">${tglPendek(h.tgl)}</span>`}</div>
-        <div class="small muted">${h.scan.length} scan${h.scan.some(x => x.sumber === "pin") ? " · 📷 selfie" : ""}${h.scan.some(x => x.sumber === "manual") ? " · ada manual" : ""}</div></div>
+        <div class="small muted">${esc(h.shift || "")}${h.shift ? " · " : ""}${h.scan.length} scan${h.scan.some(x => x.sumber === "pin") ? " · 📷 selfie" : ""}${h.scan.some(x => x.sumber === "manual") ? " · ada manual" : ""}</div></div>
       <div style="text-align:right"><div class="num" style="font-weight:700">${h.masuk} – ${h.pulang || "…"}</div>
-        ${h.terlambat ? `<span class="pill warn">terlambat</span>` : `<span class="pill ok">tepat</span>`}${h.pulangCepat ? ` <span class="pill mut">pulang cepat</span>` : ""}</div></div>`).join("")}</div>`
+        ${h.terlambat ? `<span class="pill warn">terlambat</span>` : `<span class="pill ok">tepat</span>`}${h.pulangCepat ? ` <span class="pill mut">pulang cepat</span>` : ""}${h.lembur ? ` <span class="pill">lembur ${jamMenit(h.lembur)}</span>` : ""}</div></div>`).join("")}</div>`
       : `<div class="list"><div class="empty">Belum ada scan pada ${satuHari ? "tanggal" : "periode"} ini.</div></div>`}`;
-  $("#aCsv").onclick = () => unduhCSV(`absensi-${aDari}_${aSampai}.csv`, [["Tanggal", "Nama", "Masuk", "Pulang", "Jumlah scan", "Terlambat", "Pulang cepat"],
-    ...R.harian.slice().reverse().map(h => [h.tgl, h.nama, h.masuk, h.pulang, h.scan.length, h.terlambat ? "YA" : "", h.pulangCepat ? "YA" : ""])]);
+  $("#aCsv").onclick = () => unduhCSV(`absensi-${aDari}_${aSampai}.csv`, [["Tanggal", "Nama", "Shift", "Masuk", "Pulang", "Jumlah scan", "Terlambat", "Pulang cepat", "Lembur (menit)"],
+    ...R.harian.slice().reverse().map(h => [h.tgl, h.nama, h.shift || "", h.masuk, h.pulang, h.scan.length, h.terlambat ? "YA" : "", h.pulangCepat ? "YA" : "", h.lembur || 0])]);
   const man = $("#aManual"); if (man) man.onclick = () => absenManual();
   $$("#aIsi .li.click").forEach(el => el.onclick = () => {
     const h = R.harian.find(x => `${x.tgl}|${x.user_id}` === el.dataset.k); if (!h) return;
     modal(`<h3>${esc(h.nama)} · ${esc(tglID(h.tgl))}</h3>
+      <p class="small muted" style="margin:0">${esc(h.shift || "")} ${esc(h.shift_masuk || "")}–${esc(h.shift_pulang || "")}${h.lembur ? ` · lembur <b>${jamMenit(h.lembur)}</b> (datang awal ${h.lembur_awal} mnt, pulang lewat ${h.lembur_akhir} mnt)` : ""}</p>
       <div class="list">${h.scan.map(x => `<div class="li"><div class="main"><div class="t num">${x.jam}${x.jenis ? ` <span class="pill ${x.jenis === "masuk" ? "ok" : "mut"}">${x.jenis}</span>` : ""}</div><div class="small muted">${x.sumber === "manual" ? "Manual oleh " + esc(x.oleh) + (x.ket ? " · " + esc(x.ket) : "") : x.sumber === "pin" ? `PIN + selfie di ${esc(x.perangkat || "perangkat kasir")}${x.jarak != null ? ` · ±${Math.round(x.jarak)} m dari toko` : ""}` : "Mesin sidik jari"}</div></div>
         ${x.foto ? `<button class="btn sm" data-foto="${x.id}" type="button">📷 Foto</button>` : ""}${LOKAL ? "" : `<button class="btn sm danger" data-hapus="${x.id}" type="button">Hapus</button>`}</div>`).join("")}</div>
       <div class="actions"><button class="btn" data-close>Tutup</button></div>`, m => {
@@ -1390,14 +1391,16 @@ async function vAbsen(){
   });
 }
 function absenManual(){
-  modal(`<h3>Absen manual</h3><p class="small muted" style="margin:0">Untuk karyawan yang lupa scan atau saat mesin bermasalah.</p>
+  let jenis = new Date().getHours() < 13 ? "masuk" : "pulang";
+  modal(`<h3>Absen oleh admin</h3><p class="small muted" style="margin:0">Untuk karyawan yang tidak bisa absen sendiri (mis. HP/mesin bermasalah). Jam absen otomatis <b>jam sekarang</b> dan tidak bisa diubah.</p>
     <div class="stack">
+      <div class="seg" id="amJ" style="display:flex"><button type="button" data-j="masuk" style="flex:1" class="${jenis === "masuk" ? "on" : ""}">Masuk</button><button type="button" data-j="pulang" style="flex:1" class="${jenis === "pulang" ? "on" : ""}">Pulang</button></div>
       <label class="f">Karyawan<select id="amU">${B.staf.map(s => `<option value="${s.id}">${esc(s.nama)}</option>`).join("")}</select></label>
-      <div class="row"><label class="f grow">Tanggal<input type="date" id="amT" value="${aSampai || today()}" max="${today()}"></label><label class="f grow">Jam<input type="time" id="amJ" value="${esc(B.toko.absen_jam_masuk || "08:00")}"></label></div>
-      <label class="f">Keterangan<input type="text" id="amK" placeholder="Contoh: lupa scan pulang"></label>
+      <label class="f">Keterangan<input type="text" id="amK" placeholder="Contoh: HP mati"></label>
     </div>
-    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="amOk" type="button">Simpan</button></div>`, m => {
-    $("#amOk", m).onclick = e => coba(async () => { await api("POST", "/api/absen/manual", { user_id: +$("#amU", m).value, tgl: $("#amT", m).value, jam: $("#amJ", m).value, ket: $("#amK", m).value }); closeModal(); toast("Absen manual disimpan"); vAbsen(); }, e.target);
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="amOk" type="button">Absen sekarang</button></div>`, m => {
+    $$("#amJ button", m).forEach(b => b.onclick = () => { jenis = b.dataset.j; $$("#amJ button", m).forEach(x => x.classList.toggle("on", x === b)); });
+    $("#amOk", m).onclick = e => coba(async () => { const r = await api("POST", "/api/absen/manual", { user_id: +$("#amU", m).value, jenis, ket: $("#amK", m).value }); closeModal(); toast(`Absen ${r.jenis} jam ${r.jam} disimpan`); aDari = aSampai = r.tgl; vAbsen(); }, e.target);
   });
 }
 
@@ -1409,7 +1412,7 @@ async function aturAbsen(){
     const K = await api("GET", "/api/absen/kiosk").catch(() => null); if (!$("#aAbsen")) return;
     el.innerHTML = `<h3 style="font-size:17px">Absensi</h3>
       <p class="small" style="margin:0">Absen PIN + selfie di perangkat ini: ${K && K.boleh ? `<b style="color:var(--ok)">siap dipakai</b> (tombol <b>📷 Absen</b> di atas & di layar masuk)` : `<b>belum bisa</b> — ${esc(K ? K.alasan : "status tidak terbaca")}`}.</p>
-      <p class="small muted" style="margin:0">Aktifkan absen, atur jam kerja, dan izinkan perangkat ini dari server (browser) → Pengaturan. Lokasi toko bisa diambil dari perangkat ini saat berada di toko:</p>
+      <p class="small muted" style="margin:0">Aktifkan absen, atur shift & lembur, dan izinkan perangkat ini dari server (browser) → Pengaturan. Lokasi toko bisa diambil dari perangkat ini saat berada di toko:</p>
       <button class="btn" id="abLokasiIni" type="button">📍 Pakai lokasi perangkat ini sebagai lokasi toko</button>`;
     $("#abLokasiIni").onclick = e => coba(async () => {
       toast("Membaca lokasi…");
@@ -1425,7 +1428,7 @@ async function aturAbsen(){
   const alamatPenuh = A.alamat ? location.origin + A.alamat : "";
   const koordinat = A.lat && A.lng ? `${A.lat}, ${A.lng}` : "";
   el.innerHTML = `<h3 style="font-size:17px">Absensi karyawan</h3>
-    <div class="row"><label class="f grow">Jam masuk<input type="time" id="abMasuk" value="${esc(A.jam_masuk)}"></label><label class="f grow">Jam pulang<input type="time" id="abPulang" value="${esc(A.jam_pulang)}"></label></div>
+    <p class="small muted" style="margin:0">Jam shift & lembur diatur di bagian <b>⏱️ Jam kerja, lembur & insentif lain</b>. Jam absen selalu jam saat karyawan absen (tidak bisa diisi manual).</p>
 
     <hr class="sep"><h4 style="margin:4px 0 0">📷 Absen PIN + foto selfie di perangkat kasir</h4>
     <p class="small muted" style="margin:0">Karyawan absen di iMin kasir: pilih nama, ketik PIN, ambil foto selfie. Hanya bisa dari perangkat yang diizinkan, dan hanya bila perangkat berada di lokasi toko.</p>
@@ -1456,7 +1459,7 @@ async function aturAbsen(){
   $("#abSimpanUmum").onclick = e => coba(async () => {
     const k = $("#abKoord").value.trim(), m = k.match(/^\s*(-?\d+(?:\.\d+)?)\s*[,; ]\s*(-?\d+(?:\.\d+)?)\s*$/);
     if (k && !m) throw new Error("Format koordinat: lintang, bujur — contoh -6.3274, 108.3247");
-    await api("PUT", "/api/absen/pengaturan", { pin_aktif: $("#abPinAktif").checked, jam_masuk: $("#abMasuk").value, jam_pulang: $("#abPulang").value,
+    await api("PUT", "/api/absen/pengaturan", { pin_aktif: $("#abPinAktif").checked,
       radius: $("#abRadius").value, lat: m ? m[1] : "", lng: m ? m[2] : "" });
     await muatUlang(); renderNav(); toast("Pengaturan absen disimpan"); aturAbsen();
   }, e.target);
@@ -1469,7 +1472,7 @@ async function aturAbsen(){
   }, e.target);
   const baru = $("#abBaru"); if (baru) baru.onclick = () => konfirmasi("Buat alamat baru?", "Alamat lama berhenti berfungsi. Alamat baru harus ditempel lagi di developer.fingerspot.io.", "Buat baru", () => coba(async () => { await api("PUT", "/api/absen/pengaturan", { kunciBaru: true }); aturAbsen(); }));
   $("#abSimpan").onclick = e => coba(async () => {
-    await api("PUT", "/api/absen/pengaturan", { jam_masuk: $("#abMasuk").value, jam_pulang: $("#abPulang").value, mesin: $("#abMesin").value,
+    await api("PUT", "/api/absen/pengaturan", { mesin: $("#abMesin").value,
       pin: $$("#abPin input").map(i => ({ user_id: +i.dataset.uid, pin: i.value.trim() })) });
     await muatUlang(); toast("Pengaturan mesin disimpan"); aturAbsen();
   }, e.target);
@@ -1552,6 +1555,9 @@ async function bukaAbsen(){
     }, e.target);
   });
 }
+/** 90 → "1 j 30 m" */
+const jamMenit = m => { m = Math.round(m || 0); const j = Math.floor(m / 60), r = m % 60; return (j ? j + " j" : "") + (j && r ? " " : "") + (r || !j ? r + " m" : ""); };
+const JENIS_LAIN = { kurir: "🛵 Jasa kurir non online", lapangan: "🧑‍🔧 Kerja lapangan", konten: "🎬 Buat konten" };
 const jarakM = (lat1, lng1, lat2, lng2) => { const R = 6371000, r = x => x * Math.PI / 180; const a = Math.sin(r(lat2 - lat1) / 2) ** 2 + Math.cos(r(lat1)) * Math.cos(r(lat2)) * Math.sin(r(lng2 - lng1) / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(a)); };
 const cabangAktifDiSini = () => !!(B && B.cabang);
 
@@ -1574,6 +1580,12 @@ async function vProduksi(){
         <p class="small muted" style="margin:0">Matikan centang untuk pesanan yang langsung diambil pelanggan (sudah dijual sebagai PRODUKSI di kasir), supaya stok tidak dobel.</p>
         <button class="btn pri big" id="pSave" type="button">Simpan produksi</button>
         <datalist id="prodList">${B.produk.map(x => `<option value="${x.kode} · ${esc(x.nama)}">`).join("")}</datalist>
+        <hr class="sep">
+        <h3 style="font-size:17px">Insentif lain</h3>
+        <div class="seg" id="ilJ" style="display:flex;flex-wrap:wrap">${Object.entries(JENIS_LAIN).map(([k, t], i) => `<button type="button" data-j="${k}" style="flex:1" class="${i ? "" : "on"}">${t}</button>`).join("")}</div>
+        <div class="row"><label class="f grow">Tanggal<input type="date" id="ilT" value="${today()}" max="${today()}"></label><label class="f grow">Karyawan<select id="ilU">${pembuatList.map(s => `<option value="${s.id}" ${s.id === pOleh ? "selected" : ""}>${esc(s.nama)}</option>`).join("")}</select></label></div>
+        <div class="row"><label class="f" style="width:140px">Nominal (Rp)<input type="number" id="ilN" min="0" step="500" inputmode="numeric"></label><label class="f grow">Keterangan<input type="text" id="ilK" placeholder="Contoh: antar ke Jatibarang / video reels"></label></div>
+        <button class="btn pri" id="ilSave" type="button">Simpan insentif lain</button>
       </section>
       <section class="stack" style="min-width:0">
         <div class="row"><button class="btn sm" id="pPrev" type="button" aria-label="Periode sebelumnya">‹</button><div style="flex:1;text-align:center"><div class="small muted" style="text-transform:uppercase;letter-spacing:.05em;font-weight:700">Periode insentif</div><b>${tglID(a)} – ${tglID(b)}</b></div><button class="btn sm" id="pNext" type="button" aria-label="Periode berikutnya">›</button></div>
@@ -1581,7 +1593,23 @@ async function vProduksi(){
       </section>
     </div>
     <h3 style="font-size:17px;margin:22px 0 10px">Catatan produksi periode ini</h3>
-    <div id="pLog"><div class="empty">Memuat…</div></div>`;
+    <div id="pLog"><div class="empty">Memuat…</div></div>
+    <h3 style="font-size:17px;margin:22px 0 10px">Catatan insentif lain periode ini</h3>
+    <div id="ilLog"><div class="empty">Memuat…</div></div>`;
+  let ilJenis = "kurir";
+  const tarifLain = j => Number(B.toko["ins_" + j]) || 0;
+  const isiNominal = () => { $("#ilN").value = tarifLain(ilJenis) || ""; };
+  isiNominal();
+  $$("#ilJ button").forEach(bt => bt.onclick = () => { ilJenis = bt.dataset.j; $$("#ilJ button").forEach(x => x.classList.toggle("on", x === bt)); isiNominal(); });
+  $("#ilSave").onclick = e => {
+    const tgl = $("#ilT").value || today(), nominal = num($("#ilN").value);
+    if (!nominal) return toast("Isi nominal insentif");
+    coba(async () => {
+      await api("POST", "/api/insentif-lain", { tgl, user_id: +$("#ilU").value, jenis: ilJenis, nominal, ket: $("#ilK").value.trim() });
+      toast(`${JENIS_LAIN[ilJenis].replace(/^\S+ /, "")} ${rp(nominal)} dicatat`);
+      pPer = periodeDari(tgl, B.toko.periode_mulai); vProduksi();
+    }, e.target);
+  };
   const addRow = () => {
     const d = document.createElement("div"); d.className = "row prow";
     d.innerHTML = `<label class="f grow">Produk<input type="text" class="pI" list="prodList" placeholder="Ketik nama, kode, atau scan" autocomplete="off"></label><label class="f" style="width:80px">Qty<input type="number" class="pQ" value="1" min="0" step="1" inputmode="numeric"></label>`;
@@ -1610,17 +1638,20 @@ async function vProduksi(){
     }, e.target);
   };
   coba(async () => {
-    const [rek, log] = await Promise.all([api("GET", `/api/insentif?tgl=${a}`), api("GET", `/api/produksi?dari=${a}&sampai=${b}`)]);
+    const [rek, log, lain] = await Promise.all([api("GET", `/api/insentif?tgl=${a}`), api("GET", `/api/produksi?dari=${a}&sampai=${b}`), api("GET", `/api/insentif-lain?dari=${a}&sampai=${b}`)]);
     if (view !== "produksi") return;
     const rows = rek.rows.filter(r => isAdmin() || r.pembuat_id === B.me.id);
-    const totQ = rows.reduce((x, r) => x + r.qty, 0), totI = rows.reduce((x, r) => x + r.insentif, 0);
+    const totQ = rows.reduce((x, r) => x + r.qty, 0), totI = rows.reduce((x, r) => x + r.total, 0);
     $("#pRekap").innerHTML = `<div class="kpis" style="margin-bottom:10px"><div class="kpi"><div class="l">${isAdmin() ? "Total produksi" : "Produksi saya"}</div><div class="v num">${fq(totQ)}</div></div><div class="kpi"><div class="l">${isAdmin() ? "Total insentif" : "Insentif saya"}</div><div class="v num">${rp(totI)}</div></div></div>
-      <div class="tbl-wrap"><table><thead><tr><th>Nama</th><th class="r">Produksi</th><th class="r">Insentif</th><th>Status</th><th></th></tr></thead><tbody>
-      ${rows.map(r => `<tr><td><b>${esc(r.nama)}</b></td><td class="r num">${r.qty ? fq(r.qty) : "-"}</td><td class="r num" style="font-weight:700">${rp(r.insentif)}</td>
-        <td>${r.bayar ? `<span class="pill ok">DIBAYAR</span><div class="small muted">${tglPendek(r.bayar.tgl)}${r.bayar.nominal !== r.insentif ? " · " + rp(r.bayar.nominal) : ""}</div>` : r.insentif ? `<span class="pill warn">BELUM</span>` : ""}</td>
-        <td class="r" style="white-space:nowrap">${r.qty ? `<button class="btn sm" data-slip="${r.pembuat_id}" type="button">Slip</button> ${!r.bayar && isAdmin() ? `<button class="btn sm pri" data-bayar="${r.pembuat_id}" type="button">Bayar</button>` : ""}` : ""}</td></tr>`).join("") || `<tr><td colspan="5" class="empty">Belum ada data.</td></tr>`}
+      <div class="tbl-wrap"><table><thead><tr><th>Nama</th><th class="r">Produksi</th><th class="r">Lain</th><th class="r">Lembur</th><th class="r">Total</th><th>Status</th><th></th></tr></thead><tbody>
+      ${rows.map(r => `<tr><td><b>${esc(r.nama)}</b></td><td class="r num">${r.qty ? `${rp(r.insentif)}<div class="small muted">${fq(r.qty)} pcs</div>` : "-"}</td>
+        <td class="r num">${r.lain ? rp(r.lain) : "-"}</td><td class="r num">${r.lembur_menit ? `${r.lembur_rp ? rp(r.lembur_rp) : ""}<div class="small muted">${jamMenit(r.lembur_menit)}</div>` : "-"}</td>
+        <td class="r num" style="font-weight:700">${rp(r.total)}</td>
+        <td>${r.bayar ? `<span class="pill ok">DIBAYAR</span><div class="small muted">${tglPendek(r.bayar.tgl)}${r.bayar.nominal !== r.total ? " · " + rp(r.bayar.nominal) : ""}</div>` : r.total ? `<span class="pill warn">BELUM</span>` : ""}</td>
+        <td class="r" style="white-space:nowrap">${r.qty || r.total ? `<button class="btn sm" data-slip="${r.pembuat_id}" type="button">Slip</button> ${!r.bayar && isAdmin() ? `<button class="btn sm pri" data-bayar="${r.pembuat_id}" type="button">Bayar</button>` : ""}` : ""}</td></tr>`).join("") || `<tr><td colspan="7" class="empty">Belum ada data.</td></tr>`}
       </tbody></table></div>
-      <p class="small muted" style="margin:8px 0 0">Tarif ${rp(B.toko.insentif)} per produk, periode tanggal ${B.toko.periode_mulai} s/d ${B.toko.periode_mulai - 1 || "akhir bulan"}.${isAdmin() ? " Ubah di Pengaturan; tarif khusus per produk diisi di menu Stok." : ""}</p>`;
+      ${rek.lemburTersedia === false ? `<p class="note" style="margin:8px 0 0">Lembur belum ikut dihitung: data absen ada di server pusat dan perangkat ini sedang offline.</p>` : ""}
+      <p class="small muted" style="margin:8px 0 0">Total = insentif produksi + insentif lain + lembur (${B.toko.lembur_per_jam ? rp(B.toko.lembur_per_jam) + "/jam" : "upah lembur belum diatur"}). Tarif ${rp(B.toko.insentif)} per produk, periode tanggal ${B.toko.periode_mulai} s/d ${B.toko.periode_mulai - 1 || "akhir bulan"}.${isAdmin() ? " Ubah di Pengaturan; tarif khusus per produk diisi di menu Stok." : ""}</p>`;
     $$("[data-slip]").forEach(bt => bt.onclick = () => slipInsentif(rek, rows.find(r => r.pembuat_id === +bt.dataset.slip)));
     $$("[data-bayar]").forEach(bt => bt.onclick = () => bayarInsentif(rek, rows.find(r => r.pembuat_id === +bt.dataset.bayar)));
     $("#pLog").innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>Tanggal</th><th>Barang</th><th class="r">Qty</th><th>Pembuat</th><th class="r">Insentif</th><th></th></tr></thead><tbody>
@@ -1630,14 +1661,24 @@ async function vProduksi(){
     $$("[data-del]").forEach(bt => bt.onclick = () => { const x = log.find(p => p.id === +bt.dataset.del);
       konfirmasi("Hapus catatan produksi?", `${x.nama} ×${fq(x.qty)} oleh ${x.pembuat}.${x.restock ? " Stok ready ikut dikurangi." : ""}`, "Hapus",
         () => coba(async () => { await api("DELETE", `/api/produksi/${x.id}`); await muatUlang(); vProduksi(); })); });
+    $("#ilLog").innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>Tanggal</th><th>Jenis</th><th>Karyawan</th><th>Keterangan</th><th class="r">Nominal</th><th></th></tr></thead><tbody>
+      ${lain.length ? lain.map(x => { const bolehHapus = !x.dibayar && (isAdmin() || (x.oleh_id === B.me.id && x.tgl === today()));
+        return `<tr><td class="small">${tglPendek(x.tgl)}</td><td>${JENIS_LAIN[x.jenis] || esc(x.jenis)}</td><td>${esc(x.nama)}</td><td class="small">${esc(x.ket || "")}</td><td class="r num">${rp(x.nominal)}</td><td class="r">${bolehHapus ? `<button class="btn ghost sm" data-del-lain="${x.id}" type="button">Hapus</button>` : ""}</td></tr>`; }).join("")
+        : `<tr><td colspan="6" class="empty">Belum ada insentif lain di periode ini.</td></tr>`}</tbody></table></div>`;
+    $$("[data-del-lain]").forEach(bt => bt.onclick = () => { const x = lain.find(p => p.id === +bt.dataset.delLain);
+      konfirmasi("Hapus insentif lain?", `${(JENIS_LAIN[x.jenis] || x.jenis).replace(/^\S+ /, "")} ${rp(x.nominal)} untuk ${x.nama}.`, "Hapus",
+        () => coba(async () => { await api("DELETE", `/api/insentif-lain/${x.id}`); vProduksi(); })); });
   });
 }
 function slipLines(rek, r){
   const w = lebar(), garis = "-".repeat(w), L = [];
-  L.push({ t: center(B.toko.nama_toko, w), b: 1 }, { t: center("SLIP INSENTIF PRODUKSI", w), b: 1 }, { t: garis });
+  L.push({ t: center(B.toko.nama_toko, w), b: 1 }, { t: center("SLIP INSENTIF", w), b: 1 }, { t: garis });
   L.push({ t: lr("Nama", r.nama, w) }, { t: lr("Periode", tglPendek(rek.dari) + "-" + tglPendek(rek.sampai), w) }, { t: garis });
   r.detail.forEach(x => { wrap(x.nama, w).forEach(l => L.push({ t: l })); L.push({ t: lr(`  ${fq(x.qty)} x ${angka(x.tarif)}`, angka(x.qty * x.tarif), w) }); });
-  L.push({ t: garis }, { t: lr("Total produksi", fq(r.qty) + " pcs", w) }, { t: lr("TOTAL INSENTIF", "Rp" + angka(r.insentif), w), b: 1 });
+  if (r.qty) L.push({ t: garis }, { t: lr("Produksi " + fq(r.qty) + " pcs", "Rp" + angka(r.insentif), w) });
+  if (r.lain) { L.push({ t: garis }); (r.lainDetail || []).forEach(d => L.push({ t: lr(`${d.label} ${d.kali}x`, "Rp" + angka(d.nominal), w) })); }
+  if (r.lembur_menit) L.push({ t: garis }, { t: lr("Lembur " + jamMenit(r.lembur_menit), "Rp" + angka(r.lembur_rp || 0), w) });
+  L.push({ t: garis }, { t: lr("TOTAL INSENTIF", "Rp" + angka(r.total ?? r.insentif), w), b: 1 });
   if (r.bayar) { L.push({ t: lr("Dibayar " + tglPendek(r.bayar.tgl), "Rp" + angka(r.bayar.nominal), w) }); if (r.bayar.ket) wrap(r.bayar.ket, w).forEach(l => L.push({ t: l })); }
   L.push({ t: garis }, { t: "" }, { t: lr("Penerima", "Dibayar oleh", w) }, { t: "" }, { t: "" }, { t: lr("(" + r.nama + ")", "(" + (r.bayar?.oleh || B.me.nama) + ")", w) });
   return L;
@@ -1649,13 +1690,19 @@ function slipInsentif(rek, r){
 }
 function bayarInsentif(rek, r){
   modal(`<h3>Bayar insentif ${esc(r.nama)}</h3>
-    <p class="muted">${fq(r.qty)} produk · periode ${tglID(rek.dari)} – ${tglID(rek.sampai)}</p>
+    <p class="muted">Periode ${tglID(rek.dari)} – ${tglID(rek.sampai)}</p>
+    <div class="list">
+      <div class="li"><div class="main">Insentif produksi <span class="small muted">${fq(r.qty)} pcs</span></div><b class="num">${rp(r.insentif)}</b></div>
+      ${(r.lainDetail || []).map(d => `<div class="li"><div class="main">${esc(d.label)} <span class="small muted">${d.kali}×</span></div><b class="num">${rp(d.nominal)}</b></div>`).join("")}
+      ${r.lembur_menit ? `<div class="li"><div class="main">Lembur <span class="small muted">${jamMenit(r.lembur_menit)}</span></div><b class="num">${rp(r.lembur_rp)}</b></div>` : ""}
+      <div class="li"><div class="main"><b>Total</b></div><b class="num">${rp(r.total)}</b></div>
+    </div>
     <div class="stack">
-      <label class="f">Nominal dibayar<input type="number" id="bN" value="${r.insentif}" min="0" step="500" inputmode="numeric"></label>
+      <label class="f">Nominal dibayar<input type="number" id="bN" value="${r.total}" min="0" step="500" inputmode="numeric"></label>
       <label class="f">Tanggal bayar<input type="date" id="bT" value="${today()}"></label>
       <label class="f">Catatan (bonus, potongan, dll)<input type="text" id="bK"></label>
       <label class="row small"><input type="checkbox" id="bE" checked> Catat juga di Pengeluaran (kategori Insentif Produksi)</label>
-      <p class="note">Setelah ditandai dibayar, catatan produksi ${esc(r.nama)} di periode ini terkunci.</p>
+      <p class="note">Setelah ditandai dibayar, catatan produksi & insentif lain ${esc(r.nama)} di periode ini terkunci.</p>
     </div>
     <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="bOk">Tandai sudah dibayar</button></div>`, m => {
       $("#bOk", m).onclick = e => coba(async () => {
@@ -1968,6 +2015,7 @@ function vAtur(){
       <section class="panel stack" id="aKartu"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aNota"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aSync"><div class="empty">Memuat…</div></section>
+      <section class="panel stack" id="aJam"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aAbsen"><div class="empty">Memuat…</div></section>
       <section class="panel stack"><h3 style="font-size:17px">Cadangan &amp; impor</h3>
         <p class="small muted" style="margin:0">${LOKAL ? "Aplikasi menyimpan cadangan otomatis setiap hari di folder Download/RichGallery (7 hari terakhir)." : "Server juga membuat cadangan otomatis setiap hari (lihat panduan pemasangan)."}</p>
@@ -1989,7 +2037,7 @@ function vAtur(){
   $("#pKartu").onclick = () => cetakKartu("Happy Birthday!\nSemoga panjang umur, sehat selalu,\ndan bahagia.\n\nDari: Rina");
   $("#pwSave").onclick = e => coba(async () => { await api("POST", "/api/akun/password", { lama: $("#pwL").value, baru: $("#pwB").value }); $("#pwL").value = $("#pwB").value = ""; toast("Password diganti"); }, e.target);
   if (!isAdmin()) return;
-  aturToko(); aturUser(); aturWA(); aturCanva(); aturKartu(); aturNota(); aturSync(); aturCabang(); aturAbsen();
+  aturToko(); aturUser(); aturWA(); aturCanva(); aturKartu(); aturNota(); aturSync(); aturCabang(); aturJam(); aturAbsen();
   if ($("#bkDb")) $("#bkDb").onclick = e => coba(async () => { const r = await api("GET", "/api/cadangan"); toast(`Cadangan tersimpan di ${r.disimpan}`); }, e.target);
   $("#rsFile").onchange = e => { const f = e.target.files[0]; if (!f) return; e.target.value = "";
     const r = new FileReader();
@@ -2165,6 +2213,52 @@ async function aturCanva(){
   const sv = $("#cvSimpan"); if (sv) sv.onclick = e => coba(async () => {
     await api("PUT", "/api/pengaturan", { canva_url: $("#cvUrl").value.trim(), canva_email: $("#cvEmail").value.trim() });
     await muatUlang(); toast("Pengaturan Canva tersimpan"); aturCanva();
+  }, e.target);
+}
+/** Jam operasional, shift kerja, lembur, dan tarif insentif lain. */
+async function aturJam(){
+  const el = $("#aJam"); if (!el) return;
+  const J = await coba(() => api("GET", "/api/jam-kerja")); if (!J || !$("#aJam")) return;
+  const pusat = LOKAL && B.cabang, dis = pusat ? "disabled" : "";
+  const barisShift = (x, i) => `<div class="jShift stack" style="gap:6px;border:1px solid var(--line);border-radius:10px;padding:8px">
+    <div class="row" style="flex-wrap:nowrap;align-items:center"><input type="text" class="jN" value="${esc(x.nama)}" maxlength="30" aria-label="Nama shift" style="flex:1;min-width:0;font-weight:700" ${dis}>
+      ${pusat ? "" : `<button class="btn sm ghost" data-hapus-shift="${i}" type="button" aria-label="Hapus shift">✕</button>`}</div>
+    <div class="row" style="flex-wrap:nowrap"><label class="f" style="flex:1;min-width:0">Masuk<input type="time" class="jM" value="${esc(x.masuk)}" style="padding-left:8px;padding-right:4px" ${dis}></label><label class="f" style="flex:1;min-width:0">Pulang<input type="time" class="jP" value="${esc(x.pulang)}" style="padding-left:8px;padding-right:4px" ${dis}></label></div></div>`;
+  const opsiShift = v => `<option value="">Otomatis</option>${J.shifts.map((x, i) => `<option value="${i + 1}" ${String(v) === String(i + 1) ? "selected" : ""}>${esc(x.nama)} (${x.masuk}–${x.pulang})</option>`).join("")}`;
+  el.innerHTML = `<h3 style="font-size:17px">⏱️ Jam kerja, lembur & insentif lain</h3>
+    ${pusat ? `<p class="note" style="margin:0">Diatur di server (browser) → Pengaturan, lalu otomatis ikut ke perangkat ini.</p>` : ""}
+    <div class="row"><label class="f grow">Toko buka<input type="time" id="jBuka" value="${esc(J.jam_buka)}" ${dis}></label><label class="f grow">Toko tutup<input type="time" id="jTutup" value="${esc(J.jam_tutup)}" ${dis}></label></div>
+    <h4 style="margin:4px 0 0">Shift karyawan</h4>
+    <div class="stack" id="jShifts">${J.shifts.map(barisShift).join("")}</div>
+    ${pusat ? "" : `<button class="btn sm" id="jAddShift" type="button" style="align-self:flex-start">+ Tambah shift</button>`}
+    <h4 style="margin:4px 0 0">Lembur</h4>
+    <p class="small muted" style="margin:0">Dihitung otomatis dari absen: datang sebelum jam masuk shift + pulang setelah jam pulang shift. Jam absen mengikuti jam saat absen (tidak bisa diisi manual).</p>
+    <div class="row"><label class="f grow">Upah lembur per jam (Rp)<input type="number" id="jUpah" value="${J.lembur_per_jam}" min="0" step="500" inputmode="numeric" ${dis}></label>
+      <label class="f grow">Pembulatan<select id="jBulat" ${dis}>${[[1, "Per menit"], [15, "Per 15 menit"], [30, "Per 30 menit"], [60, "Per 1 jam"]].map(([v, t]) => `<option value="${v}" ${J.lembur_bulat === v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
+    <p class="small muted" style="margin:0">Pembulatan ke bawah. Contoh per 30 menit: lembur 50 menit dihitung 30 menit. Upah bisa diubah kapan saja (tentatif); rekap insentif memakai upah yang berlaku saat dibuka.</p>
+    <h4 style="margin:4px 0 0">Insentif lain (nominal bawaan per kegiatan)</h4>
+    <div class="row"><label class="f grow">Jasa kurir non online<input type="number" id="jKurir" value="${J.ins_kurir}" min="0" step="500" inputmode="numeric" ${dis}></label>
+      <label class="f grow">Kerja lapangan<input type="number" id="jLap" value="${J.ins_lapangan}" min="0" step="500" inputmode="numeric" ${dis}></label>
+      <label class="f grow">Buat konten<input type="number" id="jKonten" value="${J.ins_konten}" min="0" step="500" inputmode="numeric" ${dis}></label></div>
+    <p class="small muted" style="margin:0">Dicatat di menu <b>Produksi</b> → Insentif lain. Nominal bisa disesuaikan saat mencatat.</p>
+    <h4 style="margin:4px 0 0">Shift tiap karyawan</h4>
+    <p class="small muted" style="margin:0">"Otomatis" memilih shift yang jam masuknya paling dekat dengan jam datang. Pilih shift tetap supaya lembur datang awal terhitung tepat.</p>
+    <div class="stack" id="jKary">${J.karyawan.filter(k => k.aktif).map(k => `<div class="row" style="align-items:center"><span style="flex:1">${esc(k.nama)} <span class="small muted">${k.peran}</span></span><select data-uid="${k.id}" style="width:auto;max-width:60%" ${dis}>${opsiShift(k.shift)}</select></div>`).join("")}</div>
+    ${pusat ? "" : `<button class="btn pri" id="jSimpan" type="button">Simpan jam kerja & insentif</button>`}`;
+  if (pusat) return;
+  const ambilShift = () => $$("#jShifts .jShift").map(r => ({ nama: $(".jN", r).value.trim(), masuk: $(".jM", r).value, pulang: $(".jP", r).value }));
+  $("#jAddShift").onclick = () => { J.shifts = ambilShift(); J.shifts.push({ nama: `Shift ${J.shifts.length + 1}`, masuk: "09:00", pulang: "17:00" }); $("#jShifts").innerHTML = J.shifts.map(barisShift).join(""); pasangHapus(); };
+  const pasangHapus = () => $$("[data-hapus-shift]").forEach(b => b.onclick = () => {
+    J.shifts = ambilShift(); if (J.shifts.length <= 1) return toast("Minimal satu shift");
+    J.shifts.splice(+b.dataset.hapusShift, 1); $("#jShifts").innerHTML = J.shifts.map(barisShift).join(""); pasangHapus();
+  });
+  pasangHapus();
+  $("#jSimpan").onclick = e => coba(async () => {
+    await api("PUT", "/api/jam-kerja", { jam_buka: $("#jBuka").value, jam_tutup: $("#jTutup").value, shifts: ambilShift(),
+      lembur_per_jam: num($("#jUpah").value), lembur_bulat: +$("#jBulat").value,
+      ins_kurir: num($("#jKurir").value), ins_lapangan: num($("#jLap").value), ins_konten: num($("#jKonten").value),
+      shift_karyawan: $$("#jKary select").map(x => ({ user_id: +x.dataset.uid, shift: x.value })) });
+    await muatUlang(); toast("Jam kerja & insentif tersimpan"); aturJam();
   }, e.target);
 }
 async function aturUser(){

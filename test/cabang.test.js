@@ -290,7 +290,13 @@ test("absensi sidik jari: mesin kirim scan → rekap di server & di cabang", asy
   const kirimMesin = (alamat, isi) => fetch(`http://127.0.0.1:${PORT_P}${alamat}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(isi) });
   // Belum aktif: alamat apa pun ditolak
   assert.equal((await kirimMesin("/api/absen/mesin/apa-saja", { type: "attlog", data: { pin: "1", scan: `${hari} 08:00` } })).status, 403);
-  assert.equal((await pusat("PUT", "/api/absen/pengaturan", { aktif: true, jam_masuk: "08:00", jam_pulang: "17:00" })).status, 200);
+  assert.equal((await pusat("PUT", "/api/absen/pengaturan", { aktif: true })).status, 200);
+  // Jam kerja bawaan: Shift 1 09.00–17.00, Shift 2 12.00–21.00; upah lembur bisa diubah
+  const J = (await pusat("GET", "/api/jam-kerja")).data;
+  assert.deepEqual(J.shifts.map(x => `${x.masuk}-${x.pulang}`), ["09:00-17:00", "12:00-21:00"]);
+  assert.equal(J.jam_buka, "09:00"); assert.equal(J.jam_tutup, "21:00");
+  assert.equal((await pusat("PUT", "/api/jam-kerja", { shifts: [{ nama: "Rusak", masuk: "17:00", pulang: "09:00" }] })).status, 400, "pulang sebelum masuk ditolak");
+  assert.equal((await pusat("PUT", "/api/jam-kerja", { lembur_per_jam: 20000, lembur_bulat: 30, ins_kurir: 15000 })).status, 200);
   const A = (await pusat("GET", "/api/absen/pengaturan")).data;
   assert.match(A.alamat, /^\/api\/absen\/mesin\/.{20,}$/);
   const iza = A.karyawan.find(k => k.nama === "IZA"), eva = A.karyawan.find(k => k.nama === "EVA");
@@ -298,7 +304,7 @@ test("absensi sidik jari: mesin kirim scan → rekap di server & di cabang", asy
   assert.equal((await pusat("PUT", "/api/absen/pengaturan", { pin: [{ user_id: iza.id, pin: "1" }, { user_id: eva.id, pin: "2" }] })).status, 200);
   // Mesin mengirim (tanpa header aplikasi), alamat salah ditolak
   assert.equal((await kirimMesin("/api/absen/mesin/salah", { type: "attlog", data: { pin: "1", scan: `${hari} 07:55` } })).status, 403);
-  for (const [pin, jam] of [["1", "07:55"], ["1", "07:55"], ["2", "08:20:31"], ["1", "17:05"], ["9", "09:00"]]) {
+  for (const [pin, jam] of [["1", "07:55"], ["1", "07:55"], ["2", "09:20:31"], ["1", "17:05"], ["9", "09:00"]]) {
     const r = await kirimMesin(A.alamat, { type: "attlog", cloud_id: "ABC123", data: { pin, scan: `${hari} ${jam}`, verify: "1", status_scan: "0" } });
     assert.equal(r.status, 200);
   }
@@ -307,12 +313,25 @@ test("absensi sidik jari: mesin kirim scan → rekap di server & di cabang", asy
   const hIza = R.harian.find(h => h.nama === "IZA"), hEva = R.harian.find(h => h.nama === "EVA");
   assert.equal(hIza.scan.length, 2, "scan dobel dari mesin tidak tercatat dua kali");
   assert.equal(hIza.masuk, "07:55"); assert.equal(hIza.pulang, "17:05"); assert.equal(hIza.terlambat, false);
-  assert.equal(hEva.masuk, "08:20"); assert.equal(hEva.pulang, ""); assert.equal(hEva.terlambat, true);
+  assert.equal(hEva.masuk, "09:20"); assert.equal(hEva.pulang, ""); assert.equal(hEva.terlambat, true);
+  // Lembur: datang 65 menit lebih awal + pulang 5 menit lewat = 70 menit → dibulatkan per 30 menit = 60 menit
+  assert.equal(hIza.shift, "Shift 1"); assert.equal(hIza.lembur, 60); assert.equal(hEva.lembur, 0);
+  assert.equal(R.ringkas.find(r => r.nama === "IZA").lembur_rp, 20000);
+  const rekP = (await pusat("GET", "/api/insentif")).data.rows.find(r => r.nama === "IZA");
+  assert.equal(rekP.lembur_menit, 60); assert.equal(rekP.lembur_rp, 20000); assert.equal(rekP.total, rekP.insentif + rekP.lain + 20000);
+  // Shift tetap: EVA di Shift 2 (12.00) → datang 09.20 bukan terlambat, tapi lembur datang awal
+  assert.equal((await pusat("PUT", "/api/jam-kerja", { shift_karyawan: [{ user_id: eva.id, shift: "2" }] })).status, 200);
+  const hEva2 = (await pusat("GET", `/api/absen?dari=${hari}&sampai=${hari}`)).data.harian.find(h => h.nama === "EVA");
+  assert.equal(hEva2.shift, "Shift 2"); assert.equal(hEva2.terlambat, false); assert.equal(hEva2.lembur, 150);
+  assert.equal((await pusat("PUT", "/api/jam-kerja", { shift_karyawan: [{ user_id: eva.id, shift: "" }] })).status, 200);
   assert.deepEqual(R.takDikenal.map(t => t.pin), ["9"]);
-  // Absen manual & hapus
-  const man = await pusat("POST", "/api/absen/manual", { user_id: eva.id, tgl: hari, jam: "17:10", ket: "lupa scan pulang" });
+  // Absen oleh admin: jam selalu jam sekarang (tanggal/jam dari luar diabaikan), wajib pilih masuk/pulang
+  assert.equal((await pusat("POST", "/api/absen/manual", { user_id: eva.id })).status, 400);
+  const man = await pusat("POST", "/api/absen/manual", { user_id: eva.id, jenis: "pulang", tgl: "2020-01-01", jam: "01:00", ket: "HP mati" });
   assert.equal(man.status, 200);
-  assert.equal((await pusat("GET", `/api/absen?dari=${hari}&sampai=${hari}`)).data.harian.find(h => h.nama === "EVA").pulang, "17:10");
+  assert.equal(man.data.tgl, hari); assert.notEqual(man.data.jam, "01:00");
+  const scanEva = (await pusat("GET", `/api/absen?dari=${hari}&sampai=${hari}`)).data.harian.find(h => h.nama === "EVA").scan;
+  assert.ok(scanEva.some(x => x.sumber === "manual" && x.jenis === "pulang" && x.jam === man.data.jam));
   assert.equal((await pusat("DELETE", `/api/absen/${man.data.id}`)).status, 200);
   // Di cabang: menu absensi aktif & rekapnya diambil dari server pusat
   await sinkron(); await segarkan();
@@ -320,7 +339,48 @@ test("absensi sidik jari: mesin kirim scan → rekap di server & di cabang", asy
   assert.equal(BC.cabang, true);
   const RC = (await cabang("GET", `/api/absen?dari=${hari}&sampai=${hari}`)).data;
   assert.equal(RC.harian.find(h => h.nama === "IZA").pulang, "17:05");
-  assert.equal((await cabang("POST", "/api/absen/manual", { user_id: eva.id, tgl: hari, jam: "17:00" })).status, 409, "diatur di server pusat");
+  assert.equal((await cabang("POST", "/api/absen/manual", { user_id: eva.id, jenis: "masuk" })).status, 409, "diatur di server pusat");
+  assert.equal((await cabang("PUT", "/api/jam-kerja", { lembur_per_jam: 1 })).status, 409, "diatur di server pusat");
+  // Lembur di rekap insentif perangkat diambil dari server pusat
+  const rekC = (await cabang("GET", "/api/insentif")).data;
+  assert.equal(rekC.lemburTersedia, true);
+  assert.equal(rekC.rows.find(r => r.nama === "IZA").lembur_rp, 20000);
+  assert.equal(BC.toko.lembur_per_jam, 20000); assert.equal(BC.toko.ins_kurir, 15000);
+});
+
+test("insentif lain (kurir, lapangan, konten): dicatat di cabang/pusat, ikut ke rekap & sinkron dua arah", async () => {
+  await segarkan();
+  const hari = BC.hariIni;
+  const izaC = BC.staf.find(s => s.nama === "IZA");
+  const c1 = await cabang("POST", "/api/insentif-lain", { user_id: izaC.id, jenis: "kurir", ket: "antar ke Jatibarang" });
+  assert.equal(c1.status, 200, JSON.stringify(c1.data));
+  assert.equal((await cabang("POST", "/api/insentif-lain", { user_id: izaC.id, jenis: "lain" })).status, 400);
+  assert.equal((await cabang("POST", "/api/insentif-lain", { user_id: izaC.id, jenis: "konten", nominal: 25000 })).status, 200);
+  await sinkron();
+  const lp = (await pusat("GET", `/api/insentif-lain?dari=${hari}&sampai=${hari}`)).data;
+  assert.deepEqual(lp.map(x => `${x.nama}:${x.jenis}:${x.nominal}`).sort(), ["IZA:konten:25000", "IZA:kurir:15000"], "nominal kurir bawaan dari pengaturan");
+  const rek = (await pusat("GET", "/api/insentif")).data.rows.find(r => r.nama === "IZA");
+  assert.equal(rek.lain, 40000);
+  assert.deepEqual(rek.lainDetail.map(d => `${d.jenis}:${d.kali}:${d.nominal}`), ["konten:1:25000", "kurir:1:15000"]);
+  // Dicatat di pusat → masuk ke cabang; dihapus di cabang → hilang di pusat
+  const eva = (await pusat("GET", "/api/jam-kerja")).data.karyawan.find(k => k.nama === "EVA");
+  assert.equal((await pusat("POST", "/api/insentif-lain", { user_id: eva.id, jenis: "lapangan", nominal: 30000 })).status, 200);
+  await sinkron();
+  const lc = (await cabang("GET", `/api/insentif-lain?dari=${hari}&sampai=${hari}`)).data;
+  assert.ok(lc.some(x => x.nama === "EVA" && x.jenis === "lapangan" && x.nominal === 30000));
+  const kurirC = lc.find(x => x.jenis === "kurir");
+  assert.equal((await cabang("DELETE", `/api/insentif-lain/${kurirC.id}`)).status, 200);
+  const st = await sinkron();
+  assert.equal(st.ditolak, 0, JSON.stringify(st.ditolakDaftar));
+  assert.ok(!(await pusat("GET", `/api/insentif-lain?dari=${hari}&sampai=${hari}`)).data.some(x => x.jenis === "kurir"));
+  assert.equal((await cabang("GET", "/api/insentif")).data.rows.find(r => r.nama === "IZA").lain, 25000);
+  // Bayar: nominal bawaan = total (produksi + lain + lembur), lalu terkunci
+  const r2 = (await pusat("GET", "/api/insentif")).data;
+  const iza = r2.rows.find(r => r.nama === "IZA");
+  assert.equal((await pusat("POST", "/api/insentif/bayar", { pembuat_id: iza.pembuat_id, periode_dari: r2.dari })).status, 200);
+  const sesudah = (await pusat("GET", "/api/insentif")).data.rows.find(r => r.nama === "IZA");
+  assert.equal(sesudah.bayar.nominal, iza.total);
+  assert.equal((await pusat("POST", "/api/insentif-lain", { user_id: iza.pembuat_id, jenis: "konten", nominal: 1000 })).status, 400, "periode sudah dibayar");
 });
 
 test("pesanan: DP di cabang, pelunasan di pusat, diambil di cabang — status sama di kedua sisi", async () => {

@@ -24,12 +24,14 @@ const HEADERS = {
   hapus_pengeluaran: ['ID','Tanggal Hapus','Oleh'],
   produksi:  ['Tanggal','Kode','Nama Barang','Qty','Pembuat','Tarif Insentif','Insentif','Jenis','Dicatat Oleh'],
   hapus_produksi: ['Tanggal Produksi','Kode','Nama Barang','Qty','Pembuat','Tanggal Hapus','Oleh'],
-  insentif:  ['Tanggal Bayar','Nama','Periode Dari','Periode Sampai','Total Produksi','Insentif Dihitung','Dibayar','Catatan','Oleh']
+  insentif:  ['Tanggal Bayar','Nama','Periode Dari','Periode Sampai','Total Produksi','Insentif Dihitung','Dibayar','Catatan','Oleh'],
+  insentif_lain: ['Tanggal','Nama','Jenis','Nominal','Keterangan','Dicatat Oleh']
 };
 const TAB = {
   penjualan: 'APP PENJUALAN', batal: 'APP PENJUALAN BATAL', masuk: 'APP BARANG MASUK', keluar: 'APP BARANG KELUAR',
   opname: 'APP STOK OPNAME', pengeluaran: 'APP PENGELUARAN', hapus_pengeluaran: 'APP PENGELUARAN DIHAPUS',
-  produksi: 'APP PRODUKSI KARYAWAN', hapus_produksi: 'APP PRODUKSI DIHAPUS', insentif: 'APP INSENTIF DIBAYAR'
+  produksi: 'APP PRODUKSI KARYAWAN', hapus_produksi: 'APP PRODUKSI DIHAPUS', insentif: 'APP INSENTIF DIBAYAR',
+  insentif_lain: 'APP INSENTIF LAIN'
 };
 
 function doPost(e) {

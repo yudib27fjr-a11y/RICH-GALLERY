@@ -121,7 +121,7 @@ const KOLOM = {
   products: ["nama", "kategori", "harga", "hpp", "stok", "stok_min", "barcode", "insentif", "aktif"],
   materials: ["nama", "kategori", "harga", "satuan", "stok", "stok_min", "barcode"],
 };
-const SETELAN_TOKO = ["nama_toko", "alamat", "telp", "footer", "prefix", "hpp_persen", "insentif", "periode_mulai", "absen_aktif", "absen_jam_masuk", "absen_jam_pulang", "wa_otomatis", "wa_template", "canva_url", "canva_email", "wa_nomor", "absen_pin_aktif", "absen_lat", "absen_lng", "absen_radius", "kartu_lebar", "kartu_tinggi", "kartu_huruf", "kartu_warna", "kartu_area", "kartu_latar_kode", "kartu_font_kode", "inv_tagline", "inv_bank", "inv_ttd", "inv_ttd_nama", "inv_ttd_jabatan"];
+const SETELAN_TOKO = ["nama_toko", "alamat", "telp", "footer", "prefix", "hpp_persen", "insentif", "periode_mulai", "absen_aktif", "absen_jam_masuk", "absen_jam_pulang", "wa_otomatis", "wa_template", "canva_url", "canva_email", "wa_nomor", "absen_pin_aktif", "absen_lat", "absen_lng", "absen_radius", "kartu_lebar", "kartu_tinggi", "kartu_huruf", "kartu_warna", "kartu_area", "kartu_latar_kode", "kartu_font_kode", "inv_tagline", "inv_bank", "inv_ttd", "inv_ttd_nama", "inv_ttd_jabatan", "jam_buka", "jam_tutup", "shifts", "lembur_per_jam", "lembur_bulat", "ins_kurir", "ins_lapangan", "ins_konten"];
 
 /** Samakan katalog, stok, akun, dan pengaturan toko dengan server pusat. */
 export function terapkanSnapshot(snap){
@@ -223,6 +223,22 @@ function salinKeuangan(snap){
     }
     for (const r of all("SELECT id, uid FROM produksi WHERE tgl >= ?", [sejak])) {
       if (!r.uid || !ada.has(r.uid)) run("DELETE FROM produksi WHERE id = ?", [r.id]);
+    }
+  }
+
+  if (Array.isArray(snap.insentif_lain)) {
+    const ada = new Set();
+    for (const x of snap.insentif_lain) {
+      const k = x && idUser.get(x.karyawan);
+      if (!x || !x.kunci || !k) continue;
+      ada.add(x.kunci);
+      const nilai = [x.tgl, k, x.jenis, x.nominal, x.ket || "", x.oleh || "", x.dihapus || null];
+      const lokal = one("SELECT id FROM insentif_lain WHERE uid = ?", [x.kunci]);
+      if (lokal) run("UPDATE insentif_lain SET tgl = ?, user_id = ?, jenis = ?, nominal = ?, ket = ?, oleh = ?, dihapus = ? WHERE id = ?", [...nilai, lokal.id]);
+      else run("INSERT INTO insentif_lain(tgl, user_id, jenis, nominal, ket, oleh, dihapus, uid, dibuat) VALUES (?,?,?,?,?,?,?,?,?)", [...nilai, x.kunci, x.dibuat || sekarangSql()]);
+    }
+    for (const r of all("SELECT id, uid FROM insentif_lain WHERE tgl >= ? AND dihapus IS NULL", [sejak])) {
+      if (!r.uid || !ada.has(r.uid)) run("DELETE FROM insentif_lain WHERE id = ?", [r.id]);
     }
   }
 
