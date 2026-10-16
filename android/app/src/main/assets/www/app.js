@@ -185,16 +185,42 @@ function kirimEscpos(s){
   if (D.modeCetak === "rawbt" || D.modeCetak === "langsung") { window.location.href = "rawbt:base64," + btoa(s); return true; }
   return false;
 }
+/** Tinggi kertas struk (mm) sesuai jumlah baris — supaya PDF / cetak tidak menyisakan kertas kosong. */
+function tinggiStruk(lines){
+  const mm = D.kertas == 80 ? 80 : 58, cw = mm == 80 ? 72 : 48, fs = cw / lebar() / 0.6;
+  return Math.ceil(lines.reduce((a, l) => a + (l.besar ? fs * 2.4 : fs * 1.25), 0) + 2 + 8 + 3);
+}
 function cetakBaris(lines){
   if (kirimEscpos(escposStruk(lines))) return;
-  const mm = D.kertas == 80 ? 80 : 58, cw = mm == 80 ? 72 : 48, chars = lebar();
-  $("#page-style").textContent = `@page{size:${mm}mm auto;margin:0}`;
+  const mm = D.kertas == 80 ? 80 : 58, cw = mm == 80 ? 72 : 48, chars = lebar(), tinggi = tinggiStruk(lines);
+  $("#page-style").textContent = `@page{size:${mm}mm ${tinggi}mm;margin:0}`;
   $("#print-area").innerHTML = `<pre style="width:${cw}mm;margin:0 ${(mm - cw) / 2}mm;padding:2mm 0 8mm;font-size:${(cw / chars / 0.6).toFixed(2)}mm">${lines.map(l => l.besar ? `<b style="font-size:2em;display:block;text-align:center;line-height:1.2">${esc(l.t)}</b>` : l.b ? `<b>${esc(l.t)}</b>` : esc(l.t)).join("\n")}</pre>`;
-  setTimeout(cetakHalaman, 60);
+  setTimeout(() => cetakHalaman(mm, tinggi), 60);
 }
 const cetak = s => cetakBaris(strukLines(s));
-/** Di aplikasi Android, window.print tidak tersedia; cetak lewat layanan cetak Android. */
-function cetakHalaman(){ if (NATIVE && NATIVE.cetak) NATIVE.cetak(D.kertas); else window.print(); }
+/** Di aplikasi Android, window.print tidak tersedia; cetak lewat layanan cetak Android.
+ *  Bila ukuran diketahui (lebar × tinggi mm), kertasnya dipotong pas — tidak ada sisa kertas kosong. */
+function cetakHalaman(lebarMm, tinggiMm){
+  if (NATIVE && NATIVE.cetakUkuran && lebarMm && tinggiMm) NATIVE.cetakUkuran(lebarMm, tinggiMm);
+  else if (NATIVE && NATIVE.cetak) NATIVE.cetak(D.kertas);
+  else window.print();
+}
+/** Struk sebagai PDF selebar kertas termal, tingginya pas dengan isi struk. */
+function pdfStruk(s){
+  const L = strukLines(s), mm = D.kertas == 80 ? 80 : 58, cw = mm == 80 ? 72 : 48, chars = lebar(), tinggi = tinggiStruk(L);
+  const PX = 12, c = document.createElement("canvas"); c.width = Math.round(mm * PX); c.height = Math.round(tinggi * PX);
+  const g = c.getContext("2d"), fs = cw / chars / 0.6 * PX, kiri = (mm - cw) / 2 * PX;
+  g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.fillStyle = "#000"; g.textBaseline = "top";
+  let y = 2 * PX;
+  L.forEach(l => {
+    if (l.besar) { g.font = `700 ${fs * 2}px "Courier New", monospace`; g.textAlign = "center"; g.fillText(l.t, c.width / 2, y + fs * 0.2); y += fs * 2.4; return; }
+    g.font = `${l.b ? "700" : "600"} ${fs}px "Courier New", monospace`; g.textAlign = "left";
+    // spasi dijaga per karakter (seperti di printer)
+    for (let i = 0; i < l.t.length; i++) if (l.t[i] !== " ") g.fillText(l.t[i], kiri + i * fs * 0.6, y);
+    y += fs * 1.25;
+  });
+  simpanPdf(`struk-${String(s.no || "rich-gallery").replace(/[^\w-]+/g, "-")}.pdf`, buatPdf(c, mm, tinggi));
+}
 function waLink(s){ return `https://wa.me/${nomorWA(s.hp)}?text=` + encodeURIComponent(pesanWA(s)); }
 function lihatStruk(s, setelahBatal){
   modal(`<h3>Struk ${esc(s.no)}</h3>
@@ -205,12 +231,14 @@ function lihatStruk(s, setelahBatal){
       ${!s.batal_at && isAdmin() ? `<button class="btn danger" id="voidBtn">Batalkan transaksi</button>` : ""}
       ${isAdmin() ? `<button class="btn" id="koreksiBtn" type="button">Koreksi</button><button class="btn danger" id="hapusBtn" type="button">Hapus</button>` : ""}
       <button class="btn" id="notaBtn" type="button">📄 Nota</button>
+      <button class="btn" id="pdfStrukBtn" type="button">PDF struk</button>
       <a class="btn" href="${waLink(s)}" target="_blank" rel="noopener">Kirim WA</a>
       <button class="btn" data-close>Tutup</button>
       <button class="btn pri" id="printBtn">Cetak struk</button>
     </div>`, m => {
       $("#printBtn", m).onclick = () => cetak(s);
       $("#notaBtn", m).onclick = () => bukaNota(s);
+      $("#pdfStrukBtn", m).onclick = () => pdfStruk(s);
       if (s.kartu) pasangTombolKartu(m, s.kartu);
       const hb = $("#hapusBtn", m);
       if (hb) hb.onclick = () => konfirmasi(`Hapus ${s.no}?`, `Transaksi dihapus sepenuhnya dari daftar & laporan${s.batal_at ? "" : ", stok produk READY dikembalikan"}. Pakai untuk salah input atau data uji coba. Tidak bisa dibatalkan.`, "Hapus transaksi", () => coba(async () => {
