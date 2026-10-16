@@ -1,5 +1,7 @@
 import { route } from "../router.js";
-import { one, run, tx, getSettings, setSetting, migrasi } from "../db.js";
+import { one, all, run, tx, getSettings, setSetting, migrasi } from "../db.js";
+import { HttpError } from "../util.js";
+import { cekPassword, hashPassword, cekBatasLogin, catatGagal, resetGagal } from "../auth.js";
 import { platform } from "../platform.js";
 import { bad, teks, angka } from "../util.js";
 import { kirimOutbox, statusSync, tarikSheet } from "../sync.js";
@@ -93,6 +95,41 @@ route("POST", "/api/sync/tarik", "admin", async ({ body }) => {
 
 /* ---- Cadangan: salinan utuh database (bisa langsung dipakai untuk memulihkan, di server maupun di aplikasi Android) ---- */
 route("GET", "/api/cadangan", "admin", () => platform.cadangan());
+
+/* ---- Hard reset: mulai input dari awal. Butuh kode reset (bawaan "OK", bisa diganti admin). ----
+   Pengguna, PIN, dan pengaturan tetap. Pilihan: hapus semua transaksi & catatan, nolkan stok, hapus katalog barang. */
+export const TABEL_TRANSAKSI = ["sale_items", "sales", "stock_moves", "produksi", "insentif_bayar", "insentif_lain", "kasbon", "gaji_bayar", "expenses", "absen", "outbox"];
+const KODE_RESET_BAWAAN = "OK";
+function cekKodeReset(kode, ctx){
+  const kunci = (ctx && ctx.ip || "") + "|reset";
+  cekBatasLogin(kunci);
+  const simpan = getSettings().reset_kode;
+  const cocok = simpan ? cekPassword(String(kode ?? ""), simpan) : String(kode ?? "") === KODE_RESET_BAWAAN;
+  if (!cocok) { catatGagal(kunci); throw new HttpError(401, "Kode reset salah"); }
+  resetGagal(kunci);
+}
+route("GET", "/api/reset", "admin", () => ({ kodeBawaan: !getSettings().reset_kode }));
+route("PUT", "/api/reset/kode", "admin", ({ body, ctx }) => {
+  cekKodeReset(body.lama, ctx);
+  const baru = String(body.baru ?? "");
+  if (baru.length < 2 || baru.length > 60) throw bad("Kode reset baru 2–60 karakter");
+  setSetting("reset_kode", hashPassword(baru));
+  return { ok: true };
+}, { pusatSaja: true });
+route("POST", "/api/reset", "admin", ({ body, ctx, user }) => {
+  cekKodeReset(body.kode, ctx);
+  const transaksi = !!body.transaksi, stok = !!body.stok, katalog = !!body.katalog;
+  if (!transaksi && !stok && !katalog) throw bad("Pilih data yang mau direset");
+  return tx(() => {
+    const n = {};
+    if (transaksi) for (const t of TABEL_TRANSAKSI) { n[t] = one(`SELECT COUNT(*) n FROM ${t}`).n; run(`DELETE FROM ${t}`); }
+    if (stok || katalog) for (const t of ["products", "materials"]) run(`UPDATE ${t} SET stok = 0, diubah = datetime('now') WHERE dihapus IS NULL`);
+    if (katalog) for (const t of ["products", "materials"]) { n[t] = one(`SELECT COUNT(*) n FROM ${t} WHERE dihapus IS NULL`).n; run(`UPDATE ${t} SET dihapus = datetime('now'), barcode = NULL WHERE dihapus IS NULL`); }
+    // Perangkat cabang ikut mengosongkan datanya saat sinkron berikutnya.
+    setSetting("reset_terakhir", { id: Date.now().toString(36), transaksi, stok, katalog, oleh: user.nama, waktu: new Date().toISOString() });
+    return { ok: true, dihapus: n };
+  });
+}, { pusatSaja: true });
 
 /* ---- Pulihkan: ganti SELURUH database dengan file cadangan .db (dari server atau dari aplikasi Android) ----
    Dipakai juga untuk memindahkan data aplikasi offline ke server online. Setelah ini semua pengguna harus masuk lagi. */

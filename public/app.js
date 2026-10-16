@@ -1904,7 +1904,7 @@ function bayarInsentif(rek, r){
 }
 
 /* ================= STOK ================= */
-let sJenis = "produk", sQ = "", sFil = "SEMUA", sKat = "SEMUA";
+let sJenis = "produk", sQ = "", sFil = "SEMUA", sKat = "SEMUA", sUbah = false, sBaru = {};
 function vStok(){
   const isP = sJenis === "produk", arr = isP ? B.produk : B.bahan;
   const kats = ["SEMUA", ...new Set(arr.map(x => x.kategori).filter(Boolean))];
@@ -1912,7 +1912,10 @@ function vStok(){
   $("#main").innerHTML = `
     <div class="view-head"><h2>Stok</h2>
       <div class="seg" id="sJ"><button type="button" data-j="produk" class="${isP ? "on" : ""}">Produk jadi</button><button type="button" data-j="bahan" class="${!isP ? "on" : ""}">Bahan baku</button></div>
-      <span class="sp"></span><button class="btn" id="sLbl" type="button">Cetak label barcode</button>${isAdmin() ? `<button class="btn pri" id="sAdd" type="button">+ ${isP ? "Produk" : "Bahan"} baru</button>` : ""}</div>
+      <span class="sp"></span>${isAdmin() ? `<button class="btn ${sUbah ? "pri" : ""}" id="sUbahBtn" type="button">✏️ ${sUbah ? "Sedang ubah stok" : "Ubah stok manual"}</button>` : ""}<button class="btn" id="sLbl" type="button">Cetak label barcode</button>${isAdmin() ? `<button class="btn pri" id="sAdd" type="button">+ ${isP ? "Produk" : "Bahan"} baru</button>` : ""}</div>
+    ${sUbah ? `<div class="panel stok-ubah-bar"><div class="row" style="align-items:center">
+      <span style="flex:1" class="small">Ketik stok baru di kolom <b>Stok</b>. Yang diubah ditandai kuning. <span id="sJml"></span></span>
+      <button class="btn sm" id="sNol" type="button">Nolkan yang tampil</button><button class="btn sm" id="sBatal" type="button">Batal</button><button class="btn sm pri" id="sSimpan" type="button">Simpan stok</button></div></div>` : ""}
     <div id="sKpi" class="kpis" style="margin-bottom:12px"></div>
     <div class="row" style="margin-bottom:12px">
       <input type="search" id="sQ" placeholder="Cari nama, kode, atau barcode…" value="${esc(sQ)}" style="flex:1 1 200px">
@@ -1926,6 +1929,19 @@ function vStok(){
   $("#sKat").onchange = e => { sKat = e.target.value; drawStok(); };
   $("#sFil").onchange = e => { sFil = e.target.value; drawStok(); };
   if ($("#sAdd")) $("#sAdd").onclick = () => editItem(sJenis, null);
+  if ($("#sUbahBtn")) $("#sUbahBtn").onclick = () => { if (sUbah && Object.keys(sBaru).length && !confirm("Batalkan perubahan stok yang belum disimpan?")) return; sUbah = !sUbah; sBaru = {}; vStok(); };
+  if (sUbah) {
+    $("#sBatal").onclick = () => { sUbah = false; sBaru = {}; vStok(); };
+    $("#sNol").onclick = () => { $$("#sBody input.sIn").forEach(i => { i.value = 0; i.dispatchEvent(new Event("input")); }); };
+    $("#sSimpan").onclick = e => {
+      const items = Object.entries(sBaru).map(([id, v]) => ({ id: +id, fisik: v }));
+      if (!items.length) return toast("Belum ada stok yang diubah");
+      coba(async () => {
+        for (let i = 0; i < items.length; i += 1500) await api("POST", "/api/opname", { jenis: sJenis, ket: "Ubah stok manual", items: items.slice(i, i + 1500) });
+        toast(`${items.length} stok ${sJenis === "produk" ? "produk" : "bahan"} diperbarui`); sUbah = false; sBaru = {}; await muatUlang(); vStok();
+      }, e.target);
+    };
+  }
   $("#sLbl").onclick = () => modalLabel();
   drawStok();
 }
@@ -1935,8 +1951,18 @@ function drawStok(){
   const nilai = arr.reduce((a, x) => a + Math.max(0, x.stok) * (isP ? (x.hpp ?? 0) : x.harga), 0);
   const sedikit = arr.filter(x => x.stok > 0 && x.stok <= (x.stok_min || 0)).length, minus = arr.filter(x => x.stok < 0).length;
   $("#sKpi").innerHTML = `<div class="kpi"><div class="l">Jumlah item</div><div class="v num">${arr.length}</div></div>${isAdmin() || !isP ? `<div class="kpi"><div class="l">${isP ? "Nilai stok (HPP)" : "Nilai aset bahan"}</div><div class="v num">${rp(nilai)}</div></div>` : ""}<div class="kpi"><div class="l">Stok sedikit</div><div class="v num" style="color:var(--warn)">${sedikit}</div></div><div class="kpi"><div class="l">Stok minus</div><div class="v num" style="color:var(--bad)">${minus}</div></div>`;
-  $("#sBody").innerHTML = list.length ? list.map(x => { const [st, cl] = statusStok(x.stok, x.stok_min); return `<tr class="click" data-id="${x.id}"><td class="code">${x.kode}</td><td>${esc(x.nama)}${isP && !x.aktif ? ' <span class="pill mut">nonaktif</span>' : ""}</td><td class="code">${esc(x.barcode || "")}</td><td class="small muted">${esc(x.kategori || "-")}</td><td class="r num">${x.harga ? rp(x.harga) : "-"}</td><td class="r num" style="font-weight:700;${x.stok < 0 ? "color:var(--bad)" : ""}">${fq(x.stok)}</td><td><span class="pill ${cl}">${st}</span></td></tr>`; }).join("") : `<tr><td colspan="7" class="empty">Tidak ada data yang cocok.</td></tr>`;
-  $$("#sBody tr.click").forEach(r => r.onclick = () => bukaItem(sJenis, +r.dataset.id));
+  $("#sBody").innerHTML = list.length ? list.map(x => { const [st, cl] = statusStok(x.stok, x.stok_min); return `<tr class="click" data-id="${x.id}"><td class="code">${x.kode}</td><td>${esc(x.nama)}${isP && !x.aktif ? ' <span class="pill mut">nonaktif</span>' : ""}</td><td class="code">${esc(x.barcode || "")}</td><td class="small muted">${esc(x.kategori || "-")}</td><td class="r num">${x.harga ? rp(x.harga) : "-"}</td>${sUbah ? `<td class="r"><input type="number" class="sIn num ${sBaru[x.id] != null ? "berubah" : ""}" data-id="${x.id}" data-lama="${x.stok}" value="${sBaru[x.id] ?? x.stok}" step="any" inputmode="decimal" style="width:96px;text-align:right" aria-label="Stok ${esc(x.nama)}"></td>` : `<td class="r num" style="font-weight:700;${x.stok < 0 ? "color:var(--bad)" : ""}">${fq(x.stok)}</td>`}<td><span class="pill ${cl}">${st}</span></td></tr>`; }).join("") : `<tr><td colspan="7" class="empty">Tidak ada data yang cocok.</td></tr>`;
+  $$("#sBody tr.click").forEach(r => r.onclick = e => { if (sUbah) return; bukaItem(sJenis, +r.dataset.id); });
+  if (sUbah) {
+    const hitungUbah = () => { const n = Object.keys(sBaru).length; const j = $("#sJml"); if (j) j.innerHTML = n ? `<b>${n} barang diubah</b>` : ""; };
+    $$("#sBody input.sIn").forEach(i => {
+      i.onclick = e => e.stopPropagation();
+      i.oninput = () => { const v = i.value === "" ? null : Number(i.value);
+        if (v == null || !isFinite(v) || v === Number(i.dataset.lama)) delete sBaru[i.dataset.id]; else sBaru[i.dataset.id] = v;
+        i.classList.toggle("berubah", sBaru[i.dataset.id] != null); hitungUbah(); };
+    });
+    hitungUbah();
+  }
 }
 const bukaItem = (jenis, id) => isAdmin() ? editItem(jenis, id) : riwayatItem(jenis, id);
 const TIPE_LABEL = { masuk: "Masuk", keluar: "Keluar", opname: "Opname", koreksi: "Koreksi", jual: "Terjual", batal: "Batal jual", produksi: "Produksi", hapus_produksi: "Hapus produksi" };
@@ -2210,6 +2236,7 @@ function vAtur(){
       <section class="panel stack" id="aSync"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aJam"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aAbsen"><div class="empty">Memuat…</div></section>
+      <section class="panel stack" id="aReset"><div class="empty">Memuat…</div></section>
       <section class="panel stack"><h3 style="font-size:17px">Cadangan &amp; impor</h3>
         <p class="small muted" style="margin:0">${LOKAL ? "Aplikasi menyimpan cadangan otomatis setiap hari di folder Download/RichGallery (7 hari terakhir)." : "Server juga membuat cadangan otomatis setiap hari (lihat panduan pemasangan)."}</p>
         ${LOKAL ? `<button class="btn" id="bkDb" type="button">Simpan cadangan database sekarang</button>` : `<a class="btn" href="/api/cadangan" download>Unduh cadangan database</a>`}
@@ -2230,7 +2257,7 @@ function vAtur(){
   $("#pKartu").onclick = () => cetakKartu("Happy Birthday!\nSemoga panjang umur, sehat selalu,\ndan bahagia.\n\nDari: Rina");
   $("#pwSave").onclick = e => coba(async () => { await api("POST", "/api/akun/password", { lama: $("#pwL").value, baru: $("#pwB").value }); $("#pwL").value = $("#pwB").value = ""; toast("Password diganti"); }, e.target);
   if (!isAdmin()) return;
-  aturToko(); aturUser(); aturWA(); aturCanva(); aturKartu(); aturNota(); aturSync(); aturCabang(); aturJam(); aturAbsen();
+  aturToko(); aturUser(); aturWA(); aturCanva(); aturKartu(); aturNota(); aturSync(); aturCabang(); aturJam(); aturAbsen(); aturReset();
   if ($("#bkDb")) $("#bkDb").onclick = e => coba(async () => { const r = await api("GET", "/api/cadangan"); toast(`Cadangan tersimpan di ${r.disimpan}`); }, e.target);
   $("#rsFile").onchange = e => { const f = e.target.files[0]; if (!f) return; e.target.value = "";
     const r = new FileReader();
@@ -2453,6 +2480,47 @@ async function aturJam(){
       shift_karyawan: $$("#jKary select").map(x => ({ user_id: +x.dataset.uid, shift: x.value })) });
     await muatUlang(); toast("Jam kerja & insentif tersimpan"); aturJam();
   }, e.target);
+}
+/** Hard reset: mulai input dari awal (butuh kode reset; bawaan "OK", bisa diganti). */
+async function aturReset(){
+  const el = $("#aReset"); if (!el) return;
+  const pusat = LOKAL && B.cabang;
+  const R = pusat ? null : await api("GET", "/api/reset").catch(() => null); if (!$("#aReset")) return;
+  el.innerHTML = `<h3 style="font-size:17px">⚠️ Hard reset (mulai dari awal)</h3>
+    ${pusat ? `<p class="note" style="margin:0">Perangkat ini tersambung ke server pusat. Hard reset dilakukan dari server (browser); perangkat ini ikut kosong otomatis saat sinkron.</p>` : `
+    <p class="small muted" style="margin:0">Untuk input ulang dari awal. Akun karyawan, PIN, dan pengaturan toko <b>tidak</b> ikut terhapus. Simpan cadangan dulu sebelum reset.</p>
+    <label class="row" style="flex-wrap:nowrap;align-items:flex-start"><input type="checkbox" id="rsT" style="margin-top:4px;flex:none"> <span><b>Hapus semua transaksi & catatan</b><br><span class="small muted">Penjualan, pesanan, riwayat stok, produksi, insentif, pengeluaran, absensi, gaji, kasbon.</span></span></label>
+    <label class="row" style="flex-wrap:nowrap;align-items:flex-start"><input type="checkbox" id="rsS" style="margin-top:4px;flex:none"> <span><b>Nolkan semua stok</b><br><span class="small muted">Barang tetap ada, stoknya jadi 0 untuk diisi ulang di menu Stok.</span></span></label>
+    <label class="row" style="flex-wrap:nowrap;align-items:flex-start"><input type="checkbox" id="rsK" style="margin-top:4px;flex:none"> <span><b>Hapus semua barang</b> (produk jadi & bahan baku)<br><span class="small muted">Katalog dikosongkan, barang dibuat ulang dari awal.</span></span></label>
+    <button class="btn danger" id="rsGo" type="button">Hard reset…</button>
+    <details><summary class="small"><b>Ganti kode reset</b> ${R && R.kodeBawaan ? `<span class="pill warn">masih bawaan "OK"</span>` : ""}</summary>
+      <div class="stack" style="margin-top:8px">
+        <label class="f">Kode reset sekarang<input type="password" id="rkL" autocomplete="off"></label>
+        <label class="f">Kode reset baru<input type="password" id="rkB" autocomplete="off"></label>
+        <label class="f">Ulangi kode baru<input type="password" id="rkB2" autocomplete="off"></label>
+        <button class="btn" id="rkOk" type="button">Simpan kode reset</button>
+      </div></details>`}`;
+  if (pusat) return;
+  $("#rsGo").onclick = () => {
+    const pilih = { transaksi: $("#rsT").checked, stok: $("#rsS").checked, katalog: $("#rsK").checked };
+    if (!pilih.transaksi && !pilih.stok && !pilih.katalog) return toast("Centang data yang mau direset");
+    const daftarTeks = [pilih.transaksi && "semua transaksi & catatan", pilih.stok && "stok jadi 0", pilih.katalog && "semua barang"].filter(Boolean).join(", ");
+    modal(`<h3>⚠️ Hard reset</h3><p>Yang dihapus: <b>${daftarTeks}</b>. Tindakan ini <b>tidak bisa dibatalkan</b>${LOKAL ? "" : " dan perangkat kasir yang tersambung ikut dikosongkan saat sinkron"}.</p>
+      <label class="f">Masukkan kode reset admin<input type="password" id="rsKode" autocomplete="off" placeholder="Kode reset"></label>
+      <div class="actions"><button class="btn" data-close>Batal</button><button class="btn danger" id="rsYa" type="button">Reset sekarang</button></div>`, m => {
+      $("#rsKode", m).focus();
+      $("#rsYa", m).onclick = e => coba(async () => {
+        const r = await api("POST", "/api/reset", { ...pilih, kode: $("#rsKode", m).value });
+        closeModal(); resetCart();
+        await muatUlang(); renderNav(); toast("Hard reset selesai"); vAtur();
+        return r;
+      }, e.target);
+    });
+  };
+  $("#rkOk").onclick = e => {
+    if ($("#rkB").value !== $("#rkB2").value) return toast("Kode baru dan ulangannya tidak sama");
+    coba(async () => { await api("PUT", "/api/reset/kode", { lama: $("#rkL").value, baru: $("#rkB").value }); toast("Kode reset diganti"); aturReset(); }, e.target);
+  };
 }
 async function aturUser(){
   const list = await coba(() => api("GET", "/api/users")); if (!list || view !== "atur") return;

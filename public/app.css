@@ -268,3 +268,6 @@ input.salah{border-color:var(--bad)!important;box-shadow:0 0 0 3px color-mix(in 
 .btn.absen-pulang{background:#b85c00;border-color:#b85c00;color:#fff}
 #akJ button[data-j=masuk].on{background:#1f7a4d;border-color:#1f7a4d;color:#fff}
 #akJ button[data-j=pulang].on{background:#b85c00;border-color:#b85c00;color:#fff}
+/* ubah stok manual */
+.stok-ubah-bar{position:sticky;top:0;z-index:5;margin-bottom:12px;padding:10px 12px}
+input.sIn.berubah{background:#fff4c2;border-color:#d9a400;color:#1c2420}

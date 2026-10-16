@@ -344,3 +344,27 @@ test("pulihkan: seluruh database diganti dengan file cadangan (jalur pindah HP â
   const s = await kasir("POST", "/api/penjualan", { items: [{ nama: "x", harga: 1000, qty: 1 }] });
   assert.equal(s.status, 200, "server tetap berjalan normal setelah pulihkan");
 });
+
+test("ubah stok manual & hard reset dengan kode (bawaan OK, bisa diganti)", async () => {
+  let b = (await admin("GET", "/api/bootstrap")).data;
+  const [p1, p2] = b.produk;
+  assert.equal((await admin("POST", "/api/opname", { jenis: "produk", ket: "Ubah stok manual", items: [{ id: p1.id, fisik: 12 }, { id: p2.id, fisik: 0 }] })).status, 200);
+  b = (await admin("GET", "/api/bootstrap")).data;
+  assert.equal(b.produk.find(x => x.id === p1.id).stok, 12); assert.equal(b.produk.find(x => x.id === p2.id).stok, 0);
+  // Hard reset: hanya admin, kode wajib benar
+  assert.equal((await kasir("POST", "/api/reset", { kode: "OK", transaksi: true })).status, 403);
+  assert.equal((await admin("POST", "/api/reset", { kode: "salah", transaksi: true })).status, 401);
+  assert.equal((await admin("GET", "/api/reset")).data.kodeBawaan, true);
+  assert.equal((await admin("PUT", "/api/reset/kode", { lama: "x", baru: "rahasia7" })).status, 401);
+  assert.equal((await admin("PUT", "/api/reset/kode", { lama: "OK", baru: "rahasia7" })).status, 200);
+  assert.equal((await admin("POST", "/api/reset", { kode: "OK", transaksi: true })).status, 401, "kode lama tidak berlaku");
+  const r = await admin("POST", "/api/reset", { kode: "rahasia7", transaksi: true, stok: true });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const hari = (await admin("GET", "/api/bootstrap")).data.hariIni;
+  assert.equal((await admin("GET", `/api/penjualan?dari=2000-01-01&sampai=${hari}`)).data.length, 0, "transaksi kosong");
+  b = (await admin("GET", "/api/bootstrap")).data;
+  assert.ok(b.produk.length > 0 && b.produk.every(x => x.stok === 0), "barang tetap, stok 0");
+  assert.ok(b.staf.length > 0, "akun tetap ada");
+  assert.equal((await admin("POST", "/api/reset", { kode: "rahasia7", katalog: true })).status, 200);
+  assert.equal((await admin("GET", "/api/bootstrap")).data.produk.length, 0, "katalog kosong");
+});

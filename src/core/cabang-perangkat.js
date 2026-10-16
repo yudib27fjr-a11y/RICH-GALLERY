@@ -127,6 +127,17 @@ const SETELAN_TOKO = ["nama_toko", "alamat", "telp", "footer", "prefix", "hpp_pe
 export function terapkanSnapshot(snap){
   return tx(() => {
     if (one("SELECT COUNT(*) n FROM cabang_kirim WHERE terkirim IS NULL").n) return false; // ada transaksi baru: tunggu kiriman berikutnya
+    // Server di-hard reset: kosongkan juga data di perangkat ini (sekali per reset).
+    // cabang_reset: null = perangkat belum pernah menerima data (baru tersambung) → reset lama di server tidak menghapus data perangkat.
+    const rs = snap.reset, kenal = getSettings().cabang_reset;
+    if (!rs && kenal == null && "reset" in snap) setSetting("cabang_reset", "");
+    if (rs && rs.id && rs.id !== kenal) {
+      setSetting("cabang_reset", rs.id);
+      if (kenal != null) {
+        if (rs.transaksi) for (const t of ["sale_items", "sales", "stock_moves", "produksi", "insentif_bayar", "insentif_lain", "kasbon", "gaji_bayar", "expenses", "absen", "outbox"]) run(`DELETE FROM ${t}`);
+        if (rs.katalog) for (const t of ["products", "materials"]) run(`UPDATE ${t} SET dihapus = datetime('now'), barcode = NULL WHERE dihapus IS NULL`);
+      }
+    }
     for (const [tabel, rows] of [["products", snap.produk], ["materials", snap.bahan]]) {
       if (!Array.isArray(rows) || !rows.length) continue; // jangan pernah mengosongkan katalog karena jawaban aneh
       const kol = KOLOM[tabel];
@@ -273,6 +284,7 @@ export async function sambungCabang({ url, nama, password, perangkat, paksa, ung
     throw new HttpError(400, "Alamat server harus diawali https:// (contoh: https://macbook-pro-yudi.tailae4382.ts.net)");
   }
   if (one("SELECT COUNT(*) n FROM cabang_kirim WHERE terkirim IS NULL").n) throw new HttpError(409, "Masih ada transaksi yang menunggu dikirim ke server sebelumnya.");
+  run("DELETE FROM settings WHERE kunci = 'cabang_reset'"); // penanda hard reset server lama tidak berlaku di server ini
   const terakhir = one("SELECT no FROM sales ORDER BY id DESC LIMIT 1");
   let j;
   try {

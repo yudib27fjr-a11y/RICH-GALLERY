@@ -288,6 +288,7 @@ route("POST", "/api/cabang/tarik", false, ({ body }) => {
     penjualan: penjualanTerbaru(sejak),
     sejak, ...keuanganTerbaru(sejak),
     versi, perangkat: alat.nama, perangkat_absen: !!alat.absen,
+    reset: getSettings().reset_terakhir || null,
   };
 });
 

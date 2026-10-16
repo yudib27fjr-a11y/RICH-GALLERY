@@ -538,6 +538,28 @@ test("server mati: transaksi menunggu, lalu terkirim saat server hidup lagi", as
   assert.ok(jual.some(s => s.no === r.data.no));
 });
 
+test("hard reset di server → transaksi di perangkat cabang ikut kosong, stok 0", async () => {
+  await sinkron(); await segarkan();
+  const hari = BC.hariIni;
+  assert.ok((await cabang("GET", `/api/penjualan?dari=2000-01-01&sampai=${hari}`)).data.length > 0);
+  assert.equal((await cabang("POST", "/api/reset", { kode: "OK", transaksi: true })).status, 409, "reset dari server pusat");
+  assert.equal((await pusat("POST", "/api/reset", { kode: "OK", transaksi: true, stok: true })).status, 200);
+  const st = await sinkron(); await segarkan();
+  assert.equal(st.ditolak, 0);
+  assert.equal((await cabang("GET", `/api/penjualan?dari=2000-01-01&sampai=${hari}`)).data.length, 0, "riwayat di perangkat kosong");
+  assert.equal((await cabang("GET", `/api/produksi?dari=2000-01-01&sampai=${hari}`)).data.length, 0);
+  assert.ok(BC.produk.every(x => x.stok === 0));
+  // Transaksi baru setelah reset tetap jalan & tidak dihapus lagi di sinkron berikutnya
+  const p = BC.produk[0];
+  assert.equal((await pusat("POST", "/api/opname", { jenis: "produk", items: [{ id: prodP(p.kode).id, fisik: 5 }] })).status, 200);
+  await sinkron(); await segarkan();
+  const j = await cabang("POST", "/api/penjualan", { items: [{ product_id: p.id, harga: p.harga, qty: 1, ready: true }] });
+  assert.equal(j.status, 200, JSON.stringify(j.data));
+  await sinkron(); await sinkron();
+  assert.equal((await cabang("GET", `/api/penjualan?dari=2000-01-01&sampai=${hari}`)).data.length, 1);
+  assert.equal((await pusat("GET", `/api/penjualan?dari=2000-01-01&sampai=${hari}`)).data.length, 1);
+});
+
 test("putuskan: ditolak bila masih ada antrean, lalu berhasil", async () => {
   assert.equal((await cabang("POST", "/api/cabang/putus", {})).status, 200);
   const st = (await cabang("GET", "/api/cabang")).data;
