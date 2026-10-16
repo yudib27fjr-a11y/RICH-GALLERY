@@ -326,12 +326,12 @@ test("pesanan: DP di cabang, pelunasan di pusat, diambil di cabang — status sa
   const p = BC.produk.find(x => x.kode === "RG009");
   const besok = new Date(Date.now() + 7 * 3600e3 + 86400e3).toISOString().slice(0, 10);
   const j = await cabang("POST", "/api/penjualan", { items: [{ product_id: p.id, harga: 100000, qty: 1 }], pelanggan: "bu rina", hp: "08123", bayar: 40000,
-    pesanan: { tgl: besok, jam: "15:00", cara: "antar", request: "Pita merah, kartu: Selamat ulang tahun" } });
+    kartu: "Selamat ulang tahun!", pesanan: { tgl: besok, jam: "15:00", cara: "antar", request: "Pita merah, kartu: Selamat ulang tahun" } });
   assert.equal(j.status, 200, JSON.stringify(j.data));
   assert.equal(j.data.ambil_tgl, besok); assert.equal(j.data.ambil_cara, "antar"); assert.match(j.data.request, /Pita merah/);
   await sinkron();
   let ps = (await pusat("GET", "/api/pesanan")).data.find(x => x.no === j.data.no);
-  assert.ok(ps, "pesanan sampai di pusat"); assert.equal(ps.bayar, 40000); assert.equal(ps.ambil_jam, "15:00"); assert.match(ps.request, /kartu/);
+  assert.ok(ps, "pesanan sampai di pusat"); assert.equal(ps.bayar, 40000); assert.equal(ps.kartu, "Selamat ulang tahun!"); assert.equal(ps.ambil_jam, "15:00"); assert.match(ps.request, /kartu/);
   // Dilunasi di pusat (QRIS) → cabang ikut lunas
   assert.equal((await pusat("POST", `/api/penjualan/${ps.id}/lunasi`, { metode: "QRIS" })).status, 200);
   assert.equal((await pusat("POST", `/api/penjualan/${ps.id}/lunasi`, { metode: "QRIS" })).status, 400, "sudah lunas");

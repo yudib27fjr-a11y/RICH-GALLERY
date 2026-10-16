@@ -136,7 +136,7 @@ function terapkan(p, d, alat){
         const b = idBarang("produk", i.kode);
         return b ? { product_id: b.id, harga: i.harga, qty: i.qty, ready: i.ready } : { nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty };
       });
-      return panggil("POST", "/api/penjualan", { items, diskon: x.diskon, ongkir: x.ongkir, metode: x.metode, bayar: x.bayar, pelanggan: x.pelanggan, hp: x.hp, catatan: x.catatan, pesanan: x.pesanan || null },
+      return panggil("POST", "/api/penjualan", { items, diskon: x.diskon, ongkir: x.ongkir, metode: x.metode, bayar: x.bayar, pelanggan: x.pelanggan, hp: x.hp, catatan: x.catatan, kartu: x.kartu, pesanan: x.pesanan || null },
         user, { tgl: x.tgl || w?.tgl, jam: x.jam || w?.jam }, { no: x.no, tgl: x.tgl, jam: x.jam });
     }
     case "batal": {
@@ -227,7 +227,7 @@ const BATAS_JUAL = 5000;
 function penjualanTerbaru(sejak){
   // Termasuk pesanan lama yang belum diambil, supaya pengingatnya tetap ada di perangkat.
   const sales = all(`SELECT id, no, tgl, jam, kasir, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan, batal_at, batal_oleh, batal_alasan,
-    ambil_tgl, ambil_jam, ambil_cara, request, diambil_at, diambil_oleh, lunas_at, lunas_metode, lunas_oleh
+    kartu, ambil_tgl, ambil_jam, ambil_cara, request, diambil_at, diambil_oleh, lunas_at, lunas_metode, lunas_oleh
     FROM sales WHERE tgl >= ? OR (ambil_tgl IS NOT NULL AND diambil_at IS NULL AND batal_at IS NULL) ORDER BY id DESC LIMIT ${BATAS_JUAL}`, [sejak]);
   if (!sales.length) return [];
   const per = new Map(sales.map(x => [x.id, (x.items = [], x)]));
@@ -256,7 +256,7 @@ route("POST", "/api/cabang/tarik", false, ({ body }) => {
   const versi = versiData() || "awal";
   if (body.versi && body.versi === versi) return { tetap: true, versi, perangkat: alat.nama };
   const sejak = one("SELECT date('now', '+7 hours', '-40 days') d").d;
-  const s = Object.fromEntries(all("SELECT kunci, nilai FROM settings WHERE kunci IN ('nama_toko','alamat','telp','footer','prefix','hpp_persen','insentif','periode_mulai','absen_aktif','absen_jam_masuk','absen_jam_pulang','wa_otomatis','wa_template')").map(r => [r.kunci, JSON.parse(r.nilai)]));
+  const s = Object.fromEntries(all("SELECT kunci, nilai FROM settings WHERE kunci IN ('nama_toko','alamat','telp','footer','prefix','hpp_persen','insentif','periode_mulai','absen_aktif','absen_jam_masuk','absen_jam_pulang','wa_otomatis','wa_template','canva_url')").map(r => [r.kunci, JSON.parse(r.nilai)]));
   return {
     produk: all("SELECT kode, nama, kategori, harga, hpp, stok, stok_min, barcode, insentif, aktif FROM products WHERE dihapus IS NULL ORDER BY id"),
     bahan: all("SELECT kode, nama, kategori, harga, satuan, stok, stok_min, barcode FROM materials WHERE dihapus IS NULL ORDER BY id"),

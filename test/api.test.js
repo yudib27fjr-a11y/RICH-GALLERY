@@ -207,7 +207,14 @@ test("data pelanggan dari riwayat transaksi & pesan WhatsApp", async () => {
   assert.equal((await kasir("GET", "/api/pelanggan?q=sinta")).data[0].total, undefined, "karyawan tidak melihat total belanja");
   const s0 = (await admin("GET", "/api/pengaturan")).data;
   assert.equal((await admin("PUT", "/api/pengaturan", { wa_otomatis: true, wa_template: "Halo {nama}, makasih! {no}", no_berikutnya: s0.no_berikutnya + 100 })).status, 200);
+  // Simpan sambungan saja (tanpa nomor invoice) & link Canva
+  assert.equal((await admin("PUT", "/api/pengaturan", { canva_url: "https://example.com/x" })).status, 400);
+  assert.equal((await admin("PUT", "/api/pengaturan", { canva_url: "https://www.canva.com/design/ABC/edit" })).status, 200);
+  // Kartu ucapan tersimpan di transaksi
+  const k = await admin("POST", "/api/penjualan", { items: [{ product_id: p.id, harga: 10000, qty: 1 }], kartu: "Happy Birthday!\nDari: Rina" });
+  assert.equal(k.data.kartu, "Happy Birthday!\nDari: Rina");
   const b = (await admin("GET", "/api/bootstrap")).data;
+  assert.equal(b.toko.canva_url, "https://www.canva.com/design/ABC/edit");
   assert.equal(b.toko.wa_otomatis, true); assert.equal(b.toko.wa_template, "Halo {nama}, makasih! {no}");
 });
 

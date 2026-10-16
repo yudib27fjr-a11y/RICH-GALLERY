@@ -24,10 +24,12 @@ route("PUT", "/api/pengaturan", "admin", ({ body }) => tx(() => {
     sheet_id: b.sheet_id != null ? teks(b.sheet_id, { max: 120, nama: "ID sheet" }) : undefined,
     wa_template: b.wa_template != null ? teks(b.wa_template, { max: 2000, nama: "Pesan WhatsApp" }) : undefined,
     wa_otomatis: b.wa_otomatis != null ? !!b.wa_otomatis : undefined,
+    canva_url: b.canva_url != null ? teks(b.canva_url, { max: 500, nama: "Link Canva" }) : undefined,
   };
+  if (v.canva_url && !/^https:\/\/(www\.)?canva\.(com|link)\//.test(v.canva_url)) throw bad("Link Canva harus diawali https://www.canva.com/ atau https://canva.link/");
   if (v.sync_url && !/^https:\/\/script\.google(usercontent)?\.com\//.test(v.sync_url)) throw bad("URL Apps Script harus diawali https://script.google.com/");
   const prefix = v.prefix ?? s.prefix, no = v.no_berikutnya ?? s.no_berikutnya;
-  if (one("SELECT 1 x FROM sales WHERE no = ?", [prefix + String(no).padStart(9, "0")])) throw bad("Nomor invoice itu sudah pernah dipakai. Isi nomor yang lebih besar.");
+  if ((v.prefix !== undefined || v.no_berikutnya !== undefined) && one("SELECT 1 x FROM sales WHERE no = ?", [prefix + String(no).padStart(9, "0")])) throw bad("Nomor invoice itu sudah pernah dipakai. Isi nomor yang lebih besar.");
   for (const [k, val] of Object.entries(v)) if (val !== undefined) setSetting(k, val);
   return { ok: true };
 }));

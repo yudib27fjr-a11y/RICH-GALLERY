@@ -176,7 +176,7 @@ const ESC = "\x1B", GS = "\x1D";
 const ascii = t => String(t).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/[\u2013\u2014]/g, "-").replace(/[^\x20-\x7E]/g, "?");
 function escposStruk(lines){
   let s = ESC + "@" + ESC + "t\x00";
-  lines.forEach(l => { s += (l.b ? ESC + "E\x01" : "") + ascii(l.t) + (l.b ? ESC + "E\x00" : "") + "\n"; });
+  lines.forEach(l => { s += (l.besar ? GS + "!\x11" + ESC + "a\x01" : "") + (l.b ? ESC + "E\x01" : "") + ascii(l.t) + (l.b ? ESC + "E\x00" : "") + (l.besar ? GS + "!\x00" + ESC + "a\x00" : "") + "\n"; });
   return s + "\n\n\n" + GS + "V\x41\x03";
 }
 /** Kirim ESC/POS ke printer: langsung ke printer bawaan, atau lewat aplikasi RawBT. Mengembalikan true bila terkirim. */
@@ -189,7 +189,7 @@ function cetakBaris(lines){
   if (kirimEscpos(escposStruk(lines))) return;
   const mm = D.kertas == 80 ? 80 : 58, cw = mm == 80 ? 72 : 48, chars = lebar();
   $("#page-style").textContent = `@page{size:${mm}mm auto;margin:0}`;
-  $("#print-area").innerHTML = `<pre style="width:${cw}mm;margin:0 ${(mm - cw) / 2}mm;padding:2mm 0 8mm;font-size:${(cw / chars / 0.6).toFixed(2)}mm">${lines.map(l => l.b ? `<b>${esc(l.t)}</b>` : esc(l.t)).join("\n")}</pre>`;
+  $("#print-area").innerHTML = `<pre style="width:${cw}mm;margin:0 ${(mm - cw) / 2}mm;padding:2mm 0 8mm;font-size:${(cw / chars / 0.6).toFixed(2)}mm">${lines.map(l => l.besar ? `<b style="font-size:2em;display:block;text-align:center;line-height:1.2">${esc(l.t)}</b>` : l.b ? `<b>${esc(l.t)}</b>` : esc(l.t)).join("\n")}</pre>`;
   setTimeout(cetakHalaman, 60);
 }
 const cetak = s => cetakBaris(strukLines(s));
@@ -199,6 +199,7 @@ function waLink(s){ return `https://wa.me/${nomorWA(s.hp)}?text=` + encodeURICom
 function lihatStruk(s, setelahBatal){
   modal(`<h3>Struk ${esc(s.no)}</h3>
     <pre class="receipt-prev">${esc(strukText(s))}</pre>
+    ${s.kartu ? `<div class="pesanan-isi stack" style="margin-bottom:8px"><b>Kartu ucapan</b><div style="white-space:pre-wrap">${esc(s.kartu)}</div>${tombolKartu(s.id)}</div>` : ""}
     ${s.batal_at ? `<p class="small muted">Dibatalkan oleh ${esc(s.batal_oleh || "-")}${s.batal_alasan ? ": " + esc(s.batal_alasan) : ""}</p>` : ""}
     <div class="actions">
       ${!s.batal_at && isAdmin() ? `<button class="btn danger" id="voidBtn">Batalkan transaksi</button>` : ""}
@@ -208,6 +209,7 @@ function lihatStruk(s, setelahBatal){
       <button class="btn pri" id="printBtn">Cetak struk</button>
     </div>`, m => {
       $("#printBtn", m).onclick = () => cetak(s);
+      if (s.kartu) pasangTombolKartu(m, s.kartu);
       const hb = $("#hapusBtn", m);
       if (hb) hb.onclick = () => konfirmasi(`Hapus ${s.no}?`, `Transaksi dihapus sepenuhnya dari daftar & laporan${s.batal_at ? "" : ", stok produk READY dikembalikan"}. Pakai untuk salah input atau data uji coba. Tidak bisa dibatalkan.`, "Hapus transaksi", () => coba(async () => {
         await api("DELETE", `/api/penjualan/${s.id}`); toast(`${s.no} dihapus`); await muatUlang(); setelahBatal ? setelahBatal() : render();
@@ -217,7 +219,7 @@ function lihatStruk(s, setelahBatal){
         await api("DELETE", `/api/penjualan/${s.id}`);
         await muatUlang();
         cart = { ...cartKosong(), pelanggan: s.pelanggan === "CUSTOMER" ? "" : s.pelanggan, hp: s.hp || "", diskon: s.diskon || 0, ongkir: s.ongkir || 0, metode: s.metode, catatan: s.catatan || "", tgl: s.tgl !== today() ? s.tgl : "",
-          pesanan: !!s.ambil_tgl, ambil_tgl: s.ambil_tgl || "", ambil_jam: s.ambil_jam || "", ambil_cara: s.ambil_cara || "ambil", request: s.request || "", bayar: s.bayar < s.total ? s.bayar : 0,
+          kartuOn: !!s.kartu, kartu: s.kartu || "", pesanan: !!s.ambil_tgl, ambil_tgl: s.ambil_tgl || "", ambil_jam: s.ambil_jam || "", ambil_cara: s.ambil_cara || "ambil", request: s.request || "", bayar: s.bayar < s.total ? s.bayar : 0,
           items: s.items.map(i => { const p = i.kode ? B.produk.find(x => x.kode === i.kode) : null;
             return { product_id: p ? p.id : null, kode: p ? p.kode : "", nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty, ready: p ? !!i.ready : false }; }) };
         saveCart(); toast("Perbaiki isi keranjang, lalu simpan lagi"); pindah("kasir");
@@ -546,6 +548,12 @@ function drawCart(){
       <label class="f">Catatan khusus / request<textarea id="cReq" rows="3" placeholder="Contoh: warna pink-putih, tulisan 'Happy Graduation Sinta', tambah coklat. ${cart.ambil_cara === "antar" ? "Alamat antar: …" : ""}">${esc(cart.request || "")}</textarea></label>
       <p class="small muted" style="margin:0">Isi <b>Dibayar</b> di bawah dengan nominal DP. Sisanya bisa dilunasi saat diambil, dari menu <b>Pesanan</b>.</p>
     </div>` : ""}
+    <label class="row pesanan-cek"><input type="checkbox" id="cKartuOn" ${cart.kartuOn ? "checked" : ""}> <b>Kartu ucapan</b> <span class="small muted">— dicetak / dibuat di Canva</span></label>
+    ${cart.kartuOn ? `<div class="pesanan-isi stack">
+      <label class="f">Isi kartu<textarea id="cKartu" rows="4" placeholder="Happy Birthday!&#10;Semoga panjang umur dan sehat selalu.&#10;Dari: Rina">${esc(cart.kartu || "")}</textarea></label>
+      ${tombolKartu("keranjang")}
+      ${B.toko.canva_url ? "" : `<p class="small muted" style="margin:0">Atur link template Canva di Pengaturan → Sambungan supaya tombol Buka Canva langsung ke desain kartu toko.</p>`}
+    </div>` : ""}
     <div class="row"><label class="f grow">Diskon (Rp)<input type="number" id="cDisc" value="${cart.diskon || ""}" min="0" step="1000" inputmode="numeric"></label><label class="f grow">Ongkir (Rp)<input type="number" id="cOng" value="${cart.ongkir || ""}" min="0" step="1000" inputmode="numeric"></label></div>
     <div class="seg" id="cMet" role="group" aria-label="Metode bayar">${B.metode.map(m => `<button type="button" class="${cart.metode === m ? "on" : ""}" data-m="${m}">${m}</button>`).join("")}</div>
     <label class="f">${cart.pesanan ? "Dibayar / DP (kosongkan = lunas)" : "Dibayar (kosongkan = lunas pas)"}<input type="number" id="cBayar" value="${cart.bayar || ""}" min="0" step="1000" inputmode="numeric" placeholder="${tot}"></label>
@@ -556,7 +564,7 @@ function drawCart(){
     <div class="cart-foot">
       <div class="tot"><span class="muted">Subtotal <span class="num">${rp(sub)}</span></span><span></span><span style="align-self:end;font-weight:700">TOTAL · ${esc(cart.metode)}</span><span class="big num" id="cTot">${rp(tot)}</span></div>
       <div class="small" id="kembali"></div>
-      <div class="row" style="flex-wrap:nowrap"><button class="btn big" id="saveOnly" type="button" style="flex:1" ${cart.items.length ? "" : "disabled"}>Simpan</button><button class="btn pri big" id="savePrint" type="button" style="flex:2" ${cart.items.length ? "" : "disabled"}>Bayar &amp; Cetak</button></div>
+      <div class="row" style="flex-wrap:nowrap"><button class="btn big" id="saveOnly" type="button" style="flex:1" ${cart.items.length ? "" : "disabled"} title="Simpan pembayaran tanpa mencetak struk">Bayar</button><button class="btn pri big" id="savePrint" type="button" style="flex:2" ${cart.items.length ? "" : "disabled"}>Bayar &amp; Cetak</button></div>
       ${saleTerakhir ? `<button class="btn ghost sm" id="reprint" type="button" style="align-self:center">Cetak ulang struk terakhir (${esc(saleTerakhir.no)})</button>` : ""}
     </div>`;
   const upd = () => { saveCart(); const t = cartTotal(); $("#cTot").textContent = rp(t); $("#cbTotal").textContent = rp(t); hitKembali(); };
@@ -570,6 +578,8 @@ function drawCart(){
   $("#cDisc", el).oninput = e => { cart.diskon = num(e.target.value); upd(); };
   const gambarUlang = () => { const sc = $(".cart-body", el).scrollTop; drawCart(); $(".cart-body", el).scrollTop = sc; };
   $("#cPes", el).onchange = e => { cart.pesanan = e.target.checked; if (cart.pesanan && !cart.ambil_tgl) cart.ambil_tgl = today(); saveCart(); gambarUlang(); };
+  $("#cKartuOn", el).onchange = e => { cart.kartuOn = e.target.checked; saveCart(); gambarUlang(); if (cart.kartuOn) $("#cKartu")?.focus(); };
+  if (cart.kartuOn) { $("#cKartu", el).oninput = e => { cart.kartu = e.target.value; saveCart(); }; pasangTombolKartu(el, () => $("#cKartu", el).value); }
   if (cart.pesanan) {
     $$("#cCara button", el).forEach(b => b.onclick = () => { cart.ambil_cara = b.dataset.c; saveCart(); gambarUlang(); });
     $("#cAmbilT", el).onchange = e => { cart.ambil_tgl = e.target.value; saveCart(); };
@@ -657,6 +667,53 @@ function pasangCariPelanggan(el){
   ambilPelanggan().then(gambar).catch(e => { kotak.innerHTML = `<div class="empty small">${esc(e.message)}</div>`; });
 }
 
+/* ---------- Kartu ucapan: salin teks, buka Canva, cetak di printer struk ---------- */
+/** Salin langsung (sinkron) — tetap dalam ketukan pengguna, jadi bisa diikuti membuka tab baru. */
+function salinSinkron(teks){
+  try { const t = document.createElement("textarea"); t.value = teks; t.setAttribute("readonly", ""); t.style.position = "fixed"; t.style.top = "0"; t.style.opacity = "0"; document.body.appendChild(t); t.focus(); t.select(); t.setSelectionRange(0, teks.length); const ok = document.execCommand("copy"); t.remove(); return ok; } catch { return false; }
+}
+/** Salin teks ke papan klip (juga di WebView lama yang belum punya navigator.clipboard). */
+async function salinTeks(teks, pesan = "Teks disalin"){
+  let ok = salinSinkron(teks);
+  if (!ok) { try { if (navigator.clipboard) { await navigator.clipboard.writeText(teks); ok = true; } } catch {} }
+  toast(ok ? pesan : "Gagal menyalin. Tekan lama pada teks lalu pilih Salin.");
+  return ok;
+}
+function bukaLink(url){
+  if (NATIVE) { location.href = url; return; } // aplikasi Android membukanya di aplikasi yang sesuai (Canva / WhatsApp)
+  const w = window.open(url, "_blank", "noopener");
+  if (!w) toast("Browser memblokir jendela baru. Izinkan pop-up untuk situs ini.");
+}
+/** Salin isi kartu lalu buka desain Canva: tinggal tempel (paste) teksnya. */
+function keCanva(teks){
+  if (!B.toko.canva_url) { if (teks) salinTeks(teks, "Teks kartu disalin"); toast("Link Canva belum diatur (Pengaturan → Sambungan)"); return; }
+  const ok = teks ? salinSinkron(teks) : true;
+  bukaLink(B.toko.canva_url);
+  if (teks) toast(ok ? "Teks kartu disalin — tempel (paste) di Canva" : "Canva dibuka. Salin teks kartu dengan tombol Salin teks.");
+}
+/** Cetak kartu ucapan di printer struk: teks di tengah, baris pertama besar. */
+function cetakKartu(teks){
+  const w = lebar(), L = [{ t: "" }];
+  String(teks || "").split("\n").forEach((baris, i) => {
+    if (!baris.trim()) { L.push({ t: "" }); return; }
+    if (i === 0 && baris.length <= Math.floor(w / 2) * 2) wrap(baris, Math.floor(w / 2)).forEach(x => L.push({ t: x, besar: 1 })); // rata tengah oleh printer
+    else wrap(baris, w).forEach(x => L.push({ t: center(x, w) }));
+  });
+  L.push({ t: "" }, { t: center("~ " + toTitle(B.toko.nama_toko) + " ~", w) });
+  cetakBaris(L);
+}
+/** Tombol-tombol kartu ucapan (dipakai di struk & pesanan). */
+const tombolKartu = id => `<div class="row" style="flex-wrap:wrap;gap:6px"><button class="btn sm" data-kartu="salin" data-id="${id}" type="button">Salin teks</button><button class="btn sm" data-kartu="canva" data-id="${id}" type="button">Buka Canva</button><button class="btn sm" data-kartu="cetak" data-id="${id}" type="button">Cetak kartu</button></div>`;
+function pasangTombolKartu(akar, teks){
+  $$("[data-kartu]", akar).forEach(b => b.onclick = () => {
+    const t = typeof teks === "function" ? teks() : teks;
+    if (!String(t || "").trim()) return toast("Isi kartu ucapan masih kosong");
+    if (b.dataset.kartu === "salin") salinTeks(t, "Teks kartu disalin");
+    else if (b.dataset.kartu === "canva") keCanva(t);
+    else cetakKartu(t);
+  });
+}
+
 /* ---------- Pesan WhatsApp ke pelanggan ---------- */
 /** Isi pesan dari templat di Pengaturan. Kode yang bisa dipakai: {nama} {toko} {no} {tanggal} {total} {barang} {struk} */
 function pesanWA(s){
@@ -685,6 +742,7 @@ async function simpanTransaksi(print, tombol){
     const s = await api("POST", "/api/penjualan", {
       tgl: isAdmin() ? (cart.tgl || today()) : undefined, pelanggan: cart.pelanggan, hp: cart.hp, metode: cart.metode,
       bayar: cart.bayar || undefined, diskon: cart.diskon || 0, ongkir: cart.ongkir || 0, catatan: cart.catatan,
+      kartu: cart.kartuOn ? (cart.kartu || "") : "",
       pesanan: cart.pesanan ? { tgl: cart.ambil_tgl || today(), jam: cart.ambil_jam || "", cara: cart.ambil_cara || "ambil", request: cart.request || "" } : undefined,
       items: cart.items.map(i => ({ product_id: i.product_id, nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty, ready: i.ready })),
     });
@@ -809,6 +867,7 @@ function detailPesanan(s){
     <div class="stack">
       <p style="margin:0"><span class="pill ${s.diambil_at ? "ok" : lb.kelas}">${s.diambil_at ? "Selesai" : esc(lb.teks)}</span> <b>${s.ambil_cara === "antar" ? "Diantar" : "Diambil"} ${esc(tglID(s.ambil_tgl))}${s.ambil_jam ? " jam " + esc(s.ambil_jam) : ""}</b></p>
       ${s.request ? `<div class="note" style="margin:0;white-space:pre-wrap">📝 ${esc(s.request)}</div>` : ""}
+      ${s.kartu ? `<div class="pesanan-isi stack"><b>💌 Kartu ucapan</b><div style="white-space:pre-wrap">${esc(s.kartu)}</div>${tombolKartu(s.id)}</div>` : ""}
       <p class="small" style="margin:0">${s.items.map(i => esc(i.nama) + " ×" + fq(i.qty)).join("<br>")}</p>
       <p style="margin:0">Total <b>${rp(s.total)}</b> · Dibayar ${rp(s.bayar)} ${sisa ? `· <b style="color:var(--warn)">Sisa ${rp(sisa)}</b>` : `· <span class="pill ok">Lunas</span>`}</p>
       ${s.hp ? `<p class="small muted" style="margin:0">${esc(s.hp)}</p>` : ""}
@@ -826,6 +885,7 @@ function detailPesanan(s){
     let metode = "Tunai";
     $$("#lsM button", m).forEach(b => b.onclick = () => { metode = b.dataset.m; $$("#lsM button", m).forEach(x => x.classList.toggle("on", x === b)); });
     $("#psStruk", m).onclick = () => lihatStruk(s, () => vPesanan());
+    if (s.kartu) pasangTombolKartu(m, s.kartu);
     const lunasi = () => api("POST", `/api/penjualan/${s.id}/lunasi`, { metode });
     const ls = $("#psLunas", m); if (ls) ls.onclick = e => coba(async () => { await lunasi(); closeModal(); toast(`Lunas (${metode})`); vPesanan(); }, e.target);
     const sl = $("#psSelesai", m); if (sl) sl.onclick = e => coba(async () => { if (sisa) await lunasi(); await api("POST", `/api/penjualan/${s.id}/diambil`, {}); closeModal(); toast("Pesanan selesai"); vPesanan(); }, e.target);
@@ -1358,6 +1418,7 @@ function vAtur(){
       ${isAdmin() ? `<section class="panel stack" id="aToko"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aUser"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aCabang"><div class="empty">Memuat…</div></section>
+      <section class="panel stack" id="aSambung"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aSync"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aAbsen"><div class="empty">Memuat…</div></section>
       <section class="panel stack"><h3 style="font-size:17px">Cadangan &amp; impor</h3>
@@ -1379,7 +1440,7 @@ function vAtur(){
   $("#pTest").onclick = () => cetak({ no: B.toko.prefix + "UJI", tgl: today(), jam: "00:00", kasir: B.me.nama, pelanggan: "UJI CETAK", hp: "", items: [{ nama: "BUKET BUNGA 100K", harga: 100000, qty: 1 }, { nama: "COKLAT SILVERQUEEN", harga: 15000, qty: 2 }], subtotal: 130000, diskon: 0, ongkir: 0, total: 130000, metode: "Tunai", bayar: 150000, catatan: "" });
   $("#pwSave").onclick = e => coba(async () => { await api("POST", "/api/akun/password", { lama: $("#pwL").value, baru: $("#pwB").value }); $("#pwL").value = $("#pwB").value = ""; toast("Password diganti"); }, e.target);
   if (!isAdmin()) return;
-  aturToko(); aturUser(); aturSync(); aturCabang(); aturAbsen();
+  aturToko(); aturUser(); aturSambung(); aturSync(); aturCabang(); aturAbsen();
   if ($("#bkDb")) $("#bkDb").onclick = e => coba(async () => { const r = await api("GET", "/api/cadangan"); toast(`Cadangan tersimpan di ${r.disimpan}`); }, e.target);
   $("#rsFile").onchange = e => { const f = e.target.files[0]; if (!f) return; e.target.value = "";
     const r = new FileReader();
@@ -1411,23 +1472,48 @@ async function aturToko(){
     <div class="row"><label class="f grow">Awalan no invoice<input type="text" id="tP" value="${esc(s.prefix)}"></label><label class="f grow">No berikutnya<input type="number" id="tNo" value="${s.no_berikutnya}" min="1"></label></div>
     <label class="f">HPP otomatis (% dari harga jual)<input type="number" id="tH" value="${s.hpp_persen}" min="0" max="100"></label>
     <div class="row"><label class="f grow">Insentif produksi per pcs (Rp)<input type="number" id="tI" value="${s.insentif}" min="0" step="500"></label><label class="f grow">Periode insentif mulai tanggal<input type="number" id="tPm" value="${s.periode_mulai}" min="1" max="28"></label></div>
-    <hr class="sep"><h3 style="font-size:16px;margin:0">Pesan WhatsApp ke pelanggan</h3>
-    <label class="row"><input type="checkbox" id="tWaAuto" ${s.wa_otomatis ? "checked" : ""}> <b>Kirim ucapan terima kasih otomatis setelah transaksi</b></label>
-    <p class="small muted" style="margin:0">Bila No HP pelanggan diisi, WhatsApp langsung terbuka dengan pesan ini, tinggal tekan kirim. Tombol "Kirim WA" di struk juga memakai pesan ini.</p>
-    <label class="f">Isi pesan<textarea id="tWa" rows="8">${esc(s.wa_template)}</textarea></label>
-    <p class="small muted" style="margin:0">Kode otomatis: <code>{nama}</code> nama pelanggan · <code>{toko}</code> · <code>{no}</code> no nota · <code>{tanggal}</code> · <code>{total}</code> · <code>{barang}</code> daftar barang · <code>{struk}</code> struk lengkap.</p>
-    <button class="btn sm" id="tWaLihat" type="button">Lihat contoh pesan</button>
     <button class="btn pri" id="tSave" type="button">Simpan pengaturan toko</button>`;
-  $("#tWaLihat").onclick = () => {
-    const simpan = B.toko.wa_template; B.toko.wa_template = $("#tWa").value;
+  $("#tSave").onclick = e => coba(async () => {
+    await api("PUT", "/api/pengaturan", { nama_toko: $("#tN").value, alamat: $("#tA").value, telp: $("#tT").value, footer: $("#tF").value, prefix: $("#tP").value, no_berikutnya: $("#tNo").value, hpp_persen: $("#tH").value, insentif: $("#tI").value, periode_mulai: $("#tPm").value });
+    await muatUlang(); shell(); render(); toast("Pengaturan toko tersimpan");
+  }, e.target);
+}
+/** Sambungan ke aplikasi lain: Canva (kartu ucapan), WhatsApp (pesan ke pelanggan), printer. */
+async function aturSambung(){
+  const s = await coba(() => api("GET", "/api/pengaturan")); if (!s || !$("#aSambung")) return;
+  const pusat = LOKAL && B.cabang;
+  const modeCetak = { langsung: "Printer bawaan iMin (langsung)", chrome: "Layanan cetak Android / browser", rawbt: "Aplikasi RawBT" }[D.modeCetak] || (NATIVE ? "Layanan cetak Android" : "Cetak lewat browser");
+  $("#aSambung").innerHTML = `<h3 style="font-size:17px">Sambungan: Canva, WhatsApp &amp; printer</h3>
+    ${pusat ? `<p class="note" style="margin:0">Perangkat ini tersambung ke server pusat: link Canva &amp; pesan WhatsApp diatur di server (browser), lalu otomatis ikut ke sini. Printer diatur per perangkat di bagian <b>Perangkat ini</b>.</p>` : ""}
+    <h4 style="margin:4px 0 0">🎨 Canva — kartu ucapan</h4>
+    <p class="small muted" style="margin:0">Buat desain kartu ucapan toko di Canva, lalu tekan <b>Bagikan → Salin link</b> (atau link template) dan tempel di sini. Di kasir, tombol <b>Buka Canva</b> menyalin isi kartu lalu membuka desain ini: tinggal tempel teksnya.</p>
+    <label class="f">Link desain / template Canva<input type="url" id="sgCanva" value="${esc(s.canva_url || "")}" placeholder="https://www.canva.com/design/…" ${pusat ? "disabled" : ""}></label>
+    <div class="row"><button class="btn sm" id="sgCanvaUji" type="button">Buka link Canva</button></div>
+    <hr class="sep"><h4 style="margin:4px 0 0">💬 WhatsApp — pesan ke pelanggan</h4>
+    <label class="row"><input type="checkbox" id="sgWaAuto" ${s.wa_otomatis ? "checked" : ""} ${pusat ? "disabled" : ""}> <b>Kirim ucapan terima kasih otomatis setelah transaksi</b></label>
+    <p class="small muted" style="margin:0">Bila No HP pelanggan diisi, WhatsApp langsung terbuka dengan pesan ini, tinggal tekan kirim. Tombol "Kirim WA" di struk juga memakai pesan ini. Di HP/iMin, pakai WhatsApp yang sudah masuk dengan nomor toko.</p>
+    <label class="f">Isi pesan<textarea id="sgWa" rows="7" ${pusat ? "disabled" : ""}>${esc(s.wa_template)}</textarea></label>
+    <p class="small muted" style="margin:0">Kode otomatis: <code>{nama}</code> · <code>{toko}</code> · <code>{no}</code> · <code>{tanggal}</code> · <code>{total}</code> · <code>{barang}</code> · <code>{struk}</code></p>
+    <div class="row"><button class="btn sm" id="sgWaLihat" type="button">Lihat contoh pesan</button><button class="btn sm" id="sgWaUji" type="button">Kirim tes ke nomor toko</button></div>
+    ${pusat ? "" : `<button class="btn pri" id="sgSimpan" type="button">Simpan sambungan Canva &amp; WhatsApp</button>`}
+    <hr class="sep"><h4 style="margin:4px 0 0">🖨️ Printer</h4>
+    <p class="small" style="margin:0">Perangkat ini: <b>${esc(modeCetak)}</b>, kertas ${D.kertas == 80 ? "80" : "58"} mm. Ganti di bagian <b>Perangkat ini</b> (paling atas).</p>
+    <div class="row"><button class="btn sm" id="sgCetakUji" type="button">Cetak struk uji</button><button class="btn sm" id="sgKartuUji" type="button">Cetak kartu uji</button></div>`;
+  const ambilTpl = () => $("#sgWa").value;
+  $("#sgCanvaUji").onclick = () => { const u = $("#sgCanva").value.trim(); if (!u) return toast("Isi link Canva dulu"); bukaLink(u); };
+  $("#sgWaLihat").onclick = () => {
+    const simpan = B.toko.wa_template; B.toko.wa_template = ambilTpl();
     const contoh = pesanWA({ no: B.toko.prefix + "000001234", tgl: today(), jam: "10:00", kasir: B.me.nama, pelanggan: "BU ANI", hp: "0812", items: [{ nama: "BUKET BUNGA 100K", harga: 100000, qty: 1 }], subtotal: 100000, diskon: 0, ongkir: 0, total: 100000, metode: "Tunai", bayar: 100000, catatan: "" });
     B.toko.wa_template = simpan;
     modal(`<h3>Contoh pesan</h3><pre class="receipt-prev" style="white-space:pre-wrap">${esc(contoh)}</pre><div class="actions"><button class="btn" data-close>Tutup</button></div>`);
   };
-  $("#tSave").onclick = e => coba(async () => {
-    await api("PUT", "/api/pengaturan", { nama_toko: $("#tN").value, alamat: $("#tA").value, telp: $("#tT").value, footer: $("#tF").value, prefix: $("#tP").value, no_berikutnya: $("#tNo").value, hpp_persen: $("#tH").value, insentif: $("#tI").value, periode_mulai: $("#tPm").value, wa_template: $("#tWa").value, wa_otomatis: $("#tWaAuto").checked });
-    await muatUlang(); shell(); render(); toast("Pengaturan toko tersimpan");
+  $("#sgWaUji").onclick = () => { const no = nomorWA(s.telp); if (!no) return toast("Isi No telepon / WA toko dulu di bagian Toko & struk"); bukaLink(`https://wa.me/${no}?text=` + encodeURIComponent("Tes pesan dari Rich Gallery POS ✅")); };
+  const simpan = $("#sgSimpan"); if (simpan) simpan.onclick = e => coba(async () => {
+    await api("PUT", "/api/pengaturan", { canva_url: $("#sgCanva").value.trim(), wa_template: ambilTpl(), wa_otomatis: $("#sgWaAuto").checked });
+    await muatUlang(); toast("Sambungan tersimpan"); aturSambung();
   }, e.target);
+  $("#sgCetakUji").onclick = () => $("#pTest")?.click();
+  $("#sgKartuUji").onclick = () => cetakKartu("Happy Birthday!\nSemoga panjang umur, sehat selalu,\ndan bahagia.\n\nDari: Rina");
 }
 async function aturUser(){
   const list = await coba(() => api("GET", "/api/users")); if (!list || view !== "atur") return;

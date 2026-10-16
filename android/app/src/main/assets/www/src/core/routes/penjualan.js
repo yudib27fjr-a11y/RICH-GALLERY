@@ -54,6 +54,7 @@ route("POST", "/api/penjualan", "semua", ({ body, user, ctx }) => tx(() => {
   const pelanggan = teks(body.pelanggan, { max: 80, upper: true, nama: "Pelanggan" }) || "CUSTOMER";
   const hp = teks(body.hp, { max: 30, nama: "No HP" });
   const catatan = teks(body.catatan, { max: 500, nama: "Catatan" });
+  const kartu = teks(body.kartu, { max: 1000, nama: "Kartu ucapan" }) || null;
   // Pesanan: diambil / diantar nanti, dengan catatan khusus (request)
   const ps = body.pesanan && typeof body.pesanan === "object" && body.pesanan.tgl ? body.pesanan : null;
   const pesanan = ps ? {
@@ -65,8 +66,8 @@ route("POST", "/api/penjualan", "semua", ({ body, user, ctx }) => tx(() => {
 
   const no = kiriman && kiriman.no ? nomorKiriman(kiriman.no) : nomorBerikutnya(s);
   const jam = kiriman && kiriman.jam ? kiriman.jam : now.jam;
-  const saleId = Number(run(`INSERT INTO sales(no, tgl, jam, user_id, kasir, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan, ambil_tgl, ambil_jam, ambil_cara, request) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [no, tgl, jam, user.id, user.nama, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan, pesanan?.tgl ?? null, pesanan?.jam ?? null, pesanan?.cara ?? null, pesanan?.request ?? null]).lastInsertRowid);
+  const saleId = Number(run(`INSERT INTO sales(no, tgl, jam, user_id, kasir, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan, kartu, ambil_tgl, ambil_jam, ambil_cara, request) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [no, tgl, jam, user.id, user.nama, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan, kartu, pesanan?.tgl ?? null, pesanan?.jam ?? null, pesanan?.cara ?? null, pesanan?.request ?? null]).lastInsertRowid);
   for (const it of items) {
     run(`INSERT INTO sale_items(sale_id, product_id, kode, nama, kategori, harga, qty, hpp, ready) VALUES (?,?,?,?,?,?,?,?,?)`,
       [saleId, it.product_id, it.kode, it.nama, it.kategori, it.harga, it.qty, it.hpp, it.ready]);
@@ -76,7 +77,7 @@ route("POST", "/api/penjualan", "semua", ({ body, user, ctx }) => tx(() => {
     return [String(saleId), tgl, jam, no, it.kode, it.nama, it.kategori, it.harga, it.qty, Math.round(it.harga * it.qty), it.ready ? "READY STOK" : "PRODUKSI", pelanggan, hp, user.nama, metode, Math.round(diskon * bagian), Math.round(ongkir * bagian), Math.round(it.hpp * it.qty), catatan]; }));
   return sembunyikanHpp(muatPenjualan("id = ?", [saleId])[0], user);
 }), { cabang: ({ hasil: x }) => ({ aksi: "jual", data: {
-  no: x.no, tgl: x.tgl, jam: x.jam, pelanggan: x.pelanggan, hp: x.hp, diskon: x.diskon, ongkir: x.ongkir, metode: x.metode, bayar: x.bayar, catatan: x.catatan,
+  no: x.no, tgl: x.tgl, jam: x.jam, pelanggan: x.pelanggan, hp: x.hp, diskon: x.diskon, ongkir: x.ongkir, metode: x.metode, bayar: x.bayar, catatan: x.catatan, kartu: x.kartu,
   pesanan: x.ambil_tgl ? { tgl: x.ambil_tgl, jam: x.ambil_jam, cara: x.ambil_cara, request: x.request } : null,
   items: x.items.map(i => ({ kode: i.kode, nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty, ready: i.ready })),
 } }) });

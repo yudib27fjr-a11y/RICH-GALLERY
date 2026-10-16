@@ -240,6 +240,9 @@ ALTER TABLE sales ADD COLUMN lunas_at TEXT;
 ALTER TABLE sales ADD COLUMN lunas_metode TEXT;
 ALTER TABLE sales ADD COLUMN lunas_oleh TEXT;
 CREATE INDEX sales_pesanan ON sales(ambil_tgl) WHERE ambil_tgl IS NOT NULL;`,
+
+/* 5: isi kartu ucapan per transaksi (dicetak / disalin ke Canva). */
+`ALTER TABLE sales ADD COLUMN kartu TEXT;`,
 ];
 
 export const DEFAULT_SETTINGS = {
@@ -263,6 +266,8 @@ export const DEFAULT_SETTINGS = {
   // Pesan WhatsApp ke pelanggan setelah transaksi
   wa_otomatis: false,
   wa_template: "Halo {nama}, terima kasih sudah berbelanja di {toko} 🌸\n\nNo. nota: {no}\nTanggal: {tanggal}\nPesanan: {barang}\nTotal: {total}\n\nSemoga suka dengan pesanannya. Ditunggu kedatangannya kembali!",
+  // Link template kartu ucapan di Canva
+  canva_url: "",
   // Absensi sidik jari
   absen_aktif: false,
   absen_token: "",
