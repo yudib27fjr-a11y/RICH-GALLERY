@@ -164,9 +164,12 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 /* cetak */
 #print-area{display:none}
 @media print{
-  body *{visibility:hidden}
-  #print-area,#print-area *{visibility:visible}
-  #print-area{display:block;position:absolute;left:0;top:0}
+  /* Hanya isi cetak yang ikut: bagian lain dibuang dari tata letak (bukan sekadar disembunyikan),
+     supaya tidak muncul puluhan halaman kosong dan struk berada di paling atas kertas. */
+  html,body{height:auto!important;min-height:0!important;margin:0!important;padding:0!important;background:#fff!important;overflow:visible!important}
+  body > :not(#print-area){display:none!important}
+  #print-area{display:block!important;position:static!important;margin:0;padding:0}
+  #print-area img{page-break-inside:avoid;break-inside:avoid}
   #print-area pre{margin:0;font-family:"Courier New",monospace;font-weight:700;color:#000;white-space:pre;line-height:1.25;-webkit-print-color-adjust:exact}
   #print-area,#print-area *{color:#000!important;-webkit-font-smoothing:none}
 }
