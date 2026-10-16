@@ -1134,6 +1134,8 @@ async function aturSync(){
 }
 
 /* ---------- Server pusat: perangkat offline (iMin) mengirim transaksinya ke server saat bisa dihubungi ---------- */
+/** Server toko di Cloudflare (gratis, menyala 24 jam). Dipakai sebagai alamat bawaan di aplikasi. */
+const SERVER_TOKO = "https://rich-gallery-pos.yudi-b27fjr.workers.dev";
 const waktuLokal = iso => iso ? new Date(iso).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }) : "-";
 async function aturCabang(){
   const el = $("#aCabang"); if (!el) return;
@@ -1154,7 +1156,7 @@ async function aturCabang(){
     el.innerHTML = `<h3 style="font-size:17px">Server pusat (sinkron otomatis)</h3>
       <p class="small muted" style="margin:0">Perangkat ini tetap bekerja offline. Begitu server pusat bisa dihubungi, transaksi otomatis terkirim ke sana, dan harga, produk, stok serta akun dari server masuk ke sini.</p>
       <p class="note" style="margin:0"><b>Sebelum menyambung:</b> pindahkan dulu data perangkat ini ke server (Simpan cadangan di sini, lalu pulihkan di server). Setelah tersambung, produk, akun dan pengaturan toko diubah di server saja.</p>
-      <label class="f">Alamat server<input type="url" id="cbUrl" placeholder="https://macbook-pro-yudi.tailae4382.ts.net" autocomplete="off"></label>
+      <label class="f">Alamat server<input type="url" id="cbUrl" value="${esc(SERVER_TOKO)}" placeholder="${esc(SERVER_TOKO)}" autocomplete="off"></label>
       <label class="f">Nama admin di server<input type="text" id="cbNama" value="${esc(B.me.nama)}" autocomplete="off"></label>
       <label class="f">Password admin di server<input type="password" id="cbPw" autocomplete="off"></label>
       <label class="f">Nama perangkat ini<input type="text" id="cbAlat" value="iMin kasir" maxlength="40"></label>
@@ -1187,6 +1189,7 @@ async function aturCabang(){
     <p class="small" style="margin:0;${masalah ? "color:var(--bad)" : ""}">${st.menunggu ? `<b>${st.menunggu} transaksi menunggu dikirim.</b>` : "Semua transaksi sudah terkirim."} Terakhir sinkron: ${waktuLokal(st.terakhir)}${st.galatTerakhir ? `<br>${esc(st.galatTerakhir)}` : ""}</p>
     ${st.ditolak ? `<p class="small" style="margin:0;color:var(--bad)">${st.ditolak} transaksi ditolak server (7 hari terakhir):<br>${st.ditolakDaftar.map(x => `${esc(x.aksi)}: ${esc(x.galat || "")}`).join("<br>")}</p>` : ""}
     <p class="small muted" style="margin:0">Sinkron berjalan otomatis tiap 30 detik selama aplikasi terbuka dan ada internet. Produk, akun dan pengaturan toko diubah di server pusat.</p>
+    ${st.url.replace(/\/+$/, "") !== SERVER_TOKO ? `<p class="note" style="margin:0">Server toko sekarang ada di Cloudflare: <b>${esc(SERVER_TOKO)}</b>. Untuk pindah: tekan <b>Putuskan</b> (setelah semua transaksi terkirim), lalu sambungkan lagi. Alamat Cloudflare sudah terisi otomatis.</p>` : ""}
     <div class="row"><button class="btn pri" id="cbSync" type="button">Sinkron sekarang</button><button class="btn" id="cbPutus" type="button">Putuskan</button></div>`;
   $("#cbSync").onclick = e => coba(async () => { const r = await api("POST", "/api/cabang/sinkron"); await muatUlang(); toast(r.galatTerakhir ? "Belum terkirim: " + r.galatTerakhir : r.menunggu ? `${r.menunggu} masih menunggu` : "Sinkron selesai"); aturCabang(); cekSync(); }, e.target);
   $("#cbPutus").onclick = () => konfirmasi("Putuskan dari server pusat?", st.menunggu ? `Masih ada ${st.menunggu} transaksi yang belum terkirim. Bila diputuskan sekarang, transaksi itu TIDAK akan dikirim.` : "Perangkat kembali bekerja sendiri. Data yang sudah terkirim tetap ada di server.", "Putuskan", async () => {
@@ -1218,7 +1221,7 @@ function aturMode(){
     ${info.mode === "online" ? `<p class="small muted" style="margin:0">Data offline di HP ini tetap tersimpan dan bisa dibuka lagi kapan saja.</p>
       <button class="btn" id="mOff" type="button">Kembali ke mode offline</button>`
     : `<p class="small muted" style="margin:0">Untuk pindah ke server online: (1) simpan cadangan database di atas, (2) buka website server di browser, masuk sebagai admin, lalu Pengaturan → Pulihkan dari cadangan, (3) isi alamat server di bawah.</p>
-      <label class="f">Alamat server<input type="url" id="mUrl" value="${esc(info.server || "")}" placeholder="https://kasir.richgallery.id"></label>
+      <label class="f">Alamat server<input type="url" id="mUrl" value="${esc(info.server || SERVER_TOKO)}" placeholder="${esc(SERVER_TOKO)}"></label>
       <button class="btn pri" id="mOn" type="button">Pakai server online</button>`}`;
   const cek = $("#mCek"); if (cek) cek.onclick = () => { toast("Memeriksa pembaruan…"); NATIVE.periksaPembaruan(); };
   const off = $("#mOff"); if (off) off.onclick = () => NATIVE.setMode("offline", "");

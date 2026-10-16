@@ -11,7 +11,7 @@ import path from "node:path";
 import { pecah } from "../public/lokal/driver.js";
 
 const dir = mkdtempSync(path.join(tmpdir(), "rg-cf-"));
-const PORT_CF = 7000 + Math.floor(Math.random() * 900), PORT_I = PORT_CF + 1000;
+const PORT_CF = 9000 + Math.floor(Math.random() * 400), PORT_I = PORT_CF + 500; // terpisah dari port tes lain
 let server, imin;
 
 /* ---- tiruan ctx.storage Durable Object (API sinkron seperti aslinya) ---- */
