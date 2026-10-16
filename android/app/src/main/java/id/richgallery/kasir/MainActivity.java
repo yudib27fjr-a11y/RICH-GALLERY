@@ -21,6 +21,8 @@ import android.webkit.ConsoleMessage;
 import android.webkit.CookieManager;
 import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
+import android.webkit.GeolocationPermissions;
+import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -73,6 +75,8 @@ public class MainActivity extends Activity {
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
+        s.setGeolocationEnabled(true); // absen: cek lokasi toko
+        s.setMediaPlaybackRequiresUserGesture(false); // pratinjau kamera selfie absen
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(false);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
@@ -293,6 +297,18 @@ public class MainActivity extends Activity {
             return true;
         }
 
+        /** Kamera untuk foto selfie absen: hanya untuk halaman aplikasi sendiri. */
+        @Override
+        public void onPermissionRequest(final PermissionRequest r) {
+            runOnUiThread(() -> mintaKamera(r));
+        }
+
+        /** Lokasi untuk memastikan absen dilakukan di toko. */
+        @Override
+        public void onGeolocationPermissionsShowPrompt(String asal, GeolocationPermissions.Callback cb) {
+            runOnUiThread(() -> mintaLokasi(asal, cb));
+        }
+
         @Override
         public boolean onConsoleMessage(ConsoleMessage m) {
             Log.d("RichGallery", m.message() + " (" + m.sourceId() + ":" + m.lineNumber() + ")");
@@ -310,9 +326,56 @@ public class MainActivity extends Activity {
         }
     }
 
+    /* ---------- Izin kamera & lokasi untuk absen (hanya halaman aplikasi sendiri / server toko) ---------- */
+    static final int KODE_KAMERA = 71, KODE_LOKASI = 72;
+    private PermissionRequest kameraTunda;
+    private String lokasiAsal;
+    private GeolocationPermissions.Callback lokasiCb;
+
+    private boolean asalSendiri(String asal) {
+        try {
+            String host = Uri.parse(asal).getHost();
+            if (host == null) return false;
+            return host.equals(HOST_LOKAL) || (online() && host.equalsIgnoreCase(Uri.parse(server()).getHost()));
+        } catch (Exception e) { return false; }
+    }
+    private boolean punyaIzin(String izin) {
+        return checkSelfPermission(izin) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+    }
+
+    void mintaKamera(PermissionRequest r) {
+        boolean video = false;
+        for (String x : r.getResources()) if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(x)) video = true;
+        if (!video || !asalSendiri(r.getOrigin().toString())) { r.deny(); return; }
+        if (punyaIzin(android.Manifest.permission.CAMERA)) { r.grant(new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE}); return; }
+        if (kameraTunda != null) kameraTunda.deny();
+        kameraTunda = r;
+        requestPermissions(new String[]{android.Manifest.permission.CAMERA}, KODE_KAMERA);
+    }
+
+    void mintaLokasi(String asal, GeolocationPermissions.Callback cb) {
+        if (!asalSendiri(asal)) { cb.invoke(asal, false, false); return; }
+        if (punyaIzin(android.Manifest.permission.ACCESS_FINE_LOCATION) || punyaIzin(android.Manifest.permission.ACCESS_COARSE_LOCATION)) { cb.invoke(asal, true, false); return; }
+        if (lokasiCb != null) lokasiCb.invoke(lokasiAsal, false, false);
+        lokasiAsal = asal; lokasiCb = cb;
+        requestPermissions(new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION}, KODE_LOKASI);
+    }
+
     @Override
     public void onRequestPermissionsResult(int req, String[] izin, int[] hasil) {
         super.onRequestPermissionsResult(req, izin, hasil);
+        boolean ok = false;
+        for (int h : hasil) if (h == android.content.pm.PackageManager.PERMISSION_GRANTED) ok = true;
+        if (req == KODE_KAMERA && kameraTunda != null) {
+            if (ok) kameraTunda.grant(new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE}); else kameraTunda.deny();
+            kameraTunda = null;
+            if (!ok) toast("Izin kamera ditolak. Foto selfie absen butuh kamera.");
+        }
+        if (req == KODE_LOKASI && lokasiCb != null) {
+            lokasiCb.invoke(lokasiAsal, ok, false);
+            lokasiCb = null;
+            if (!ok) toast("Izin lokasi ditolak. Absen butuh lokasi untuk memastikan di toko.");
+        }
         if (req == PrinterLangsung.KODE_IZIN && printer != null)
             printer.hasilIzin(hasil.length > 0 && hasil[0] == android.content.pm.PackageManager.PERMISSION_GRANTED);
     }

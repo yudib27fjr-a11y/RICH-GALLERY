@@ -243,6 +243,37 @@ CREATE INDEX sales_pesanan ON sales(ambil_tgl) WHERE ambil_tgl IS NOT NULL;`,
 
 /* 5: isi kartu ucapan per transaksi (dicetak / disalin ke Canva). */
 `ALTER TABLE sales ADD COLUMN kartu TEXT;`,
+
+/* 6: absen karyawan dengan PIN + foto selfie dari perangkat kasir (iMin) di lokasi toko. */
+`CREATE TABLE absen_baru(
+  id INTEGER PRIMARY KEY,
+  tgl TEXT NOT NULL,
+  jam TEXT NOT NULL,
+  pin TEXT NOT NULL DEFAULT '',
+  user_id INTEGER,
+  sumber TEXT NOT NULL DEFAULT 'mesin' CHECK (sumber IN ('mesin','manual','pin')),
+  mesin TEXT NOT NULL DEFAULT '',
+  verify TEXT,
+  status_scan TEXT,
+  ket TEXT NOT NULL DEFAULT '',
+  oleh TEXT NOT NULL DEFAULT '',
+  dihapus TEXT,
+  dibuat TEXT NOT NULL DEFAULT (datetime('now')),
+  jenis TEXT,
+  foto TEXT,
+  lat REAL,
+  lng REAL,
+  jarak REAL,
+  uid TEXT
+);
+INSERT INTO absen_baru(id, tgl, jam, pin, user_id, sumber, mesin, verify, status_scan, ket, oleh, dihapus, dibuat)
+  SELECT id, tgl, jam, pin, user_id, sumber, mesin, verify, status_scan, ket, oleh, dihapus, dibuat FROM absen;
+DROP TABLE absen;
+ALTER TABLE absen_baru RENAME TO absen;
+CREATE INDEX absen_tgl ON absen(tgl);
+CREATE UNIQUE INDEX absen_scan ON absen(mesin, pin, tgl, jam) WHERE sumber = 'mesin';
+CREATE UNIQUE INDEX absen_uid ON absen(uid) WHERE uid IS NOT NULL;
+ALTER TABLE perangkat ADD COLUMN absen INTEGER NOT NULL DEFAULT 0;`,
 ];
 
 export const DEFAULT_SETTINGS = {
@@ -262,6 +293,7 @@ export const DEFAULT_SETTINGS = {
   cabang_token: "",
   cabang_kode: "",
   cabang_nama: "",
+  cabang_absen: false, // perangkat ini diizinkan admin untuk absen karyawan
   impor_oleh: "",
   // Pesan WhatsApp ke pelanggan setelah transaksi
   wa_otomatis: false,
@@ -277,4 +309,9 @@ export const DEFAULT_SETTINGS = {
   absen_jam_masuk: "08:00",
   absen_jam_pulang: "17:00",
   absen_terakhir: "",
+  // Absen PIN + selfie di perangkat kasir
+  absen_pin_aktif: false,
+  absen_lat: "",
+  absen_lng: "",
+  absen_radius: 100,
 };

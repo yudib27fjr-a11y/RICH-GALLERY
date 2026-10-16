@@ -98,6 +98,7 @@ export async function sinkronCabang({ paksa = false } = {}){
     // Ambil data terbaru hanya bila tidak ada yang menunggu, supaya stok lokal tidak tertimpa sebelum transaksinya sampai.
     if (!one("SELECT COUNT(*) n FROM cabang_kirim WHERE terkirim IS NULL").n) {
       const snap = await panggil(s.cabang_url, "/api/cabang/tarik", { token: s.cabang_token, versi: paksa ? "" : versiServer });
+      if (snap.perangkat_absen !== undefined && !!snap.perangkat_absen !== !!s.cabang_absen) setSetting("cabang_absen", !!snap.perangkat_absen); // izin absen dari admin server
       if (snap.perangkat && snap.perangkat !== s.cabang_nama) setSetting("cabang_nama", String(snap.perangkat).slice(0, 40)); // nama diganti di server
       if (!snap.tetap && terapkanSnapshot(snap)) { berubah = true; versiServer = snap.versi || ""; }
     }
@@ -120,7 +121,7 @@ const KOLOM = {
   products: ["nama", "kategori", "harga", "hpp", "stok", "stok_min", "barcode", "insentif", "aktif"],
   materials: ["nama", "kategori", "harga", "satuan", "stok", "stok_min", "barcode"],
 };
-const SETELAN_TOKO = ["nama_toko", "alamat", "telp", "footer", "prefix", "hpp_persen", "insentif", "periode_mulai", "absen_aktif", "absen_jam_masuk", "absen_jam_pulang", "wa_otomatis", "wa_template", "canva_url", "canva_email", "wa_nomor"];
+const SETELAN_TOKO = ["nama_toko", "alamat", "telp", "footer", "prefix", "hpp_persen", "insentif", "periode_mulai", "absen_aktif", "absen_jam_masuk", "absen_jam_pulang", "wa_otomatis", "wa_template", "canva_url", "canva_email", "wa_nomor", "absen_pin_aktif", "absen_lat", "absen_lng", "absen_radius"];
 
 /** Samakan katalog, stok, akun, dan pengaturan toko dengan server pusat. */
 export function terapkanSnapshot(snap){
@@ -290,7 +291,7 @@ export function putusCabang({ paksa } = {}){
   const n = one("SELECT COUNT(*) n FROM cabang_kirim WHERE terkirim IS NULL").n;
   if (n && !paksa) throw new HttpError(409, `Masih ada ${n} transaksi yang belum terkirim ke server pusat. Sinkronkan dulu, atau putuskan paksa (transaksi itu tidak akan terkirim).`);
   tx(() => {
-    for (const k of ["cabang_url", "cabang_token", "cabang_kode", "cabang_nama", "cabang_galat"]) setSetting(k, "");
+    for (const k of ["cabang_url", "cabang_token", "cabang_kode", "cabang_nama", "cabang_galat", "cabang_absen"]) setSetting(k, "");
     if (paksa) run("UPDATE cabang_kirim SET terkirim = datetime('now'), hasil = 'dibatalkan' WHERE terkirim IS NULL");
   });
   return statusCabang();

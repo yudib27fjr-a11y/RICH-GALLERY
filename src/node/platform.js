@@ -29,6 +29,7 @@ export function pasangPlatformNode(){
   pasangPlatform({
     zona: config.tz,
     sesiHari: config.sessionDays,
+    perangkat: process.env.RG_UJI_PERANGKAT === "1", // hanya untuk tes: server Node berperan sebagai perangkat kasir
     hashPassword, cekPassword,
     sha256: t => createHash("sha256").update(t).digest("hex"),
     token: () => randomBytes(32).toString("base64url"),

@@ -20,6 +20,7 @@ export function pasangPlatformLokal(){
   pasangPlatform({
     zona: (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Jakarta"; } catch { return "Asia/Jakarta"; } })(),
     sesiHari: 30,
+    perangkat: true, // mesin lokal di aplikasi Android (perangkat kasir), bukan server
     hashPassword: pw => window.RGNative.hashPassword(pw),
     cekPassword: (pw, h) => !!window.RGNative.cekPassword(pw, h),
     sha256: t => window.RGNative.sha256(t),

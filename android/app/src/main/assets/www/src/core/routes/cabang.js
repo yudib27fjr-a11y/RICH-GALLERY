@@ -8,7 +8,7 @@ import { platform } from "../platform.js";
 import { HttpError, bad, notFound, teks, denganWaktu, tanggal } from "../util.js";
 import { cekPassword, cekBatasLogin, catatGagal, resetGagal } from "../auth.js";
 import { muatPenjualan, hapusPenjualan } from "./penjualan.js";
-import { rekapAbsen } from "./absen.js";
+import { rekapAbsen, terimaAbsen, fotoAbsen, cekLokasi } from "./absen.js";
 import { statusCabang, sinkronCabang, sambungCabang, putusCabang, gantiNamaPerangkat } from "../cabang-perangkat.js";
 
 /* ================= di perangkat ================= */
@@ -157,6 +157,7 @@ function terapkan(p, d, alat){
       if (s.batal_at) return { ok: true };
       return panggil("POST", `/api/penjualan/${s.id}/diambil`, { batal: !!x.batal }, user, w);
     }
+    case "absen": return terimaAbsen(x, alat);
     case "hapus_jual": {
       const nos = Array.isArray(x.nos) ? x.nos.slice(0, 100000) : [];
       for (const no of nos) {
@@ -254,9 +255,9 @@ function keuanganTerbaru(sejak){
 route("POST", "/api/cabang/tarik", false, ({ body }) => {
   const alat = perangkatDariToken(body.token);
   const versi = versiData() || "awal";
-  if (body.versi && body.versi === versi) return { tetap: true, versi, perangkat: alat.nama };
+  if (body.versi && body.versi === versi) return { tetap: true, versi, perangkat: alat.nama, perangkat_absen: !!alat.absen };
   const sejak = one("SELECT date('now', '+7 hours', '-40 days') d").d;
-  const s = Object.fromEntries(all("SELECT kunci, nilai FROM settings WHERE kunci IN ('nama_toko','alamat','telp','footer','prefix','hpp_persen','insentif','periode_mulai','absen_aktif','absen_jam_masuk','absen_jam_pulang','wa_otomatis','wa_template','canva_url','canva_email','wa_nomor')").map(r => [r.kunci, JSON.parse(r.nilai)]));
+  const s = Object.fromEntries(all("SELECT kunci, nilai FROM settings WHERE kunci IN ('nama_toko','alamat','telp','footer','prefix','hpp_persen','insentif','periode_mulai','absen_aktif','absen_jam_masuk','absen_jam_pulang','wa_otomatis','wa_template','canva_url','canva_email','wa_nomor','absen_pin_aktif','absen_lat','absen_lng','absen_radius')").map(r => [r.kunci, JSON.parse(r.nilai)]));
   return {
     produk: all("SELECT kode, nama, kategori, harga, hpp, stok, stok_min, barcode, insentif, aktif FROM products WHERE dihapus IS NULL ORDER BY id"),
     bahan: all("SELECT kode, nama, kategori, harga, satuan, stok, stok_min, barcode FROM materials WHERE dihapus IS NULL ORDER BY id"),
@@ -264,8 +265,18 @@ route("POST", "/api/cabang/tarik", false, ({ body }) => {
     toko: s,
     penjualan: penjualanTerbaru(sejak),
     sejak, ...keuanganTerbaru(sejak),
-    versi, perangkat: alat.nama,
+    versi, perangkat: alat.nama, perangkat_absen: !!alat.absen,
   };
+});
+
+/* Foto selfie absen & lokasi toko, untuk admin di perangkat cabang. */
+route("POST", "/api/cabang/absen-foto", false, ({ body }) => { perangkatDariToken(body.token); return fotoAbsen(body.id); });
+route("POST", "/api/cabang/absen-lokasi", false, ({ body }) => {
+  perangkatDariToken(body.token);
+  const lat = Number(body.lat), lng = Number(body.lng);
+  if (!(isFinite(lat) && isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180)) throw bad("Lokasi tidak valid");
+  setSetting("absen_lat", String(lat)); setSetting("absen_lng", String(lng));
+  return { ok: true };
 });
 
 /* Rekap absensi untuk perangkat cabang (data mesin absen ada di server pusat). */
@@ -276,7 +287,7 @@ route("POST", "/api/cabang/absen", false, ({ body }) => {
 });
 
 route("GET", "/api/cabang/perangkat", "admin", () =>
-  all(`SELECT p.id, p.kode, p.nama, p.dibuat, p.terakhir, p.dicabut,
+  all(`SELECT p.id, p.kode, p.nama, p.dibuat, p.terakhir, p.dicabut, p.absen,
     (SELECT COUNT(*) FROM cabang_terima t WHERE t.perangkat_id = p.id AND t.status = 'ok') diterima,
     (SELECT COUNT(*) FROM cabang_terima t WHERE t.perangkat_id = p.id AND t.status = 'ditolak') ditolak
     FROM perangkat p ORDER BY p.dicabut IS NOT NULL, p.id`));
@@ -284,7 +295,8 @@ route("GET", "/api/cabang/perangkat", "admin", () =>
 route("PUT", "/api/cabang/perangkat/:id", "admin", ({ params, body }) => {
   const d = one("SELECT id FROM perangkat WHERE id = ? AND dicabut IS NULL", [+params.id]);
   if (!d) throw notFound("Perangkat tidak ditemukan");
-  run("UPDATE perangkat SET nama = ? WHERE id = ?", [teks(body.nama, { wajib: true, max: 40, nama: "Nama perangkat" }), d.id]);
+  if (body.nama != null) run("UPDATE perangkat SET nama = ? WHERE id = ?", [teks(body.nama, { wajib: true, max: 40, nama: "Nama perangkat" }), d.id]);
+  if (body.absen != null) run("UPDATE perangkat SET absen = ? WHERE id = ?", [body.absen ? 1 : 0, d.id]);
   return { ok: true };
 });
 

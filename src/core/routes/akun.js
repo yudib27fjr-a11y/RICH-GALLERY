@@ -54,7 +54,7 @@ route("GET", "/api/bootstrap", "semua", ({ user }) => {
   const produkKolom = `id, kode, nama, kategori, harga, ${admin ? "hpp," : ""} stok, stok_min, barcode, insentif, aktif`;
   return {
     me: user, hariIni: hariIni(),
-    toko: { nama_toko: s.nama_toko, alamat: s.alamat, telp: s.telp, footer: s.footer, prefix: s.prefix, hpp_persen: s.hpp_persen, insentif: s.insentif, periode_mulai: s.periode_mulai, absen_aktif: !!s.absen_aktif, absen_jam_masuk: s.absen_jam_masuk, wa_otomatis: !!s.wa_otomatis, wa_template: s.wa_template, canva_url: s.canva_url, canva_email: s.canva_email, wa_nomor: s.wa_nomor },
+    toko: { nama_toko: s.nama_toko, alamat: s.alamat, telp: s.telp, footer: s.footer, prefix: s.prefix, hpp_persen: s.hpp_persen, insentif: s.insentif, periode_mulai: s.periode_mulai, absen_aktif: !!(s.absen_aktif || s.absen_pin_aktif), absen_pin_aktif: !!s.absen_pin_aktif, absen_lat: s.absen_lat, absen_lng: s.absen_lng, absen_radius: s.absen_radius, absen_jam_masuk: s.absen_jam_masuk, wa_otomatis: !!s.wa_otomatis, wa_template: s.wa_template, canva_url: s.canva_url, canva_email: s.canva_email, wa_nomor: s.wa_nomor },
     cabang: cabangAktif(),
     kategori: KATEGORI, katBahan: KAT_BAHAN, katPengeluaran: KAT_PENGELUARAN, metode: METODE,
     produk: all(`SELECT ${produkKolom} FROM products WHERE dihapus IS NULL ORDER BY kode`),

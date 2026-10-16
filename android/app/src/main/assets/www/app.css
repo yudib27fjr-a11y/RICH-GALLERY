@@ -219,3 +219,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 .pesanan-cek{gap:8px;align-items:center;flex-wrap:wrap}
 .pesanan-isi{border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--surface-2)}
 #cCara{display:flex}#cCara button{flex:1}
+.absen-kamera{position:relative;background:#000;border-radius:12px;overflow:hidden;min-height:180px;display:flex;align-items:center;justify-content:center}
+.absen-kamera video,.absen-kamera img{width:100%;display:block;transform:scaleX(-1)}
+.absen-kamera img{transform:none}
+.absen-kamera #akKet{position:absolute;left:8px;right:8px;bottom:8px;color:#fff;text-align:center;text-shadow:0 1px 3px #000}

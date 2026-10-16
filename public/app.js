@@ -365,7 +365,12 @@ function tampilLogin(pesan = ""){
     <label class="f">Password / PIN<input type="password" id="lPw" name="password" autocomplete="current-password" required></label>
     <div class="err" id="lErr">${esc(pesan)}</div>
     <button class="btn pri big" type="submit">Masuk</button>
-    <p class="small muted" style="margin:0">Lupa PIN? Minta admin menggantinya di Pengaturan → Pengguna.</p></form></div>`;
+    <p class="small muted" style="margin:0">Lupa PIN? Minta admin menggantinya di Pengaturan → Pengguna.</p>
+    <div id="lAbsen"></div></form></div>`;
+  // Perangkat kasir: karyawan bisa absen tanpa masuk
+  if (LOKAL) cekKiosk().then(K => { const d = $("#lAbsen"); if (!d || !K || !K.aktif) return;
+    d.innerHTML = K.boleh ? `<button class="btn big" id="lAbsenBtn" type="button" style="width:100%">📷 Absen karyawan</button>` : `<p class="small muted" style="margin:0">Absen: ${esc(K.alasan)}</p>`;
+    const b = $("#lAbsenBtn"); if (b) b.onclick = bukaAbsen; });
   $("#fLogin").onsubmit = async e => {
     e.preventDefault(); const btn = tombolKirim(e); btn.disabled = true; $("#lErr").textContent = ""; const label = btn.textContent; btn.textContent = "Memeriksa…";
     try { await api("POST", "/api/login", { nama: $("#lNama").value, password: $("#lPw").value }); await mulai(); }
@@ -413,10 +418,12 @@ function shell(){
       <div class="brand"><img src="/monogram.png" alt="" width="30" height="30"><h1>${esc(toTitle(B.toko.nama_toko))}</h1><small>POS</small></div>
       <span class="sp"></span>
       ${isAdmin() ? `<span class="sync-dot" id="syncDot" title="Status sinkron Google Sheet"></span>` : ""}
+      ${LOKAL && kioskInfo && kioskInfo.boleh ? `<button class="btn sm" id="tbAbsen" type="button">📷 Absen</button>` : ""}
       <span class="userchip"><b>${esc(B.me.nama)}</b><span class="pill mut">${isAdmin() ? "ADMIN" : "KARYAWAN"}</span><button class="btn ghost sm" id="keluar" type="button">Keluar</button></span>
     </header>
     <nav class="tabs" id="tabs"></nav>
     <main id="main"></main></div>`;
+  const ab = $("#tbAbsen"); if (ab) ab.onclick = bukaAbsen;
   $("#keluar").onclick = async () => { await api("POST", "/api/logout").catch(() => {}); resetCart(); tampilLogin(); };
   if (isAdmin()) { cekSync(); clearInterval(window.__rgCekSync); window.__rgCekSync = setInterval(cekSync, 30_000); }
 }
@@ -956,7 +963,7 @@ async function vAbsen(){
       ${LOKAL && B.me ? "" : `<button class="btn sm" id="aManual" type="button">+ Absen manual</button>`}<button class="btn sm" id="aCsv" type="button">Unduh CSV</button></div>
     ${R.harian.length ? `<div class="list">${R.harian.map(h => `<div class="li click" data-k="${h.tgl}|${h.user_id}">
       <div class="main"><div class="t">${esc(h.nama)}${satuHari ? "" : ` <span class="small muted">${tglPendek(h.tgl)}</span>`}</div>
-        <div class="small muted">${h.scan.length} scan${h.scan.some(x => x.sumber === "manual") ? " · ada manual" : ""}</div></div>
+        <div class="small muted">${h.scan.length} scan${h.scan.some(x => x.sumber === "pin") ? " · 📷 selfie" : ""}${h.scan.some(x => x.sumber === "manual") ? " · ada manual" : ""}</div></div>
       <div style="text-align:right"><div class="num" style="font-weight:700">${h.masuk} – ${h.pulang || "…"}</div>
         ${h.terlambat ? `<span class="pill warn">terlambat</span>` : `<span class="pill ok">tepat</span>`}${h.pulangCepat ? ` <span class="pill mut">pulang cepat</span>` : ""}</div></div>`).join("")}</div>`
       : `<div class="list"><div class="empty">Belum ada scan pada ${satuHari ? "tanggal" : "periode"} ini.</div></div>`}`;
@@ -966,9 +973,13 @@ async function vAbsen(){
   $$("#aIsi .li.click").forEach(el => el.onclick = () => {
     const h = R.harian.find(x => `${x.tgl}|${x.user_id}` === el.dataset.k); if (!h) return;
     modal(`<h3>${esc(h.nama)} · ${esc(tglID(h.tgl))}</h3>
-      <div class="list">${h.scan.map(x => `<div class="li"><div class="main"><div class="t num">${x.jam}</div><div class="small muted">${x.sumber === "manual" ? "Manual oleh " + esc(x.oleh) + (x.ket ? " · " + esc(x.ket) : "") : "Mesin sidik jari"}</div></div>
-        ${LOKAL ? "" : `<button class="btn sm danger" data-hapus="${x.id}" type="button">Hapus</button>`}</div>`).join("")}</div>
+      <div class="list">${h.scan.map(x => `<div class="li"><div class="main"><div class="t num">${x.jam}${x.jenis ? ` <span class="pill ${x.jenis === "masuk" ? "ok" : "mut"}">${x.jenis}</span>` : ""}</div><div class="small muted">${x.sumber === "manual" ? "Manual oleh " + esc(x.oleh) + (x.ket ? " · " + esc(x.ket) : "") : x.sumber === "pin" ? `PIN + selfie di ${esc(x.perangkat || "perangkat kasir")}${x.jarak != null ? ` · ±${Math.round(x.jarak)} m dari toko` : ""}` : "Mesin sidik jari"}</div></div>
+        ${x.foto ? `<button class="btn sm" data-foto="${x.id}" type="button">📷 Foto</button>` : ""}${LOKAL ? "" : `<button class="btn sm danger" data-hapus="${x.id}" type="button">Hapus</button>`}</div>`).join("")}</div>
       <div class="actions"><button class="btn" data-close>Tutup</button></div>`, m => {
+      m.querySelectorAll("[data-foto]").forEach(b => b.onclick = () => coba(async () => {
+        const f = await api("GET", `/api/absen/${b.dataset.foto}/foto`);
+        modal(`<h3>Foto absen ${esc(h.nama)}</h3><img src="${f.foto}" alt="Foto selfie absen" style="width:100%;border-radius:10px"><div class="actions"><button class="btn" data-close>Tutup</button></div>`);
+      }, b));
       m.querySelectorAll("[data-hapus]").forEach(b => b.onclick = () => konfirmasi("Hapus scan ini?", "Scan dihapus dari rekap absensi.", "Hapus", () => coba(async () => { await api("DELETE", `/api/absen/${b.dataset.hapus}`); toast("Scan dihapus"); vAbsen(); })));
     });
   });
@@ -989,33 +1000,64 @@ function absenManual(){
 async function aturAbsen(){
   const el = $("#aAbsen"); if (!el) return;
   if (LOKAL && cabangAktifDiSini()) {
-    el.innerHTML = `<h3 style="font-size:17px">Absensi sidik jari</h3>
-      <p class="small muted" style="margin:0">${B.toko.absen_aktif ? "Aktif. Mesin absen mengirim data ke server pusat; rekapnya bisa dilihat di menu <b>Absensi</b> (butuh internet)." : "Belum aktif."} Pengaturan absensi dan PIN mesin diatur di server pusat (buka server lewat browser → Pengaturan).</p>`;
+    // Perangkat kasir: status absen di perangkat ini & tombol ambil lokasi toko
+    const K = await api("GET", "/api/absen/kiosk").catch(() => null); if (!$("#aAbsen")) return;
+    el.innerHTML = `<h3 style="font-size:17px">Absensi</h3>
+      <p class="small" style="margin:0">Absen PIN + selfie di perangkat ini: ${K && K.boleh ? `<b style="color:var(--ok)">siap dipakai</b> (tombol <b>📷 Absen</b> di atas & di layar masuk)` : `<b>belum bisa</b> — ${esc(K ? K.alasan : "status tidak terbaca")}`}.</p>
+      <p class="small muted" style="margin:0">Aktifkan absen, atur jam kerja, dan izinkan perangkat ini dari server (browser) → Pengaturan. Lokasi toko bisa diambil dari perangkat ini saat berada di toko:</p>
+      <button class="btn" id="abLokasiIni" type="button">📍 Pakai lokasi perangkat ini sebagai lokasi toko</button>`;
+    $("#abLokasiIni").onclick = e => coba(async () => {
+      toast("Membaca lokasi…");
+      const p = await ambilLokasi();
+      if (p.akurasi > 100) toast(`Akurasi lokasi ±${Math.round(p.akurasi)} m. Sebaiknya coba lagi di dekat pintu/jendela.`);
+      await api("POST", "/api/absen/lokasi-toko", { lat: p.lat, lng: p.lng });
+      await api("POST", "/api/cabang/sinkron").catch(() => {});
+      toast(`Lokasi toko disimpan (±${Math.round(p.akurasi)} m)`); aturAbsen();
+    }, e.target);
     return;
   }
   const A = await coba(() => api("GET", "/api/absen/pengaturan")); if (!A || !$("#aAbsen")) return;
   const alamatPenuh = A.alamat ? location.origin + A.alamat : "";
-  el.innerHTML = `<h3 style="font-size:17px">Absensi sidik jari</h3>
+  const koordinat = A.lat && A.lng ? `${A.lat}, ${A.lng}` : "";
+  el.innerHTML = `<h3 style="font-size:17px">Absensi karyawan</h3>
+    <div class="row"><label class="f grow">Jam masuk<input type="time" id="abMasuk" value="${esc(A.jam_masuk)}"></label><label class="f grow">Jam pulang<input type="time" id="abPulang" value="${esc(A.jam_pulang)}"></label></div>
+
+    <hr class="sep"><h4 style="margin:4px 0 0">📷 Absen PIN + foto selfie di perangkat kasir</h4>
+    <p class="small muted" style="margin:0">Karyawan absen di iMin kasir: pilih nama, ketik PIN, ambil foto selfie. Hanya bisa dari perangkat yang diizinkan, dan hanya bila perangkat berada di lokasi toko.</p>
+    <label class="row"><input type="checkbox" id="abPinAktif" ${A.pin_aktif ? "checked" : ""}> <b>Aktifkan absen PIN + selfie</b></label>
+    <label class="f">Koordinat lokasi toko (lintang, bujur)<input type="text" id="abKoord" value="${esc(koordinat)}" placeholder="-6.3274, 108.3247" inputmode="decimal"></label>
+    <p class="small muted" style="margin:0">Cara termudah: di iMin (saat di toko) buka Pengaturan → Absensi → <b>Pakai lokasi perangkat ini</b>. Atau <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(B.toko.alamat || "")}" target="_blank" rel="noopener">buka alamat toko di Google Maps</a>, tekan lama titik toko, salin angka koordinatnya, lalu tempel di sini.</p>
+    <label class="f">Radius (meter dari titik toko)<input type="number" id="abRadius" value="${A.radius}" min="20" max="2000" step="10"></label>
+    <p class="small muted" style="margin:0">Izinkan perangkat kasir mana yang boleh dipakai absen di bagian <b>Server pusat → Perangkat cabang</b> (tombol "Izinkan absen").</p>
+    <button class="btn pri" id="abSimpanUmum" type="button">Simpan pengaturan absen</button>
+
+    <hr class="sep"><h4 style="margin:4px 0 0">🖐️ Mesin sidik jari (Fingerspot)</h4>
     <p class="small muted" style="margin:0">Untuk mesin absen <b>Fingerspot Revo</b> yang tersambung WiFi ke layanan <b>developer.fingerspot.io</b>. Setiap scan dikirim otomatis ke ${LOKAL ? "aplikasi ini" : "server ini"} dan tampil di menu <b>Absensi</b>.</p>
-    <label class="row"><input type="checkbox" id="abAktif" ${A.aktif ? "checked" : ""}> <b>Aktifkan absensi sidik jari</b></label>
+    <label class="row"><input type="checkbox" id="abAktif" ${A.aktif ? "checked" : ""}> <b>Aktifkan mesin sidik jari</b></label>
     ${A.aktif ? `
-      ${LOKAL ? `<p class="note" style="margin:0">Mesin absen mengirim data lewat internet, jadi alamat penerimanya harus server online. Sambungkan perangkat ini ke server pusat, lalu aktifkan absensi di server.</p>` : `
+      ${LOKAL ? `<p class="note" style="margin:0">Mesin absen mengirim data lewat internet, jadi alamat penerimanya harus server online. Sambungkan perangkat ini ke server pusat, lalu aktifkan di server.</p>` : `
       <label class="f">Alamat webhook (tempel di developer.fingerspot.io)<input type="text" id="abUrl" value="${esc(alamatPenuh)}" readonly></label>
       <div class="row"><button class="btn sm" id="abSalin" type="button">Salin alamat</button><button class="btn sm" id="abUji" type="button">Uji alamat</button><button class="btn sm ghost" id="abBaru" type="button">Buat alamat baru</button></div>
       <p class="small ${A.terakhir ? "" : "muted"}" style="margin:0">${A.terakhir ? `Data terakhir diterima: <b>${esc(waktuLokal(A.terakhir.waktu))}</b> (${esc(A.terakhir.jenis)}${A.terakhir.baru ? ", " + A.terakhir.baru + " scan baru" : ""})` : "Belum ada data dari mesin."}</p>`}
-      <div class="row"><label class="f grow">Jam masuk<input type="time" id="abMasuk" value="${esc(A.jam_masuk)}"></label><label class="f grow">Jam pulang<input type="time" id="abPulang" value="${esc(A.jam_pulang)}"></label></div>
       <label class="f">Cloud ID mesin (opsional, untuk menolak mesin lain)<input type="text" id="abMesin" value="${esc(A.mesin)}" placeholder="Lihat di aplikasi/akun Fingerspot"></label>
       <p class="small" style="margin:0"><b>PIN mesin tiap karyawan</b> — isi dengan nomor ID karyawan saat mendaftarkan sidik jarinya di mesin.</p>
       <div class="stack" id="abPin">${A.karyawan.filter(k => k.aktif).map(k => `<div class="row" style="align-items:center"><span style="flex:1">${esc(k.nama)} <span class="small muted">${k.peran}</span></span><input type="text" inputmode="numeric" data-uid="${k.id}" value="${esc(k.pin_absen || "")}" placeholder="PIN" style="width:110px"></div>`).join("")}</div>
-      <button class="btn pri" id="abSimpan" type="button">Simpan pengaturan absensi</button>
+      <button class="btn pri" id="abSimpan" type="button">Simpan pengaturan mesin</button>
       <details><summary class="small"><b>Cara menyambungkan mesin</b></summary><ol class="small" style="margin:8px 0 0;padding-left:20px">
         <li>Pasang mesin Fingerspot Revo, sambungkan ke WiFi toko, dan daftarkan ke akun <b>Fingerspot.io</b> (ikuti buku panduan mesin).</li>
         <li>Daftarkan sidik jari tiap karyawan di mesin. Catat nomor ID (PIN) masing-masing, lalu isi di kolom PIN di atas.</li>
         <li>Masuk ke <b>developer.fingerspot.io</b>, pilih mesin, lalu isi <b>Webhook URL</b> dengan alamat di atas.</li>
         <li>Coba scan satu jari, lalu buka menu <b>Absensi</b>: scan harus muncul dalam beberapa detik.</li></ol></details>` : ""}`;
-  $("#abAktif").onchange = e => coba(async () => { await api("PUT", "/api/absen/pengaturan", { aktif: e.target.checked }); await muatUlang(); renderNav(); toast(e.target.checked ? "Absensi diaktifkan" : "Absensi dimatikan"); aturAbsen(); });
+  $("#abSimpanUmum").onclick = e => coba(async () => {
+    const k = $("#abKoord").value.trim(), m = k.match(/^\s*(-?\d+(?:\.\d+)?)\s*[,; ]\s*(-?\d+(?:\.\d+)?)\s*$/);
+    if (k && !m) throw new Error("Format koordinat: lintang, bujur — contoh -6.3274, 108.3247");
+    await api("PUT", "/api/absen/pengaturan", { pin_aktif: $("#abPinAktif").checked, jam_masuk: $("#abMasuk").value, jam_pulang: $("#abPulang").value,
+      radius: $("#abRadius").value, lat: m ? m[1] : "", lng: m ? m[2] : "" });
+    await muatUlang(); renderNav(); toast("Pengaturan absen disimpan"); aturAbsen();
+  }, e.target);
+  $("#abAktif").onchange = e => coba(async () => { await api("PUT", "/api/absen/pengaturan", { aktif: e.target.checked }); await muatUlang(); renderNav(); toast(e.target.checked ? "Mesin sidik jari diaktifkan" : "Mesin sidik jari dimatikan"); aturAbsen(); });
   if (!A.aktif) return;
-  const salin = $("#abSalin"); if (salin) salin.onclick = async () => { const i = $("#abUrl"); try { await navigator.clipboard.writeText(i.value); } catch { i.select(); try { document.execCommand("copy"); } catch {} } toast("Alamat disalin"); };
+  const salin = $("#abSalin"); if (salin) salin.onclick = () => salinTeks($("#abUrl").value, "Alamat disalin");
   const uji = $("#abUji"); if (uji) uji.onclick = e => coba(async () => {
     const r = await fetch(A.alamat, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "uji", cloud_id: A.mesin || "" }) });
     toast(r.ok ? "Alamat berfungsi: siap menerima data dari mesin" : "Alamat tidak berfungsi (HTTP " + r.status + ")"); aturAbsen();
@@ -1024,9 +1066,88 @@ async function aturAbsen(){
   $("#abSimpan").onclick = e => coba(async () => {
     await api("PUT", "/api/absen/pengaturan", { jam_masuk: $("#abMasuk").value, jam_pulang: $("#abPulang").value, mesin: $("#abMesin").value,
       pin: $$("#abPin input").map(i => ({ user_id: +i.dataset.uid, pin: i.value.trim() })) });
-    await muatUlang(); toast("Pengaturan absensi disimpan"); aturAbsen();
+    await muatUlang(); toast("Pengaturan mesin disimpan"); aturAbsen();
   }, e.target);
 }
+
+/* ================= ABSEN KARYAWAN DI PERANGKAT KASIR (PIN + selfie + lokasi) ================= */
+/** Lokasi perangkat (GPS). Mengembalikan { lat, lng, akurasi }. */
+function ambilLokasi(){
+  return new Promise((ok, gagal) => {
+    if (!navigator.geolocation) return gagal(new Error("Perangkat ini tidak bisa membaca lokasi"));
+    navigator.geolocation.getCurrentPosition(p => ok({ lat: p.coords.latitude, lng: p.coords.longitude, akurasi: p.coords.accuracy || 0 }),
+      e => gagal(new Error(e.code === 1 ? "Izin lokasi ditolak. Izinkan lokasi untuk aplikasi Rich Gallery POS." : "Lokasi tidak terbaca. Nyalakan GPS / Lokasi di pengaturan HP lalu coba lagi.")),
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 30000 });
+  });
+}
+let kioskInfo = null;
+async function cekKiosk(){ kioskInfo = LOKAL ? await api("GET", "/api/absen/kiosk").catch(() => null) : null; return kioskInfo; }
+/** Layar absen: pilih nama + PIN + foto selfie, lokasi dicek otomatis. */
+async function bukaAbsen(){
+  const K = await cekKiosk();
+  if (!K || !K.boleh) return toast(K ? K.alasan : "Absen tidak tersedia");
+  const jamSkr = new Date().getHours();
+  let jenis = jamSkr < 12 ? "masuk" : "pulang", foto = "", lokasi = null, stream = null;
+  modal(`<h3>📷 Absen karyawan</h3>
+    <div class="stack">
+      <div class="seg" id="akJ" style="display:flex"><button type="button" data-j="masuk" style="flex:1" class="${jenis === "masuk" ? "on" : ""}">Masuk</button><button type="button" data-j="pulang" style="flex:1" class="${jenis === "pulang" ? "on" : ""}">Pulang</button></div>
+      <label class="f">Nama<select id="akU"><option value="">— pilih nama —</option>${K.staf.map(s => `<option value="${s.id}">${esc(s.nama)}</option>`).join("")}</select></label>
+      <label class="f">PIN<input type="password" id="akP" inputmode="numeric" autocomplete="off"></label>
+      <div class="absen-kamera"><video id="akV" autoplay playsinline muted></video><img id="akF" alt="Foto selfie" hidden><div id="akKet" class="small muted">Menyalakan kamera…</div></div>
+      <div class="row"><button class="btn" id="akAmbil" type="button" disabled>📸 Ambil foto</button><button class="btn ghost" id="akUlang" type="button" hidden>Ulangi foto</button></div>
+      <p class="small" id="akLok" style="margin:0">📍 Membaca lokasi…</p>
+    </div>
+    <div class="actions"><button class="btn" id="akBatal" type="button">Batal</button><button class="btn pri" id="akKirim" type="button" disabled>Simpan absen</button></div>`, m => {
+    const v = $("#akV", m), img = $("#akF", m), ket = $("#akKet", m);
+    const matikan = () => { try { stream && stream.getTracks().forEach(t => t.stop()); } catch {} stream = null; };
+    const siap = () => { $("#akKirim", m).disabled = !(foto && lokasi && lokasi.ok && $("#akU", m).value && $("#akP", m).value); };
+    const pantau = setInterval(() => { if (!document.body.contains(v)) { matikan(); clearInterval(pantau); } }, 800);
+    $$("#akJ button", m).forEach(b => b.onclick = () => { jenis = b.dataset.j; $$("#akJ button", m).forEach(x => x.classList.toggle("on", x === b)); });
+    $("#akU", m).onchange = siap; $("#akP", m).oninput = siap;
+    $("#akBatal", m).onclick = () => { matikan(); closeModal(); };
+    // Kamera depan
+    (async () => {
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("Kamera tidak tersedia di aplikasi versi ini. Pasang versi terbaru (Pengaturan → Periksa pembaruan).");
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+        if (!document.body.contains(v)) return matikan();
+        v.srcObject = stream; await v.play().catch(() => {});
+        ket.textContent = "Arahkan wajah ke kamera, lalu tekan Ambil foto"; $("#akAmbil", m).disabled = false;
+      } catch (e) { ket.textContent = e.name === "NotAllowedError" ? "Izin kamera ditolak. Izinkan kamera untuk aplikasi ini." : e.name === "NotFoundError" ? "Kamera tidak ditemukan di perangkat ini." : e.message; }
+    })();
+    $("#akAmbil", m).onclick = () => {
+      const w = 360, h = Math.round(w * (v.videoHeight || 480) / (v.videoWidth || 640));
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      const g = c.getContext("2d"); g.translate(w, 0); g.scale(-1, 1); g.drawImage(v, 0, 0, w, h); // seperti cermin
+      foto = c.toDataURL("image/jpeg", 0.6);
+      img.src = foto; img.hidden = false; v.hidden = true; ket.textContent = "";
+      $("#akAmbil", m).hidden = true; $("#akUlang", m).hidden = false; siap();
+    };
+    $("#akUlang", m).onclick = () => { foto = ""; img.hidden = true; v.hidden = false; $("#akAmbil", m).hidden = false; $("#akUlang", m).hidden = true; siap(); };
+    // Lokasi
+    const bacaLokasi = async () => {
+      $("#akLok", m).textContent = "📍 Membaca lokasi…";
+      try {
+        const p = await ambilLokasi();
+        const jarak = isFinite(K.lat) && isFinite(K.lng) ? jarakM(p.lat, p.lng, K.lat, K.lng) : null;
+        const ok = jarak == null || jarak <= K.radius + Math.min(p.akurasi, 50);
+        lokasi = { ...p, ok };
+        $("#akLok", m).innerHTML = jarak == null ? `📍 Lokasi terbaca (±${Math.round(p.akurasi)} m)`
+          : ok ? `📍 Di toko — ±${Math.round(jarak)} m dari titik toko <span class="pill ok">OK</span>`
+          : `📍 <b style="color:var(--bad)">Di luar toko</b> — ±${Math.round(jarak)} m (batas ${K.radius} m). <button class="btn sm" id="akLokUlang" type="button">Cek ulang</button>`;
+        const u = $("#akLokUlang", m); if (u) u.onclick = bacaLokasi;
+      } catch (e) { lokasi = null; $("#akLok", m).innerHTML = `📍 ${esc(e.message)} <button class="btn sm" id="akLokUlang" type="button">Coba lagi</button>`; $("#akLokUlang", m).onclick = bacaLokasi; }
+      siap();
+    };
+    bacaLokasi();
+    $("#akKirim", m).onclick = e => coba(async () => {
+      const r = await api("POST", "/api/absen/pin", { user_id: +$("#akU", m).value, pin: $("#akP", m).value, jenis, foto, lat: lokasi.lat, lng: lokasi.lng, akurasi: lokasi.akurasi });
+      matikan(); closeModal();
+      modal(`<h3>✅ Absen ${r.jenis} tercatat</h3><p style="font-size:18px;margin:0"><b>${esc(r.nama)}</b> — jam <b>${esc(r.jam)}</b></p><p class="small muted">±${r.jarak} m dari titik toko</p><div class="actions"><button class="btn pri" data-close>Selesai</button></div>`);
+    }, e.target);
+  });
+}
+const jarakM = (lat1, lng1, lat2, lng2) => { const R = 6371000, r = x => x * Math.PI / 180; const a = Math.sin(r(lat2 - lat1) / 2) ** 2 + Math.cos(r(lat1)) * Math.cos(r(lat2)) * Math.sin(r(lng2 - lng1) / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(a)); };
 const cabangAktifDiSini = () => !!(B && B.cabang);
 
 /* ================= PRODUKSI & INSENTIF ================= */
@@ -1623,8 +1744,12 @@ async function aturCabang(){
       ${d.length ? d.map(x => `<div class="row" style="border:1px solid var(--line);border-radius:9px;padding:8px 10px;background:var(--surface);align-items:center">
         <div style="flex:1;min-width:0"><b>${esc(x.kode)} · ${esc(x.nama)}</b>${x.dicabut ? ` <span class="pill mut">dicabut</span>` : ""}
           <div class="small muted">Terakhir: ${x.terakhir ? waktuLokal(x.terakhir.replace(" ", "T") + "Z") : "belum pernah"} · ${x.diterima} transaksi diterima${x.ditolak ? ` · <span style="color:var(--bad)">${x.ditolak} ditolak</span>` : ""}</div></div>
-        ${x.dicabut ? "" : `<button class="btn sm" data-nama="${x.id}" type="button">Ganti nama</button><button class="btn sm danger" data-cabut="${x.id}" type="button">Cabut</button>`}</div>`).join("")
+        ${x.dicabut ? "" : `<button class="btn sm ${x.absen ? "pri" : ""}" data-absen="${x.id}" data-v="${x.absen ? 0 : 1}" type="button">${x.absen ? "✓ Boleh absen" : "Izinkan absen"}</button><button class="btn sm" data-nama="${x.id}" type="button">Ganti nama</button><button class="btn sm danger" data-cabut="${x.id}" type="button">Cabut</button>`}</div>`).join("")
         : `<div class="empty">Belum ada perangkat yang tersambung.</div>`}`;
+    el.querySelectorAll("[data-absen]").forEach(b => b.onclick = () => coba(async () => {
+      await api("PUT", `/api/cabang/perangkat/${b.dataset.absen}`, { absen: b.dataset.v === "1" });
+      toast(b.dataset.v === "1" ? "Perangkat diizinkan untuk absen karyawan" : "Izin absen dicabut"); aturCabang();
+    }, b));
     el.querySelectorAll("[data-nama]").forEach(b => b.onclick = () => {
       const x = d.find(y => y.id === +b.dataset.nama);
       modal(`<h3>Ganti nama perangkat ${esc(x.kode)}</h3>
@@ -1736,6 +1861,7 @@ async function mulai(){
     $("#ulang").onclick = mulai; return;
   }
   try { const h = location.hash.slice(1); if (SEMUA_VIEW.some(v => v[0] === h)) view = h; } catch {}
+  if (LOKAL) await cekKiosk();
   pPer = null; shell(); render();
   halamanTampil();
   setTimeout(pengingatPesanan, 800);

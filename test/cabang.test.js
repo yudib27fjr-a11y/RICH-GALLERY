@@ -12,7 +12,7 @@ const procs = [];
 
 function nyalakan(port, nama){
   const p = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", "server.js"], {
-    env: { ...process.env, PORT: String(port), DB_PATH: path.join(dir, nama + ".db"), BACKUP_DIR: path.join(dir, nama + "-bk"), SYNC_INTERVAL_SEC: "3600", COOKIE_SECURE: "false" },
+    env: { ...process.env, RG_UJI_PERANGKAT: nama === "cabang" ? "1" : "", PORT: String(port), DB_PATH: path.join(dir, nama + ".db"), BACKUP_DIR: path.join(dir, nama + "-bk"), SYNC_INTERVAL_SEC: "3600", COOKIE_SECURE: "false" },
     stdio: ["ignore", "pipe", "inherit"],
   });
   procs.push(p);
@@ -33,6 +33,8 @@ const pusat = klien(PORT_P), cabang = klien(PORT_C);
 let BP, BC;
 const prodP = kode => BP.produk.find(p => p.kode === kode);
 const segarkan = async () => { BP = (await pusat("GET", "/api/bootstrap")).data; BC = (await cabang("GET", "/api/bootstrap")).data; };
+const tamuC = klien(PORT_C);
+async function kasirPin(nama, pin){ const u = BP.staf.find(s => s.nama === nama); return pusat("PUT", `/api/users/${u.id}`, { password: pin }); }
 const sinkron = async () => { const r = await cabang("POST", "/api/cabang/sinkron"); assert.equal(r.status, 200, JSON.stringify(r.data)); return r.data; };
 
 test("siapkan pusat & cabang, sambungkan", async () => {
@@ -180,7 +182,7 @@ test("produksi, pengeluaran & insentif dari pusat masuk ke cabang; versi sama = 
   const t1 = (await pusat("POST", "/api/cabang/tarik", { token: d.token })).data;
   assert.ok(t1.versi && Array.isArray(t1.produk) && Array.isArray(t1.produksi) && t1.sejak);
   const t2 = (await pusat("POST", "/api/cabang/tarik", { token: d.token, versi: t1.versi })).data;
-  assert.deepEqual(t2, { tetap: true, versi: t1.versi, perangkat: "uji versi" });
+  assert.deepEqual(t2, { tetap: true, versi: t1.versi, perangkat: "uji versi", perangkat_absen: false });
   const v1 = (await pusat("GET", "/api/versi")).data.versi;
   assert.equal(v1, t1.versi);
 
@@ -351,6 +353,51 @@ test("pesanan: DP di cabang, pelunasan di pusat, diambil di cabang — status sa
   assert.equal((await cabang("POST", `/api/penjualan/${id2}/lunasi`, { nominal: 15000, metode: "Transfer" })).status, 200);
   await sinkron();
   assert.equal((await pusat("GET", "/api/pesanan")).data.find(x => x.no === j2.data.no).bayar, 25000);
+});
+
+test("absen PIN + selfie: hanya perangkat yang diizinkan & di lokasi toko", async () => {
+  await segarkan();
+  const hari = BC.hariIni;
+  const FOTO = "data:image/jpeg;base64," + "A".repeat(4000);
+  const DI_TOKO = { lat: -6.32740, lng: 108.32470 }, JAUH = { lat: -6.34000, lng: 108.32470 }; // ±1,4 km
+  const izaC = BC.staf.find(s => s.nama === "IZA");
+  assert.equal((await kasirPin("IZA", "1234")).status, 200, "PIN karyawan diatur di pusat");
+  // Belum aktif
+  let k = (await cabang("GET", "/api/absen/kiosk")).data;
+  assert.equal(k.boleh, false); assert.match(k.alasan, /belum diaktifkan/);
+  // Server pusat menolak absen PIN langsung (bukan perangkat kasir)
+  assert.equal((await pusat("PUT", "/api/absen/pengaturan", { pin_aktif: true, lat: DI_TOKO.lat, lng: DI_TOKO.lng, radius: 100 })).status, 200);
+  assert.equal((await pusat("POST", "/api/absen/pin", { user_id: 1, pin: "x" })).status, 403);
+  await sinkron();
+  k = (await cabang("GET", "/api/absen/kiosk")).data;
+  assert.match(k.alasan, /belum diizinkan/, "perangkat belum diizinkan admin");
+  const a = (await pusat("GET", "/api/cabang/perangkat")).data.find(x => x.kode === "A");
+  assert.equal((await pusat("PUT", `/api/cabang/perangkat/${a.id}`, { absen: true })).status, 200);
+  await sinkron();
+  k = (await cabang("GET", "/api/absen/kiosk")).data;
+  assert.equal(k.boleh, true, JSON.stringify(k)); assert.ok(k.staf.some(s => s.nama === "IZA"));
+  const absen = b => tamuC("POST", "/api/absen/pin", { user_id: izaC.id, pin: "1234", jenis: "masuk", foto: FOTO, akurasi: 15, ...DI_TOKO, ...b });
+  assert.equal((await absen({ pin: "9999" })).status, 401, "PIN salah");
+  assert.equal((await absen({ foto: "" })).status, 400, "foto wajib");
+  const jauh = await absen(JAUH);
+  assert.equal(jauh.status, 400); assert.match(jauh.data.error, /hanya bisa di toko/);
+  const ok = await absen({});
+  assert.equal(ok.status, 200, JSON.stringify(ok.data)); assert.equal(ok.data.nama, "IZA"); assert.ok(ok.data.jarak < 5);
+  const st = await sinkron();
+  assert.equal(st.ditolak, 0, JSON.stringify(st.ditolakDaftar));
+  const R = (await pusat("GET", `/api/absen?dari=${hari}&sampai=${hari}`)).data;
+  const h = R.harian.find(x => x.nama === "IZA");
+  const sc = h.scan.find(x => x.sumber === "pin");
+  assert.ok(sc && sc.foto && sc.jenis === "masuk", "absen sampai di server dengan foto");
+  assert.equal((await pusat("GET", `/api/absen/${sc.id}/foto`)).data.foto, FOTO);
+  // Admin di perangkat bisa melihat foto (diambil dari server) & mengatur lokasi toko dari perangkat
+  assert.equal((await cabang("GET", `/api/absen/${sc.id}/foto`)).data.foto, FOTO);
+  assert.equal((await cabang("POST", "/api/absen/lokasi-toko", { lat: -6.3275, lng: 108.3248 })).status, 200);
+  assert.equal((await pusat("GET", "/api/absen/pengaturan")).data.lat, "-6.3275");
+  // Izin dicabut → perangkat tidak bisa absen lagi
+  assert.equal((await pusat("PUT", `/api/cabang/perangkat/${a.id}`, { absen: false })).status, 200);
+  await sinkron();
+  assert.equal((await cabang("GET", "/api/absen/kiosk")).data.boleh, false);
 });
 
 test("server mati: transaksi menunggu, lalu terkirim saat server hidup lagi", async () => {
