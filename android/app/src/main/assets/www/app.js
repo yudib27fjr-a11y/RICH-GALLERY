@@ -454,12 +454,14 @@ function vKasir(){
   $("#main").innerHTML = `
   <div class="pos">
     <section class="catalog">
+      <div class="kasir-atas">
       <div class="row">
         <input type="search" id="posQ" placeholder="Cari nama / kode, atau scan barcode…" value="${esc(posQ)}" style="flex:1 1 220px" aria-label="Cari produk">
         <button class="btn" id="manualBtn" type="button">+ Item manual</button>
         <label class="row small muted" style="gap:6px"><input type="checkbox" id="readyOnly" ${hanyaReady ? "checked" : ""}> Stok ready saja</label>
       </div>
       <div class="chips" id="katChips">${kats.map(k => `<button type="button" class="chip ${k === posKat ? "on" : ""}" data-k="${esc(k)}">${esc(k === "SEMUA" ? "Semua" : toTitle(k))}</button>`).join("")}</div>
+      </div>
       <div class="prodgrid" id="prodGrid"></div>
     </section>
     <aside class="cart panel" id="cart"></aside>

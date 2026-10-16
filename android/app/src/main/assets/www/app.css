@@ -208,3 +208,5 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 .tarik-segar{position:fixed;left:50%;top:calc(58px + env(safe-area-inset-top,0px));z-index:70;transform:translate(-50%,-60px);opacity:0;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:8px 16px;font-weight:600;font-size:14px;box-shadow:0 4px 14px rgba(0,0,0,.15);pointer-events:none;transition:opacity .15s}
 .tarik-segar.siap{background:var(--ink);color:var(--bg)}
 .btn.danger-teks{color:var(--bad,#b3261e)}
+/* kasir: kolom cari & kategori tetap di atas saat daftar produk digulir */
+.kasir-atas{position:-webkit-sticky;position:sticky;top:-16px;z-index:6;background:var(--bg);margin-top:-16px;padding-top:16px;padding-bottom:8px;display:flex;flex-direction:column;gap:10px;box-shadow:0 8px 8px -8px rgba(0,0,0,.25)}
