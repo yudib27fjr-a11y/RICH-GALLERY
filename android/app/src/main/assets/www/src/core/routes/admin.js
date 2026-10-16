@@ -7,10 +7,10 @@ import { cabangAktif, mintaPusat } from "../cabang-perangkat.js";
 import { KATEGORI, KAT_BAHAN, KAT_PENGELUARAN, barcodeDefault, tebakKategori } from "../../../public/shared.js";
 
 /* ---- Pengaturan toko ---- */
-route("GET", "/api/pengaturan", "admin", () => { const { cabang_token, kartu_latar, ...s } = getSettings(); return { ...s, sync: statusSync() }; });
+route("GET", "/api/pengaturan", "admin", () => { const { cabang_token, kartu_latar, kartu_font, ...s } = getSettings(); return { ...s, sync: statusSync() }; });
 
 /* Gambar latar kartu ucapan (desain Canva yang diunduh). Disimpan terpisah supaya data lain tetap ringan. */
-route("GET", "/api/kartu/latar", "semua", async () => cabangAktif() ? mintaPusat("/api/cabang/kartu-latar", {}) : { latar: getSettings().kartu_latar || "" });
+route("GET", "/api/kartu/latar", "semua", async () => { if (cabangAktif()) return mintaPusat("/api/cabang/kartu-latar", {}); const s = getSettings(); return { latar: s.kartu_latar || "", font: s.kartu_font || "" }; });
 
 route("PUT", "/api/pengaturan", "admin", ({ body }) => tx(() => {
   const s = getSettings(), b = body;
@@ -32,7 +32,8 @@ route("PUT", "/api/pengaturan", "admin", ({ body }) => tx(() => {
     canva_email: b.canva_email != null ? teks(b.canva_email, { max: 120, nama: "Email Canva" }) : undefined,
     kartu_lebar: b.kartu_lebar != null ? angka(b.kartu_lebar, { min: 30, max: 300, nama: "Lebar kartu" }) : undefined,
     kartu_tinggi: b.kartu_tinggi != null ? angka(b.kartu_tinggi, { min: 30, max: 300, nama: "Tinggi kartu" }) : undefined,
-    kartu_huruf: b.kartu_huruf != null ? (["script", "serif", "sans"].includes(b.kartu_huruf) ? b.kartu_huruf : "script") : undefined,
+    kartu_huruf: b.kartu_huruf != null ? (["grown", "kustom", "script", "serif", "sans"].includes(b.kartu_huruf) ? b.kartu_huruf : "grown") : undefined,
+    kartu_font: b.kartu_font != null ? String(b.kartu_font) : undefined,
     kartu_warna: b.kartu_warna != null ? (/^#[0-9a-fA-F]{6}$/.test(b.kartu_warna) ? b.kartu_warna : "#3a2a2a") : undefined,
     kartu_area: b.kartu_area != null ? (["tengah", "atas", "bawah", "kiri", "kanan"].includes(b.kartu_area) ? b.kartu_area : "tengah") : undefined,
     kartu_latar: b.kartu_latar != null ? String(b.kartu_latar) : undefined,
@@ -44,6 +45,8 @@ route("PUT", "/api/pengaturan", "admin", ({ body }) => tx(() => {
     wa_nomor: b.wa_nomor != null ? teks(b.wa_nomor, { max: 30, nama: "Nomor WA toko" }) : undefined,
   };
   if (v.kartu_latar && (!/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(v.kartu_latar) || v.kartu_latar.length > 1_400_000)) throw bad("Gambar latar kartu tidak valid atau terlalu besar (maks ± 1 MB)");
+  if (v.kartu_font && (!/^data:[a-z\/+.-]*;base64,[A-Za-z0-9+/=]+$/.test(v.kartu_font) || v.kartu_font.length > 2_000_000)) throw bad("File font tidak valid atau terlalu besar (maks ± 1,4 MB)");
+  if (v.kartu_font !== undefined) setSetting("kartu_font_kode", v.kartu_font ? platform.sha256(v.kartu_font).slice(0, 12) : "");
   if (v.kartu_latar !== undefined) setSetting("kartu_latar_kode", v.kartu_latar ? platform.sha256(v.kartu_latar).slice(0, 12) : "");
   if (v.inv_ttd && (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(v.inv_ttd) || v.inv_ttd.length > 150_000)) throw bad("Tanda tangan tidak valid atau terlalu besar");
   if (v.wa_nomor && String(v.wa_nomor).replace(/\D/g, "").length < 9) throw bad("Nomor WA toko tidak valid");
@@ -54,7 +57,7 @@ route("PUT", "/api/pengaturan", "admin", ({ body }) => tx(() => {
   if ((v.prefix !== undefined || v.no_berikutnya !== undefined) && one("SELECT 1 x FROM sales WHERE no = ?", [prefix + String(no).padStart(9, "0")])) throw bad("Nomor invoice itu sudah pernah dipakai. Isi nomor yang lebih besar.");
   for (const [k, val] of Object.entries(v)) if (val !== undefined) setSetting(k, val);
   return { ok: true };
-}), { batas: 2_000_000 });
+}), { batas: 4_000_000 });
 
 /* ---- Sinkron Google Sheet ---- */
 route("GET", "/api/sync", "admin", () => statusSync());

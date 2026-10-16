@@ -55,7 +55,7 @@ route("GET", "/api/bootstrap", "semua", ({ user }) => {
   return {
     me: user, hariIni: hariIni(),
     toko: { nama_toko: s.nama_toko, alamat: s.alamat, telp: s.telp, footer: s.footer, prefix: s.prefix, hpp_persen: s.hpp_persen, insentif: s.insentif, periode_mulai: s.periode_mulai, absen_aktif: !!(s.absen_aktif || s.absen_pin_aktif), absen_pin_aktif: !!s.absen_pin_aktif, absen_lat: s.absen_lat, absen_lng: s.absen_lng, absen_radius: s.absen_radius, absen_jam_masuk: s.absen_jam_masuk, wa_otomatis: !!s.wa_otomatis, wa_template: s.wa_template, canva_url: s.canva_url, canva_email: s.canva_email, wa_nomor: s.wa_nomor,
-      kartu_lebar: s.kartu_lebar, kartu_tinggi: s.kartu_tinggi, kartu_huruf: s.kartu_huruf, kartu_warna: s.kartu_warna, kartu_area: s.kartu_area, kartu_latar_kode: s.kartu_latar_kode,
+      kartu_lebar: s.kartu_lebar, kartu_tinggi: s.kartu_tinggi, kartu_huruf: s.kartu_huruf, kartu_warna: s.kartu_warna, kartu_area: s.kartu_area, kartu_latar_kode: s.kartu_latar_kode, kartu_font_kode: s.kartu_font_kode,
       inv_tagline: s.inv_tagline, inv_bank: s.inv_bank, inv_ttd: s.inv_ttd, inv_ttd_nama: s.inv_ttd_nama, inv_ttd_jabatan: s.inv_ttd_jabatan },
     cabang: cabangAktif(),
     kategori: KATEGORI, katBahan: KAT_BAHAN, katPengeluaran: KAT_PENGELUARAN, metode: METODE,

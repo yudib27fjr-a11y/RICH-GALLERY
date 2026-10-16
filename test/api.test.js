@@ -224,6 +224,7 @@ test("data pelanggan dari riwayat transaksi & pesan WhatsApp", async () => {
   assert.equal(k.data.kartu, "Happy Birthday!\nDari: Rina");
   const b = (await admin("GET", "/api/bootstrap")).data;
   assert.equal(b.toko.canva_url, "https://www.canva.com/design/ABC/edit");
+  assert.equal(b.toko.kartu_huruf, "grown", "kartu memakai huruf Grown");
   assert.equal(b.toko.kartu_lebar, 148); assert.ok(b.toko.kartu_latar_kode); assert.equal(b.toko.kartu_latar, undefined);
   assert.equal(b.toko.inv_ttd_nama, "Siti Nur Khodijah"); assert.match(b.toko.inv_ttd, /^data:image\/png/);
   assert.equal(b.toko.wa_nomor, "0812-9999-1111"); assert.equal(b.toko.canva_email, "toko@gmail.com");

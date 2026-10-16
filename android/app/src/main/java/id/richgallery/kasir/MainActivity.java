@@ -234,6 +234,7 @@ public class MainActivity extends Activity {
         MIME.put("html", "text/html"); MIME.put("js", "text/javascript"); MIME.put("css", "text/css");
         MIME.put("svg", "image/svg+xml"); MIME.put("png", "image/png"); MIME.put("json", "application/json");
         MIME.put("webmanifest", "application/manifest+json"); MIME.put("ico", "image/x-icon");
+        MIME.put("ttf", "font/ttf"); MIME.put("txt", "text/plain");
     }
 
     private WebResourceResponse aset(String path) {

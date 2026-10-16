@@ -274,6 +274,9 @@ CREATE INDEX absen_tgl ON absen(tgl);
 CREATE UNIQUE INDEX absen_scan ON absen(mesin, pin, tgl, jam) WHERE sumber = 'mesin';
 CREATE UNIQUE INDEX absen_uid ON absen(uid) WHERE uid IS NOT NULL;
 ALTER TABLE perangkat ADD COLUMN absen INTEGER NOT NULL DEFAULT 0;`,
+
+/* 7: kartu ucapan memakai huruf "Grown" (permintaan toko). */
+`UPDATE settings SET nilai = '"grown"' WHERE kunci = 'kartu_huruf';`,
 ];
 
 export const DEFAULT_SETTINGS = {
@@ -303,7 +306,9 @@ export const DEFAULT_SETTINGS = {
   // Kartu ucapan: dicetak seukuran desain Canva, berisi ucapan dari pelanggan
   kartu_lebar: 100,
   kartu_tinggi: 70,
-  kartu_huruf: "script",
+  kartu_huruf: "grown",
+  kartu_font: "",
+  kartu_font_kode: "",
   kartu_warna: "#3a2a2a",
   kartu_area: "tengah",
   kartu_latar: "",

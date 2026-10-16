@@ -257,7 +257,7 @@ route("POST", "/api/cabang/tarik", false, ({ body }) => {
   const versi = versiData() || "awal";
   if (body.versi && body.versi === versi) return { tetap: true, versi, perangkat: alat.nama, perangkat_absen: !!alat.absen };
   const sejak = one("SELECT date('now', '+7 hours', '-40 days') d").d;
-  const s = Object.fromEntries(all("SELECT kunci, nilai FROM settings WHERE kunci IN ('nama_toko','alamat','telp','footer','prefix','hpp_persen','insentif','periode_mulai','absen_aktif','absen_jam_masuk','absen_jam_pulang','wa_otomatis','wa_template','canva_url','canva_email','wa_nomor','absen_pin_aktif','absen_lat','absen_lng','absen_radius','kartu_lebar','kartu_tinggi','kartu_huruf','kartu_warna','kartu_area','kartu_latar_kode','inv_tagline','inv_bank','inv_ttd','inv_ttd_nama','inv_ttd_jabatan')").map(r => [r.kunci, JSON.parse(r.nilai)]));
+  const s = Object.fromEntries(all("SELECT kunci, nilai FROM settings WHERE kunci IN ('nama_toko','alamat','telp','footer','prefix','hpp_persen','insentif','periode_mulai','absen_aktif','absen_jam_masuk','absen_jam_pulang','wa_otomatis','wa_template','canva_url','canva_email','wa_nomor','absen_pin_aktif','absen_lat','absen_lng','absen_radius','kartu_lebar','kartu_tinggi','kartu_huruf','kartu_warna','kartu_area','kartu_latar_kode','kartu_font_kode','inv_tagline','inv_bank','inv_ttd','inv_ttd_nama','inv_ttd_jabatan')").map(r => [r.kunci, JSON.parse(r.nilai)]));
   return {
     produk: all("SELECT kode, nama, kategori, harga, hpp, stok, stok_min, barcode, insentif, aktif FROM products WHERE dihapus IS NULL ORDER BY id"),
     bahan: all("SELECT kode, nama, kategori, harga, satuan, stok, stok_min, barcode FROM materials WHERE dihapus IS NULL ORDER BY id"),
@@ -279,7 +279,7 @@ route("POST", "/api/cabang/absen-lokasi", false, ({ body }) => {
   return { ok: true };
 });
 
-route("POST", "/api/cabang/kartu-latar", false, ({ body }) => { perangkatDariToken(body.token); return { latar: getSettings().kartu_latar || "" }; });
+route("POST", "/api/cabang/kartu-latar", false, ({ body }) => { perangkatDariToken(body.token); const s = getSettings(); return { latar: s.kartu_latar || "", font: s.kartu_font || "" }; });
 
 /* Rekap absensi untuk perangkat cabang (data mesin absen ada di server pusat). */
 route("POST", "/api/cabang/absen", false, ({ body }) => {

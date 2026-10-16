@@ -9,7 +9,7 @@ const HEADER_AMAN = {
   "X-Frame-Options": "DENY",
   "Referrer-Policy": "same-origin",
   "Permissions-Policy": "camera=(self), microphone=(), geolocation=(self)",
-  "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+  "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
 };
 
 function parseCookies(h = ""){
@@ -33,7 +33,7 @@ function ipDari(req){
   return req.socket.remoteAddress || "";
 }
 
-const TIPE = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".webmanifest": "application/manifest+json", ".json": "application/json" };
+const TIPE = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".webmanifest": "application/manifest+json", ".json": "application/json", ".ttf": "font/ttf", ".txt": "text/plain; charset=utf-8" };
 async function kirimStatis(req, res, url){
   let rel = decodeURIComponent(url.pathname);
   if (rel === "/" || !path.extname(rel)) rel = "/index.html";
