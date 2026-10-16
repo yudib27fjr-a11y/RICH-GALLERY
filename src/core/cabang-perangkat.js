@@ -91,6 +91,7 @@ export async function sinkronCabang({ paksa = false } = {}){
     // Ambil data terbaru hanya bila tidak ada yang menunggu, supaya stok lokal tidak tertimpa sebelum transaksinya sampai.
     if (!one("SELECT COUNT(*) n FROM cabang_kirim WHERE terkirim IS NULL").n) {
       const snap = await panggil(s.cabang_url, "/api/cabang/tarik", { token: s.cabang_token, versi: paksa ? "" : versiServer });
+      if (snap.perangkat && snap.perangkat !== s.cabang_nama) setSetting("cabang_nama", String(snap.perangkat).slice(0, 40)); // nama diganti di server
       if (!snap.tetap && terapkanSnapshot(snap)) { berubah = true; versiServer = snap.versi || ""; }
     }
     setSetting("cabang_terakhir", new Date().toISOString());

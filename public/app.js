@@ -1183,8 +1183,17 @@ async function aturCabang(){
       ${d.length ? d.map(x => `<div class="row" style="border:1px solid var(--line);border-radius:9px;padding:8px 10px;background:var(--surface);align-items:center">
         <div style="flex:1;min-width:0"><b>${esc(x.kode)} · ${esc(x.nama)}</b>${x.dicabut ? ` <span class="pill mut">dicabut</span>` : ""}
           <div class="small muted">Terakhir: ${x.terakhir ? waktuLokal(x.terakhir.replace(" ", "T") + "Z") : "belum pernah"} · ${x.diterima} transaksi diterima${x.ditolak ? ` · <span style="color:var(--bad)">${x.ditolak} ditolak</span>` : ""}</div></div>
-        ${x.dicabut ? "" : `<button class="btn sm danger" data-cabut="${x.id}" type="button">Cabut</button>`}</div>`).join("")
+        ${x.dicabut ? "" : `<button class="btn sm" data-nama="${x.id}" type="button">Ganti nama</button><button class="btn sm danger" data-cabut="${x.id}" type="button">Cabut</button>`}</div>`).join("")
         : `<div class="empty">Belum ada perangkat yang tersambung.</div>`}`;
+    el.querySelectorAll("[data-nama]").forEach(b => b.onclick = () => {
+      const x = d.find(y => y.id === +b.dataset.nama);
+      modal(`<h3>Ganti nama perangkat ${esc(x.kode)}</h3>
+        <label class="f">Nama perangkat<input type="text" id="pn" value="${esc(x.nama)}" maxlength="40" placeholder="Contoh: iMin Kasir Depan"></label>
+        <p class="small muted" style="margin:0">Nama baru otomatis tampil juga di perangkat itu saat sinkron berikutnya. Seri nota (${esc(x.kode)}) tidak berubah.</p>
+        <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="pok" type="button">Simpan</button></div>`, m => {
+        $("#pok", m).onclick = e => coba(async () => { await api("PUT", `/api/cabang/perangkat/${x.id}`, { nama: $("#pn", m).value }); closeModal(); toast("Nama perangkat diganti"); aturCabang(); }, e.target);
+      });
+    });
     el.querySelectorAll("[data-cabut]").forEach(b => b.onclick = () => konfirmasi("Cabut perangkat ini?", "Perangkat tidak bisa mengirim transaksi lagi sampai disambungkan ulang. Data yang sudah diterima tetap ada.", "Cabut", async () => { await api("DELETE", `/api/cabang/perangkat/${b.dataset.cabut}`); toast("Perangkat dicabut"); aturCabang(); }));
     return;
   }

@@ -180,7 +180,7 @@ test("produksi, pengeluaran & insentif dari pusat masuk ke cabang; versi sama = 
   const t1 = (await pusat("POST", "/api/cabang/tarik", { token: d.token })).data;
   assert.ok(t1.versi && Array.isArray(t1.produk) && Array.isArray(t1.produksi) && t1.sejak);
   const t2 = (await pusat("POST", "/api/cabang/tarik", { token: d.token, versi: t1.versi })).data;
-  assert.deepEqual(t2, { tetap: true, versi: t1.versi });
+  assert.deepEqual(t2, { tetap: true, versi: t1.versi, perangkat: "uji versi" });
   const v1 = (await pusat("GET", "/api/versi")).data.versi;
   assert.equal(v1, t1.versi);
 
@@ -266,6 +266,14 @@ test("hapus transaksi (salah input / uji coba) ikut terhapus di kedua sisi, stok
   assert.equal((await cabang("GET", `/api/penjualan?dari=${hari}&sampai=${hari}`)).data.length, 0, "cabang bersih");
   await segarkan();
   for (const x of BP.produk) assert.equal(BC.produk.find(y => y.kode === x.kode).stok, x.stok, "stok sama " + x.kode);
+});
+
+test("ganti nama perangkat di server → ikut di perangkat", async () => {
+  const a = (await pusat("GET", "/api/cabang/perangkat")).data.find(x => x.kode === "A");
+  assert.equal((await pusat("PUT", `/api/cabang/perangkat/${a.id}`, { nama: "iMin Kasir Depan" })).status, 200);
+  const st = await sinkron();
+  assert.equal(st.nama, "iMin Kasir Depan");
+  assert.equal(st.kode, "A");
 });
 
 test("server mati: transaksi menunggu, lalu terkirim saat server hidup lagi", async () => {

@@ -235,9 +235,9 @@ function keuanganTerbaru(sejak){
 /* Perangkat bertanya "ada yang baru?" dengan versi terakhir yang ia punya. Bila sama, jawabannya kecil sekali (hemat kuota);
    bila berbeda, dikirim data lengkap terbaru. */
 route("POST", "/api/cabang/tarik", false, ({ body }) => {
-  perangkatDariToken(body.token);
+  const alat = perangkatDariToken(body.token);
   const versi = versiData() || "awal";
-  if (body.versi && body.versi === versi) return { tetap: true, versi };
+  if (body.versi && body.versi === versi) return { tetap: true, versi, perangkat: alat.nama };
   const sejak = one("SELECT date('now', '+7 hours', '-40 days') d").d;
   const s = Object.fromEntries(all("SELECT kunci, nilai FROM settings WHERE kunci IN ('nama_toko','alamat','telp','footer','prefix','hpp_persen','insentif','periode_mulai')").map(r => [r.kunci, JSON.parse(r.nilai)]));
   return {
@@ -247,7 +247,7 @@ route("POST", "/api/cabang/tarik", false, ({ body }) => {
     toko: s,
     penjualan: penjualanTerbaru(sejak),
     sejak, ...keuanganTerbaru(sejak),
-    versi,
+    versi, perangkat: alat.nama,
   };
 });
 
@@ -256,6 +256,13 @@ route("GET", "/api/cabang/perangkat", "admin", () =>
     (SELECT COUNT(*) FROM cabang_terima t WHERE t.perangkat_id = p.id AND t.status = 'ok') diterima,
     (SELECT COUNT(*) FROM cabang_terima t WHERE t.perangkat_id = p.id AND t.status = 'ditolak') ditolak
     FROM perangkat p ORDER BY p.dicabut IS NOT NULL, p.id`));
+
+route("PUT", "/api/cabang/perangkat/:id", "admin", ({ params, body }) => {
+  const d = one("SELECT id FROM perangkat WHERE id = ? AND dicabut IS NULL", [+params.id]);
+  if (!d) throw notFound("Perangkat tidak ditemukan");
+  run("UPDATE perangkat SET nama = ? WHERE id = ?", [teks(body.nama, { wajib: true, max: 40, nama: "Nama perangkat" }), d.id]);
+  return { ok: true };
+});
 
 route("DELETE", "/api/cabang/perangkat/:id", "admin", ({ params }) => {
   const d = one("SELECT id FROM perangkat WHERE id = ? AND dicabut IS NULL", [+params.id]);
