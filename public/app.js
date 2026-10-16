@@ -552,7 +552,7 @@ function drawCart(){
     ${cart.kartuOn ? `<div class="pesanan-isi stack">
       <label class="f">Isi kartu<textarea id="cKartu" rows="4" placeholder="Happy Birthday!&#10;Semoga panjang umur dan sehat selalu.&#10;Dari: Rina">${esc(cart.kartu || "")}</textarea></label>
       ${tombolKartu("keranjang")}
-      ${B.toko.canva_url ? "" : `<p class="small muted" style="margin:0">Atur link template Canva di Pengaturan → Sambungan supaya tombol Buka Canva langsung ke desain kartu toko.</p>`}
+      ${B.toko.canva_url ? "" : `<p class="small muted" style="margin:0">Atur link desain Canva di Pengaturan → Canva supaya tombol Buka Canva langsung ke desain kartu toko.</p>`}
     </div>` : ""}
     <div class="row"><label class="f grow">Diskon (Rp)<input type="number" id="cDisc" value="${cart.diskon || ""}" min="0" step="1000" inputmode="numeric"></label><label class="f grow">Ongkir (Rp)<input type="number" id="cOng" value="${cart.ongkir || ""}" min="0" step="1000" inputmode="numeric"></label></div>
     <div class="seg" id="cMet" role="group" aria-label="Metode bayar">${B.metode.map(m => `<button type="button" class="${cart.metode === m ? "on" : ""}" data-m="${m}">${m}</button>`).join("")}</div>
@@ -679,16 +679,30 @@ async function salinTeks(teks, pesan = "Teks disalin"){
   toast(ok ? pesan : "Gagal menyalin. Tekan lama pada teks lalu pilih Salin.");
   return ok;
 }
-function bukaLink(url){
-  if (NATIVE) { location.href = url; return; } // aplikasi Android membukanya di aplikasi yang sesuai (Canva / WhatsApp)
+/* Aplikasi tujuan per perangkat (disimpan di perangkat ini): Canva → aplikasi / browser; WhatsApp → WhatsApp / WhatsApp Business. */
+const PAKET = { canva: "com.canva.editor", wa: "com.whatsapp", wab: "com.whatsapp.w4b" };
+const bisaPilihAplikasi = () => !!(NATIVE && NATIVE.bukaDengan);
+/** Buka link. paket: nama paket Android, "browser", atau "" (pilihan Android). */
+function bukaLink(url, paket = ""){
+  if (bisaPilihAplikasi()) { NATIVE.bukaDengan(url, paket); return; }
+  if (NATIVE) { location.href = url; return; } // aplikasi Android versi lama: dibuka di aplikasi yang biasa menangani link ini
   const w = window.open(url, "_blank", "noopener");
   if (!w) toast("Browser memblokir jendela baru. Izinkan pop-up untuk situs ini.");
 }
+/** Buka desain Canva: di aplikasi Canva (bila terpasang & sudah masuk) atau di browser (canva.com). */
+const bukaCanva = url => bukaLink(url, D.canvaBuka === "web" ? "browser" : PAKET.canva);
+/** Buka chat WhatsApp dengan pesan terisi, di aplikasi WhatsApp yang dipilih untuk perangkat ini. */
+function bukaWA(no, teks){
+  if (bisaPilihAplikasi() && (D.waApp === "wa" || D.waApp === "wab")) {
+    return NATIVE.bukaDengan(`whatsapp://send?phone=${no}&text=${encodeURIComponent(teks || "")}`, PAKET[D.waApp]);
+  }
+  bukaLink(`https://wa.me/${no}${teks ? "?text=" + encodeURIComponent(teks) : ""}`);
+}
 /** Salin isi kartu lalu buka desain Canva: tinggal tempel (paste) teksnya. */
 function keCanva(teks){
-  if (!B.toko.canva_url) { if (teks) salinTeks(teks, "Teks kartu disalin"); toast("Link Canva belum diatur (Pengaturan → Sambungan)"); return; }
+  if (!B.toko.canva_url) { if (teks) salinTeks(teks, "Teks kartu disalin"); toast("Link Canva belum diatur (Pengaturan → Canva)"); return; }
   const ok = teks ? salinSinkron(teks) : true;
-  bukaLink(B.toko.canva_url);
+  bukaCanva(B.toko.canva_url);
   if (teks) toast(ok ? "Teks kartu disalin — tempel (paste) di Canva" : "Canva dibuka. Salin teks kartu dengan tombol Salin teks.");
 }
 /** Cetak kartu ucapan di printer struk: teks di tengah, baris pertama besar. */
@@ -714,6 +728,14 @@ function pasangTombolKartu(akar, teks){
   });
 }
 
+/* Semua tautan wa.me (tombol Kirim WA, WA pengingat, dll.) dibuka di aplikasi WhatsApp pilihan perangkat ini. */
+document.addEventListener("click", e => {
+  const a = e.target && e.target.closest && e.target.closest('a[href^="https://wa.me/"]');
+  if (!a || !bisaPilihAplikasi()) return;
+  e.preventDefault();
+  const u = new URL(a.href); bukaWA(u.pathname.slice(1), u.searchParams.get("text") || "");
+}, true);
+
 /* ---------- Pesan WhatsApp ke pelanggan ---------- */
 /** Isi pesan dari templat di Pengaturan. Kode yang bisa dipakai: {nama} {toko} {no} {tanggal} {total} {barang} {struk} */
 function pesanWA(s){
@@ -721,18 +743,15 @@ function pesanWA(s){
   if (!tpl) return "```\n" + strukText(s) + "\n```";
   const nama = s.pelanggan && s.pelanggan !== "CUSTOMER" ? toTitle(s.pelanggan) : "Kak";
   const isi = { nama, toko: toTitle(B.toko.nama_toko), no: s.no, tanggal: tglID(s.tgl), total: rp(s.total),
-    barang: s.items.map(i => toTitle(i.nama) + (i.qty != 1 ? " ×" + fq(i.qty) : "")).join(", "), struk: "```\n" + strukText(s) + "\n```" };
-  return tpl.replace(/\{(nama|toko|no|tanggal|total|barang|struk)\}/g, (_, k) => isi[k]);
+    wa_toko: B.toko.wa_nomor || B.toko.telp || "", barang: s.items.map(i => toTitle(i.nama) + (i.qty != 1 ? " ×" + fq(i.qty) : "")).join(", "), struk: "```\n" + strukText(s) + "\n```" };
+  return tpl.replace(/\{(nama|toko|no|tanggal|total|barang|struk|wa_toko)\}/g, (_, k) => isi[k]);
 }
 function nomorWA(hp){ let d = String(hp || "").replace(/\D/g, ""); if (d.startsWith("0")) d = "62" + d.slice(1); else if (d.startsWith("8")) d = "62" + d; return d.length >= 10 ? d : ""; }
 /** Buka WhatsApp dengan pesan terisi (tinggal tekan kirim). Di aplikasi Android langsung membuka WhatsApp. */
 function kirimWA(s){
   const no = nomorWA(s.hp);
   if (!no) return false;
-  const url = `https://wa.me/${no}?text=` + encodeURIComponent(pesanWA(s));
-  if (NATIVE) { location.href = url; return true; } // ditangkap aplikasi → dibuka di WhatsApp
-  const w = window.open(url, "_blank", "noopener");
-  if (!w) toast("Tekan \"Kirim WA\" di struk untuk mengirim ucapan ke pelanggan");
+  bukaWA(no, pesanWA(s));
   return true;
 }
 
@@ -1406,7 +1425,7 @@ function vAtur(){
         <label class="f">Lebar kertas printer<select id="pK"><option value="58" ${D.kertas == 58 ? "selected" : ""}>58 mm (32 karakter)</option><option value="80" ${D.kertas == 80 ? "selected" : ""}>80 mm (48 karakter)</option></select></label>
         <label class="f">Cara mencetak<select id="pM">${NATIVE && NATIVE.cetakLangsung ? `<option value="langsung" ${D.modeCetak === "langsung" ? "selected" : ""}>Printer bawaan iMin langsung (paling tajam)</option>` : ""}<option value="chrome" ${D.modeCetak === "chrome" ? "selected" : ""}>Layanan cetak Android (gambar)</option><option value="rawbt" ${D.modeCetak === "rawbt" ? "selected" : ""}>Aplikasi RawBT (ESC/POS)</option></select></label>
         <p class="note">${NATIVE && NATIVE.cetakLangsung ? `<b>Printer bawaan langsung</b> mengirim teks ke printer iMin seperti aplikasi kasir lain, hasilnya hitam dan tajam. Bluetooth harus menyala (printer iMin tersambung lewat Bluetooth internal "BluetoothPrinter"). ${(() => { const st = statusPrinterLangsung(); return st === "izin" ? "Saat mencetak pertama kali, izinkan akses <i>Perangkat sekitar</i>." : st ? `Printer ditemukan: <b>${esc(st)}</b>.` : "Printer bawaan belum terdeteksi — pastikan Bluetooth menyala."; })()}<br>` : ""}Layanan cetak Android mengubah struk menjadi gambar, sehingga bisa tampak buram. RawBT butuh aplikasi RawBT dari Play Store.</p>
-        <button class="btn" id="pTest" type="button">Cetak struk uji</button>
+        <div class="row"><button class="btn" id="pTest" type="button">Cetak struk uji</button><button class="btn" id="pKartu" type="button">Cetak kartu uji</button></div>
         <label class="f">Tema<select id="thm"><option value="">Ikuti perangkat</option><option value="light" ${D.tema === "light" ? "selected" : ""}>Terang</option><option value="dark" ${D.tema === "dark" ? "selected" : ""}>Gelap</option></select></label>
       </section>
       <section class="panel stack"><h3 style="font-size:17px">Akun saya</h3>
@@ -1418,7 +1437,8 @@ function vAtur(){
       ${isAdmin() ? `<section class="panel stack" id="aToko"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aUser"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aCabang"><div class="empty">Memuat…</div></section>
-      <section class="panel stack" id="aSambung"><div class="empty">Memuat…</div></section>
+      <section class="panel stack" id="aWa"><div class="empty">Memuat…</div></section>
+      <section class="panel stack" id="aCanva"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aSync"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aAbsen"><div class="empty">Memuat…</div></section>
       <section class="panel stack"><h3 style="font-size:17px">Cadangan &amp; impor</h3>
@@ -1438,9 +1458,10 @@ function vAtur(){
   $("#pM").onchange = e => { D.modeCetak = e.target.value; D.modeDipilih = true; simpanD(); vAtur(); };
   $("#thm").onchange = e => { D.tema = e.target.value; simpanD(); terapkanTema(); };
   $("#pTest").onclick = () => cetak({ no: B.toko.prefix + "UJI", tgl: today(), jam: "00:00", kasir: B.me.nama, pelanggan: "UJI CETAK", hp: "", items: [{ nama: "BUKET BUNGA 100K", harga: 100000, qty: 1 }, { nama: "COKLAT SILVERQUEEN", harga: 15000, qty: 2 }], subtotal: 130000, diskon: 0, ongkir: 0, total: 130000, metode: "Tunai", bayar: 150000, catatan: "" });
+  $("#pKartu").onclick = () => cetakKartu("Happy Birthday!\nSemoga panjang umur, sehat selalu,\ndan bahagia.\n\nDari: Rina");
   $("#pwSave").onclick = e => coba(async () => { await api("POST", "/api/akun/password", { lama: $("#pwL").value, baru: $("#pwB").value }); $("#pwL").value = $("#pwB").value = ""; toast("Password diganti"); }, e.target);
   if (!isAdmin()) return;
-  aturToko(); aturUser(); aturSambung(); aturSync(); aturCabang(); aturAbsen();
+  aturToko(); aturUser(); aturWA(); aturCanva(); aturSync(); aturCabang(); aturAbsen();
   if ($("#bkDb")) $("#bkDb").onclick = e => coba(async () => { const r = await api("GET", "/api/cadangan"); toast(`Cadangan tersimpan di ${r.disimpan}`); }, e.target);
   $("#rsFile").onchange = e => { const f = e.target.files[0]; if (!f) return; e.target.value = "";
     const r = new FileReader();
@@ -1478,42 +1499,62 @@ async function aturToko(){
     await muatUlang(); shell(); render(); toast("Pengaturan toko tersimpan");
   }, e.target);
 }
-/** Sambungan ke aplikasi lain: Canva (kartu ucapan), WhatsApp (pesan ke pelanggan), printer. */
-async function aturSambung(){
-  const s = await coba(() => api("GET", "/api/pengaturan")); if (!s || !$("#aSambung")) return;
+/** Pilihan aplikasi di perangkat ini (Android): keterangan terpasang / belum. */
+const ketAplikasi = paket => !NATIVE || !NATIVE.adaAplikasi ? "" : NATIVE.adaAplikasi(paket) ? " ✓ terpasang" : " — belum terpasang";
+
+/** WhatsApp: nomor toko, aplikasi yang dipakai di perangkat ini, dan pesan ucapan terima kasih. */
+async function aturWA(){
+  const s = await coba(() => api("GET", "/api/pengaturan")); if (!s || !$("#aWa")) return;
   const pusat = LOKAL && B.cabang;
-  const modeCetak = { langsung: "Printer bawaan iMin (langsung)", chrome: "Layanan cetak Android / browser", rawbt: "Aplikasi RawBT" }[D.modeCetak] || (NATIVE ? "Layanan cetak Android" : "Cetak lewat browser");
-  $("#aSambung").innerHTML = `<h3 style="font-size:17px">Sambungan: Canva, WhatsApp &amp; printer</h3>
-    ${pusat ? `<p class="note" style="margin:0">Perangkat ini tersambung ke server pusat: link Canva &amp; pesan WhatsApp diatur di server (browser), lalu otomatis ikut ke sini. Printer diatur per perangkat di bagian <b>Perangkat ini</b>.</p>` : ""}
-    <h4 style="margin:4px 0 0">🎨 Canva — kartu ucapan</h4>
-    <p class="small muted" style="margin:0">Buat desain kartu ucapan toko di Canva, lalu tekan <b>Bagikan → Salin link</b> (atau link template) dan tempel di sini. Di kasir, tombol <b>Buka Canva</b> menyalin isi kartu lalu membuka desain ini: tinggal tempel teksnya.</p>
-    <label class="f">Link desain / template Canva<input type="url" id="sgCanva" value="${esc(s.canva_url || "")}" placeholder="https://www.canva.com/design/…" ${pusat ? "disabled" : ""}></label>
-    <div class="row"><button class="btn sm" id="sgCanvaUji" type="button">Buka link Canva</button></div>
-    <hr class="sep"><h4 style="margin:4px 0 0">💬 WhatsApp — pesan ke pelanggan</h4>
-    <label class="row"><input type="checkbox" id="sgWaAuto" ${s.wa_otomatis ? "checked" : ""} ${pusat ? "disabled" : ""}> <b>Kirim ucapan terima kasih otomatis setelah transaksi</b></label>
-    <p class="small muted" style="margin:0">Bila No HP pelanggan diisi, WhatsApp langsung terbuka dengan pesan ini, tinggal tekan kirim. Tombol "Kirim WA" di struk juga memakai pesan ini. Di HP/iMin, pakai WhatsApp yang sudah masuk dengan nomor toko.</p>
-    <label class="f">Isi pesan<textarea id="sgWa" rows="7" ${pusat ? "disabled" : ""}>${esc(s.wa_template)}</textarea></label>
-    <p class="small muted" style="margin:0">Kode otomatis: <code>{nama}</code> · <code>{toko}</code> · <code>{no}</code> · <code>{tanggal}</code> · <code>{total}</code> · <code>{barang}</code> · <code>{struk}</code></p>
-    <div class="row"><button class="btn sm" id="sgWaLihat" type="button">Lihat contoh pesan</button><button class="btn sm" id="sgWaUji" type="button">Kirim tes ke nomor toko</button></div>
-    ${pusat ? "" : `<button class="btn pri" id="sgSimpan" type="button">Simpan sambungan Canva &amp; WhatsApp</button>`}
-    <hr class="sep"><h4 style="margin:4px 0 0">🖨️ Printer</h4>
-    <p class="small" style="margin:0">Perangkat ini: <b>${esc(modeCetak)}</b>, kertas ${D.kertas == 80 ? "80" : "58"} mm. Ganti di bagian <b>Perangkat ini</b> (paling atas).</p>
-    <div class="row"><button class="btn sm" id="sgCetakUji" type="button">Cetak struk uji</button><button class="btn sm" id="sgKartuUji" type="button">Cetak kartu uji</button></div>`;
-  const ambilTpl = () => $("#sgWa").value;
-  $("#sgCanvaUji").onclick = () => { const u = $("#sgCanva").value.trim(); if (!u) return toast("Isi link Canva dulu"); bukaLink(u); };
-  $("#sgWaLihat").onclick = () => {
-    const simpan = B.toko.wa_template; B.toko.wa_template = ambilTpl();
+  $("#aWa").innerHTML = `<h3 style="font-size:17px">💬 WhatsApp</h3>
+    ${pusat ? `<p class="note" style="margin:0">Nomor & pesan diatur di server (browser), lalu otomatis ikut ke sini. Aplikasi WhatsApp bisa dipilih untuk perangkat ini.</p>` : ""}
+    <label class="f">Nomor WA toko<input type="tel" id="waNo" value="${esc(s.wa_nomor || s.telp || "")}" placeholder="08…" ${pusat ? "disabled" : ""}></label>
+    <p class="small muted" style="margin:0">Bisa diganti kapan saja. Dipakai untuk kode <code>{wa_toko}</code> di pesan dan tombol tes. Pesan ke pelanggan terkirim dari akun WhatsApp yang sedang masuk di HP/perangkat yang dipakai.</p>
+    ${bisaPilihAplikasi() ? `<label class="f">Kirim pakai aplikasi (perangkat ini)<select id="waApp">
+        <option value="" ${!D.waApp ? "selected" : ""}>Tanya / pilihan Android</option>
+        <option value="wa" ${D.waApp === "wa" ? "selected" : ""}>WhatsApp${ketAplikasi(PAKET.wa)}</option>
+        <option value="wab" ${D.waApp === "wab" ? "selected" : ""}>WhatsApp Business${ketAplikasi(PAKET.wab)}</option></select></label>`
+      : NATIVE ? `<p class="small muted" style="margin:0">Untuk memilih WhatsApp / WhatsApp Business, pasang aplikasi versi terbaru (Pengaturan → Periksa pembaruan).</p>` : ""}
+    <label class="row"><input type="checkbox" id="waAuto" ${s.wa_otomatis ? "checked" : ""} ${pusat ? "disabled" : ""}> <b>Kirim ucapan terima kasih otomatis setelah transaksi</b></label>
+    <label class="f">Isi pesan<textarea id="waTpl" rows="7" ${pusat ? "disabled" : ""}>${esc(s.wa_template)}</textarea></label>
+    <p class="small muted" style="margin:0">Kode otomatis: <code>{nama}</code> · <code>{toko}</code> · <code>{no}</code> · <code>{tanggal}</code> · <code>{total}</code> · <code>{barang}</code> · <code>{struk}</code> · <code>{wa_toko}</code></p>
+    <div class="row"><button class="btn sm" id="waLihat" type="button">Lihat contoh pesan</button><button class="btn sm" id="waUji" type="button">Kirim tes ke nomor ini</button></div>
+    ${pusat ? "" : `<button class="btn pri" id="waSimpan" type="button">Simpan pengaturan WhatsApp</button>`}`;
+  const sel = $("#waApp"); if (sel) sel.onchange = e => { D.waApp = e.target.value; simpanD(); toast("Aplikasi WhatsApp perangkat ini disimpan"); };
+  $("#waLihat").onclick = () => {
+    const simpan = { ...B.toko }; B.toko.wa_template = $("#waTpl").value; B.toko.wa_nomor = $("#waNo").value;
     const contoh = pesanWA({ no: B.toko.prefix + "000001234", tgl: today(), jam: "10:00", kasir: B.me.nama, pelanggan: "BU ANI", hp: "0812", items: [{ nama: "BUKET BUNGA 100K", harga: 100000, qty: 1 }], subtotal: 100000, diskon: 0, ongkir: 0, total: 100000, metode: "Tunai", bayar: 100000, catatan: "" });
-    B.toko.wa_template = simpan;
+    B.toko = simpan;
     modal(`<h3>Contoh pesan</h3><pre class="receipt-prev" style="white-space:pre-wrap">${esc(contoh)}</pre><div class="actions"><button class="btn" data-close>Tutup</button></div>`);
   };
-  $("#sgWaUji").onclick = () => { const no = nomorWA(s.telp); if (!no) return toast("Isi No telepon / WA toko dulu di bagian Toko & struk"); bukaLink(`https://wa.me/${no}?text=` + encodeURIComponent("Tes pesan dari Rich Gallery POS ✅")); };
-  const simpan = $("#sgSimpan"); if (simpan) simpan.onclick = e => coba(async () => {
-    await api("PUT", "/api/pengaturan", { canva_url: $("#sgCanva").value.trim(), wa_template: ambilTpl(), wa_otomatis: $("#sgWaAuto").checked });
-    await muatUlang(); toast("Sambungan tersimpan"); aturSambung();
+  $("#waUji").onclick = () => { const no = nomorWA($("#waNo").value); if (!no) return toast("Isi nomor WA dulu"); bukaWA(no, "Tes pesan dari Rich Gallery POS ✅"); };
+  const sv = $("#waSimpan"); if (sv) sv.onclick = e => coba(async () => {
+    await api("PUT", "/api/pengaturan", { wa_nomor: $("#waNo").value.trim(), wa_template: $("#waTpl").value, wa_otomatis: $("#waAuto").checked });
+    await muatUlang(); toast("Pengaturan WhatsApp tersimpan"); aturWA();
   }, e.target);
-  $("#sgCetakUji").onclick = () => $("#pTest")?.click();
-  $("#sgKartuUji").onclick = () => cetakKartu("Happy Birthday!\nSemoga panjang umur, sehat selalu,\ndan bahagia.\n\nDari: Rina");
+}
+
+/** Canva: link desain kartu, akun, dan cara membuka di perangkat ini (aplikasi / browser). */
+async function aturCanva(){
+  const s = await coba(() => api("GET", "/api/pengaturan")); if (!s || !$("#aCanva")) return;
+  const pusat = LOKAL && B.cabang;
+  $("#aCanva").innerHTML = `<h3 style="font-size:17px">🎨 Canva — kartu ucapan</h3>
+    ${pusat ? `<p class="note" style="margin:0">Link & akun Canva diatur di server (browser), lalu otomatis ikut ke sini. Cara membuka bisa dipilih untuk perangkat ini.</p>` : ""}
+    <p class="small muted" style="margin:0">Buka desain kartu toko di Canva → <b>Bagikan → Salin link</b>, lalu tempel di sini. Di kasir, tombol <b>Buka Canva</b> menyalin isi kartu lalu membuka desain ini: tinggal tempel teksnya.</p>
+    <label class="f">Link desain / template Canva<input type="url" id="cvUrl" value="${esc(s.canva_url || "")}" placeholder="https://www.canva.com/design/…" ${pusat ? "disabled" : ""}></label>
+    <label class="f">Email akun Canva toko (pengingat akun yang dipakai)<input type="email" id="cvEmail" value="${esc(s.canva_email || "")}" placeholder="toko@gmail.com" ${pusat ? "disabled" : ""}></label>
+    <label class="f">Buka Canva di perangkat ini<select id="cvBuka">
+      <option value="aplikasi" ${D.canvaBuka !== "web" ? "selected" : ""}>Aplikasi Canva${NATIVE ? ketAplikasi(PAKET.canva) : " (bila terpasang)"}</option>
+      <option value="web" ${D.canvaBuka === "web" ? "selected" : ""}>Browser (canva.com)</option></select></label>
+    <p class="small muted" style="margin:0">${NATIVE ? "Aplikasi Canva" : "Di komputer, link Canva dibuka di browser. Aplikasi Canva desktop"} langsung menampilkan desain bila sudah masuk dengan akun${s.canva_email ? " <b>" + esc(s.canva_email) + "</b>" : " Canva toko"}. Bila belum masuk, Canva meminta masuk dulu (sekali saja).${NATIVE && !bisaPilihAplikasi() ? " Untuk memaksa buka di browser, pasang aplikasi versi terbaru." : ""}</p>
+    <div class="row"><button class="btn sm" id="cvUji" type="button">Buka Canva</button></div>
+    ${pusat ? "" : `<button class="btn pri" id="cvSimpan" type="button">Simpan pengaturan Canva</button>`}`;
+  $("#cvBuka").onchange = e => { D.canvaBuka = e.target.value; simpanD(); toast("Disimpan untuk perangkat ini"); };
+  $("#cvUji").onclick = () => { const u = $("#cvUrl").value.trim() || B.toko.canva_url; if (!u) return toast("Isi link Canva dulu"); bukaCanva(u); };
+  const sv = $("#cvSimpan"); if (sv) sv.onclick = e => coba(async () => {
+    await api("PUT", "/api/pengaturan", { canva_url: $("#cvUrl").value.trim(), canva_email: $("#cvEmail").value.trim() });
+    await muatUlang(); toast("Pengaturan Canva tersimpan"); aturCanva();
+  }, e.target);
 }
 async function aturUser(){
   const list = await coba(() => api("GET", "/api/users")); if (!list || view !== "atur") return;

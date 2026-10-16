@@ -256,7 +256,7 @@ route("POST", "/api/cabang/tarik", false, ({ body }) => {
   const versi = versiData() || "awal";
   if (body.versi && body.versi === versi) return { tetap: true, versi, perangkat: alat.nama };
   const sejak = one("SELECT date('now', '+7 hours', '-40 days') d").d;
-  const s = Object.fromEntries(all("SELECT kunci, nilai FROM settings WHERE kunci IN ('nama_toko','alamat','telp','footer','prefix','hpp_persen','insentif','periode_mulai','absen_aktif','absen_jam_masuk','absen_jam_pulang','wa_otomatis','wa_template','canva_url')").map(r => [r.kunci, JSON.parse(r.nilai)]));
+  const s = Object.fromEntries(all("SELECT kunci, nilai FROM settings WHERE kunci IN ('nama_toko','alamat','telp','footer','prefix','hpp_persen','insentif','periode_mulai','absen_aktif','absen_jam_masuk','absen_jam_pulang','wa_otomatis','wa_template','canva_url','canva_email','wa_nomor')").map(r => [r.kunci, JSON.parse(r.nilai)]));
   return {
     produk: all("SELECT kode, nama, kategori, harga, hpp, stok, stok_min, barcode, insentif, aktif FROM products WHERE dihapus IS NULL ORDER BY id"),
     bahan: all("SELECT kode, nama, kategori, harga, satuan, stok, stok_min, barcode FROM materials WHERE dihapus IS NULL ORDER BY id"),

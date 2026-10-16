@@ -23,7 +23,7 @@ public class RgNative {
     private final MainActivity act;
     private static final int ITERASI = 60000;
     /** Versi kemampuan native. Naikkan bila menambah metode baru yang dipakai halaman; paket web yang butuh versi lebih tinggi tidak akan dipasang di APK lama. */
-    static final int API = 3;
+    static final int API = 4;
     /** Versi native minimum yang dibutuhkan paket tampilan saat ini. Halaman memeriksa sendiri metode baru (mis. cetakLangsung),
      *  jadi angka ini hanya dinaikkan bila halaman benar-benar tidak bisa jalan di APK lama. Dibaca oleh workflow rilis. */
     static final int WEB_BUTUH_API = 2;
@@ -132,6 +132,18 @@ public class RgNative {
         while ((n = in.read(buf)) > 0) { out.write(buf, 0, n); total += n; if (total > 10_000_000) break; }
         in.close();
         return out.toString("UTF-8");
+    }
+
+    /* ---------- Buka link di aplikasi tertentu (Canva, WhatsApp / WhatsApp Business) atau di browser ---------- */
+    /** paket: nama paket aplikasi (mis. "com.canva.editor", "com.whatsapp.w4b"), "browser" untuk peramban, atau "" (pilihan Android).
+     *  Bila aplikasinya belum terpasang, link dibuka dengan cara biasa. */
+    @JavascriptInterface
+    public void bukaDengan(final String url, final String paket) { act.runOnUiThread(() -> act.bukaDengan(url, paket)); }
+
+    /** Apakah aplikasi dengan paket ini terpasang (untuk keterangan di Pengaturan). */
+    @JavascriptInterface
+    public boolean adaAplikasi(String paket) {
+        try { act.getPackageManager().getPackageInfo(paket, 0); return true; } catch (Exception e) { return false; }
     }
 
     /* ---------- Cetak struk/label lewat layanan cetak Android ---------- */

@@ -173,6 +173,24 @@ public class MainActivity extends Activity {
         }
     }
 
+    void bukaDengan(String url, String paket) {
+        Uri u = Uri.parse(url);
+        Intent i = new Intent(Intent.ACTION_VIEW, u);
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        if ("browser".equals(paket)) {
+            // Paksa ke peramban (bukan aplikasi yang biasanya menangkap link ini)
+            i.addCategory(Intent.CATEGORY_BROWSABLE);
+            i.setSelector(Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_BROWSER));
+        } else if (paket != null && !paket.isEmpty()) {
+            i.setPackage(paket);
+        }
+        try { startActivity(i); }
+        catch (ActivityNotFoundException e) {
+            if (paket != null && !paket.isEmpty() && !"browser".equals(paket)) toast("Aplikasinya belum terpasang, dibuka dengan cara biasa.");
+            bukaLuar(u);
+        }
+    }
+
     private void bukaLuar(Uri u) {
         try { startActivity(new Intent(Intent.ACTION_VIEW, u)); }
         catch (ActivityNotFoundException e) {

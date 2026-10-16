@@ -25,7 +25,11 @@ route("PUT", "/api/pengaturan", "admin", ({ body }) => tx(() => {
     wa_template: b.wa_template != null ? teks(b.wa_template, { max: 2000, nama: "Pesan WhatsApp" }) : undefined,
     wa_otomatis: b.wa_otomatis != null ? !!b.wa_otomatis : undefined,
     canva_url: b.canva_url != null ? teks(b.canva_url, { max: 500, nama: "Link Canva" }) : undefined,
+    canva_email: b.canva_email != null ? teks(b.canva_email, { max: 120, nama: "Email Canva" }) : undefined,
+    wa_nomor: b.wa_nomor != null ? teks(b.wa_nomor, { max: 30, nama: "Nomor WA toko" }) : undefined,
   };
+  if (v.wa_nomor && String(v.wa_nomor).replace(/\D/g, "").length < 9) throw bad("Nomor WA toko tidak valid");
+  if (v.canva_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.canva_email)) throw bad("Email Canva tidak valid");
   if (v.canva_url && !/^https:\/\/(www\.)?canva\.(com|link)\//.test(v.canva_url)) throw bad("Link Canva harus diawali https://www.canva.com/ atau https://canva.link/");
   if (v.sync_url && !/^https:\/\/script\.google(usercontent)?\.com\//.test(v.sync_url)) throw bad("URL Apps Script harus diawali https://script.google.com/");
   const prefix = v.prefix ?? s.prefix, no = v.no_berikutnya ?? s.no_berikutnya;

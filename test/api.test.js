@@ -210,11 +210,15 @@ test("data pelanggan dari riwayat transaksi & pesan WhatsApp", async () => {
   // Simpan sambungan saja (tanpa nomor invoice) & link Canva
   assert.equal((await admin("PUT", "/api/pengaturan", { canva_url: "https://example.com/x" })).status, 400);
   assert.equal((await admin("PUT", "/api/pengaturan", { canva_url: "https://www.canva.com/design/ABC/edit" })).status, 200);
+  assert.equal((await admin("PUT", "/api/pengaturan", { wa_nomor: "12" })).status, 400);
+  assert.equal((await admin("PUT", "/api/pengaturan", { wa_nomor: "0812-9999-1111", canva_email: "toko@gmail.com" })).status, 200);
+  assert.equal((await admin("PUT", "/api/pengaturan", { canva_email: "bukan email" })).status, 400);
   // Kartu ucapan tersimpan di transaksi
   const k = await admin("POST", "/api/penjualan", { items: [{ product_id: p.id, harga: 10000, qty: 1 }], kartu: "Happy Birthday!\nDari: Rina" });
   assert.equal(k.data.kartu, "Happy Birthday!\nDari: Rina");
   const b = (await admin("GET", "/api/bootstrap")).data;
   assert.equal(b.toko.canva_url, "https://www.canva.com/design/ABC/edit");
+  assert.equal(b.toko.wa_nomor, "0812-9999-1111"); assert.equal(b.toko.canva_email, "toko@gmail.com");
   assert.equal(b.toko.wa_otomatis, true); assert.equal(b.toko.wa_template, "Halo {nama}, makasih! {no}");
 });
 
