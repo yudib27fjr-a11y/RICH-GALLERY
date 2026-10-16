@@ -733,6 +733,7 @@ function itemManual(){
       <label class="f">Nama barang<input type="text" id="mn" placeholder="Contoh: BUKET CUSTOM PINK" autocomplete="off"></label>
       <div class="row"><label class="f grow">Harga satuan<input type="number" id="mp" inputmode="numeric" min="0" step="500"></label><label class="f" style="width:100px">Qty<input type="number" id="mq" value="1" min="0.5" step="0.5" inputmode="decimal"></label></div>
       <label class="f">Kategori<select id="mk">${B.kategori.map(k => `<option ${k === "BUKET COSTUME" ? "selected" : ""}>${k}</option>`).join("")}</select></label>
+      <label class="f">Dibuat oleh (masuk produksi & insentif)<select id="mpb"><option value="">— belum ditentukan —</option>${B.staf.map(u => `<option value="${u.id}">${esc(u.nama)}</option>`).join("")}</select></label>
       ${isAdmin() ? `<label class="row small"><input type="checkbox" id="msave"> Simpan juga ke daftar produk</label>` : ""}
     </div>
     <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="mok">Tambah ke keranjang</button></div>`, m => {
@@ -743,8 +744,8 @@ function itemManual(){
         if ($("#msave", m)?.checked) {
           const p = await api("POST", "/api/produk", { nama, harga, kategori });
           await muatUlang();
-          cart.items.push({ product_id: p.id, kode: p.kode, nama: p.nama, kategori, harga, qty, ready: false });
-        } else cart.items.push({ product_id: null, kode: "", nama, kategori, harga, qty, ready: false, manual: true });
+          cart.items.push({ product_id: p.id, kode: p.kode, nama: p.nama, kategori, harga, qty, ready: false, pembuat_id: +$("#mpb", m).value || null });
+        } else cart.items.push({ product_id: null, kode: "", nama, kategori, harga, qty, ready: false, manual: true, pembuat_id: +$("#mpb", m).value || null });
         saveCart(); closeModal(); drawGrid(); drawCart();
       }, e.target);
     });
