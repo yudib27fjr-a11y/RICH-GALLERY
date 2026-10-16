@@ -6,6 +6,7 @@
 import { one, all, run, tx, getSettings, setSetting } from "./db.js";
 import { platform } from "./platform.js";
 import { HttpError, sekarang } from "./util.js";
+import { TABEL_DATA, eksporData } from "./ekspor.js";
 
 export const PESAN_PUSAT = "Perangkat ini tersambung ke server pusat. Ubah data ini di server pusat; hasilnya otomatis masuk ke perangkat ini.";
 
@@ -134,8 +135,19 @@ export function terapkanSnapshot(snap){
   });
 }
 
-/** Sambungkan perangkat ini ke server pusat dengan akun admin server. */
-export async function sambungCabang({ url, nama, password, perangkat, paksa }){
+/** Kirim seluruh data perangkat ini ke server (yang masih kosong), bertahap supaya tiap kiriman tidak terlalu besar. */
+async function unggahAwal(url, token){
+  const data = eksporData().tabel;
+  const bagian = [];
+  for (const t of TABEL_DATA) for (let i = 0; i < Math.max(1, data[t].length); i += 400) bagian.push({ tabel: t, rows: data[t].slice(i, i + 400) });
+  for (let i = 0; i < bagian.length; i++) {
+    await panggil(url, "/api/cabang/unggah-awal", { token, ...bagian[i], mulai: i === 0, selesai: i === bagian.length - 1 });
+  }
+}
+
+/** Sambungkan perangkat ini ke server pusat dengan akun admin server.
+ *  unggahAwal: server masih baru/kosong → kirim seluruh data perangkat ini ke sana dulu. */
+export async function sambungCabang({ url, nama, password, perangkat, paksa, unggahAwal: kirimSemua }){
   url = String(url || "").trim().replace(/\/+$/, "");
   if (!/^https:\/\/[^/\s]+$/.test(url) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(url)) {
     throw new HttpError(400, "Alamat server harus diawali https:// (contoh: https://macbook-pro-yudi.tailae4382.ts.net)");
@@ -144,7 +156,8 @@ export async function sambungCabang({ url, nama, password, perangkat, paksa }){
   const terakhir = one("SELECT no FROM sales ORDER BY id DESC LIMIT 1");
   let j;
   try {
-    j = await panggil(url, "/api/cabang/daftar", { nama, password, perangkat: perangkat || "Perangkat kasir", noTerakhir: terakhir ? terakhir.no : "", paksa: !!paksa });
+    j = await panggil(url, "/api/cabang/daftar", { nama, password, perangkat: perangkat || "Perangkat kasir", noTerakhir: terakhir ? terakhir.no : "", paksa: !!(paksa || kirimSemua), unggahAwal: !!kirimSemua });
+    if (kirimSemua) await unggahAwal(url, j.token);
   } catch (e) { throw new HttpError(e.status && e.status < 500 ? e.status : 502, e.message); }
   tx(() => {
     setSetting("cabang_url", url);

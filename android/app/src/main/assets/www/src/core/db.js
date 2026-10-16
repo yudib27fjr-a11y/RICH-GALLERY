@@ -21,9 +21,11 @@ export const run = (sql, p) => stmt(sql).run(...siapkan(p));
 export const exec = sql => drv.exec(sql);
 
 let kedalaman = 0;
-/** Jalankan fn dalam satu transaksi. Semua perubahan stok/uang wajib lewat sini. fn harus sinkron. */
+/** Jalankan fn dalam satu transaksi. Semua perubahan stok/uang wajib lewat sini. fn harus sinkron.
+ *  Driver boleh menyediakan transaksi(fn) sendiri (Cloudflare: BEGIN/COMMIT tidak boleh lewat SQL). */
 export function tx(fn){
   if (kedalaman > 0) return fn();
+  if (drv.transaksi) { kedalaman++; try { return drv.transaksi(fn); } finally { kedalaman--; } }
   drv.exec("BEGIN IMMEDIATE"); kedalaman++;
   try { const r = fn(); kedalaman--; drv.exec("COMMIT"); return r; }
   catch (e) { kedalaman--; drv.exec("ROLLBACK"); throw e; }
@@ -33,6 +35,7 @@ export function tx(fn){
 export function migrasi(){
   const versi = Number(one("PRAGMA user_version").user_version);
   for (let v = versi; v < MIGRASI.length; v++) {
+    if (drv.transaksi) { drv.transaksi(() => { drv.exec(MIGRASI[v]); drv.exec(`PRAGMA user_version = ${v + 1}`); }); continue; }
     drv.exec("BEGIN");
     try { drv.exec(MIGRASI[v]); drv.exec(`PRAGMA user_version = ${v + 1}`); drv.exec("COMMIT"); }
     catch (e) { drv.exec("ROLLBACK"); throw e; }

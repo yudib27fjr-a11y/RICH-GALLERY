@@ -1,0 +1,51 @@
+name: Pasang ke Cloudflare
+
+# Setiap perubahan di branch main dipasang ke Cloudflare (Worker + Durable Object SQLite, paket gratis).
+# Butuh Secret CLOUDFLARE_API_TOKEN (template "Edit Cloudflare Workers"). Tanpa secret ini, langkah pasang dilewati.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: cloudflare
+  cancel-in-progress: false
+
+jobs:
+  pasang:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Periksa token Cloudflare
+        id: cek
+        env:
+          T: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$T" ]; then
+            echo "::notice::Secret CLOUDFLARE_API_TOKEN belum diisi, pemasangan ke Cloudflare dilewati."
+            echo "ada=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "ada=1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Tes aturan bisnis (termasuk simulasi Cloudflare)
+        if: steps.cek.outputs.ada == '1'
+        run: npm test
+
+      - name: Pasang ke Cloudflare
+        if: steps.cek.outputs.ada == '1'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          npx --yes wrangler@4 deploy 2>&1 | tee pasang.log
+          URL=$(grep -o 'https://[a-z0-9.-]*workers\.dev' pasang.log | head -1)
+          if [ -n "$URL" ]; then
+            echo "### Rich Gallery POS sudah online: $URL" >> "$GITHUB_STEP_SUMMARY"
+            for i in 1 2 3 4 5 6; do curl -fsS "$URL/api/health" && break; sleep 5; done
+          fi

@@ -1024,9 +1024,9 @@ function vAtur(){
       <section class="panel stack" id="aSync"><div class="empty">Memuat…</div></section>
       <section class="panel stack"><h3 style="font-size:17px">Cadangan &amp; impor</h3>
         <p class="small muted" style="margin:0">${LOKAL ? "Aplikasi menyimpan cadangan otomatis setiap hari di folder Download/RichGallery (7 hari terakhir)." : "Server juga membuat cadangan otomatis setiap hari (lihat panduan pemasangan)."}</p>
-        ${LOKAL ? `<button class="btn" id="bkDb" type="button">Simpan cadangan database sekarang</button>` : `<a class="btn" href="/api/cadangan" download>Unduh cadangan database (.db)</a>`}
+        ${LOKAL ? `<button class="btn" id="bkDb" type="button">Simpan cadangan database sekarang</button>` : `<a class="btn" href="/api/cadangan" download>Unduh cadangan database</a>`}
         <p class="small" style="margin:0"><b>Pulihkan dari cadangan (.db).</b> Mengganti <u>seluruh</u> data di ${LOKAL ? "aplikasi ini" : "server ini"} dengan isi file cadangan. Bisa memakai cadangan dari aplikasi Android maupun dari server, jadi ini juga cara memindahkan data dari aplikasi offline ke server online.</p>
-        <label class="btn danger" for="rsFile">Pilih file cadangan (.db) untuk dipulihkan</label><input type="file" id="rsFile" accept=".db,application/octet-stream,application/x-sqlite3" hidden>
+        <label class="btn danger" for="rsFile">Pilih file cadangan (.db / .json) untuk dipulihkan</label><input type="file" id="rsFile" accept=".db,.json,application/json,application/octet-stream,application/x-sqlite3" hidden>
         <hr class="sep">
         <p class="small" style="margin:0"><b>Pindahkan data dari aplikasi versi file.</b> Di aplikasi lama: Pengaturan → Unduh cadangan (.json), lalu pilih file itu di sini. Data yang sudah pernah diimpor tidak akan tergandakan.</p>
         <label class="row small"><input type="checkbox" id="impStok"> Pakai angka stok dari file cadangan</label>
@@ -1159,19 +1159,26 @@ async function aturCabang(){
       <label class="f">Password admin di server<input type="password" id="cbPw" autocomplete="off"></label>
       <label class="f">Nama perangkat ini<input type="text" id="cbAlat" value="iMin kasir" maxlength="40"></label>
       <button class="btn pri" id="cbGo" type="button">Sambungkan ke server pusat</button>`;
-    const sambung = paksa => e => coba(async () => {
-      toast("Menghubungi server…");
+    const isian = () => ({ url: $("#cbUrl").value.trim(), nama: $("#cbNama").value.trim(), password: $("#cbPw").value, perangkat: $("#cbAlat").value.trim() });
+    const sambung = (opsi = {}, tombol) => coba(async () => {
+      toast(opsi.unggahAwal ? "Mengirim semua data ke server… jangan tutup aplikasi" : "Menghubungi server…");
       try {
-        await api("POST", "/api/cabang/sambung", { url: $("#cbUrl").value.trim(), nama: $("#cbNama").value.trim(), password: $("#cbPw").value, perangkat: $("#cbAlat").value.trim(), paksa });
+        await api("POST", "/api/cabang/sambung", { ...isian(), ...opsi });
       } catch (err) {
-        if (err.status === 409 && !paksa && /belum ada di server/.test(err.message)) {
-          return konfirmasi("Data belum sama dengan server", err.message, "Sambungkan paksa", () => sambung(true)({ target: null }));
-        }
+        if (err.status === 409 && !opsi.paksa && !opsi.unggahAwal && /belum ada di server/.test(err.message)) return tawarPindah();
         throw err;
       }
-      await muatUlang(); toast("Tersambung ke server pusat"); aturCabang(); cekSync();
-    }, e && e.target);
-    $("#cbGo").onclick = sambung(false);
+      await muatUlang(); toast(opsi.unggahAwal ? "Semua data terkirim. Tersambung ke server pusat" : "Tersambung ke server pusat"); aturCabang(); cekSync();
+    }, tombol);
+    // Server belum punya data perangkat ini: kirim semua (server baru), atau sambungkan saja.
+    const tawarPindah = () => modal(`<h3>Server belum punya data perangkat ini</h3>
+      <p>Bila server ini <b>masih baru</b> (mis. baru dipasang di Cloudflare), kirim semua data perangkat ini ke sana: produk, stok, transaksi, produksi, pengeluaran, akun dan PIN. Setelah itu masuk ke server memakai akun yang sama dengan di perangkat ini.</p>
+      <p class="small muted">Bila server sudah berisi transaksi, data tidak akan ditimpa dan pengiriman ditolak dengan aman.</p>
+      <div class="actions"><button class="btn" data-close>Batal</button><button class="btn" id="cbPaksa">Sambungkan tanpa memindah data</button><button class="btn pri" id="cbKirim">Kirim semua data ke server</button></div>`, m => {
+        $("#cbKirim", m).onclick = e => { closeModal(); sambung({ unggahAwal: true }, $("#cbGo")); };
+        $("#cbPaksa", m).onclick = e => { closeModal(); sambung({ paksa: true }, $("#cbGo")); };
+      });
+    $("#cbGo").onclick = e => sambung({}, e.target);
     return;
   }
   const masalah = st.galatTerakhir && st.menunggu;

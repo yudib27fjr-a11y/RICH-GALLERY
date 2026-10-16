@@ -96,6 +96,17 @@ Skrip `deploy/pasang-mac.sh` memasang Node.js, menaruh aplikasi di `/Users/Share
 
 Perbarui aplikasi: jalankan perintah yang sama lagi.
 
+### 3.6 Gratis & selalu menyala: Cloudflare (disarankan)
+Tanpa VPS, tanpa kartu kredit, tidak bergantung komputer toko. Berjalan di paket gratis Cloudflare Workers dengan database SQLite di Durable Object (batas gratis: 100.000 permintaan dan 100.000 baris tulis per hari, 5 GB data).
+
+1. Cloudflare → **Workers & Pages**: bila diminta, buat subdomain `workers.dev` (sekali saja).
+2. Cloudflare → ikon profil → **My Profile → API Tokens → Create Token** → template **Edit Cloudflare Workers** → **Create Token**, salin tokennya.
+3. GitHub repository → **Settings → Secrets and variables → Actions → New repository secret**: nama `CLOUDFLARE_API_TOKEN`, isi token tadi.
+4. GitHub → **Actions → Pasang ke Cloudflare → Run workflow**. Alamatnya tampil di ringkasan: `https://rich-gallery-pos.<subdomain>.workers.dev`.
+5. Pindahkan data iMin: di iMin **Pengaturan → Server pusat** → isi alamat Cloudflare dan admin server → **Sambungkan** → **Kirim semua data ke server**.
+
+Setiap perubahan di `main` otomatis dipasang ulang (lihat `.github/workflows/cloudflare.yml`, `wrangler.toml`, `src/cloudflare/`). Cadangan dari server Cloudflare berupa file `.json` dan bisa dipulihkan lagi di sana.
+
 ---
 
 ## 4. Langkah pertama setelah online
@@ -165,6 +176,7 @@ public/lokal/              mesin lokal Android: driver SQLite lewat jembatan nat
 android/                   proyek Android (Java, tanpa library tambahan) — lihat android/README.md
 .github/workflows/         membangun APK otomatis di GitHub
 deploy/                    pasang.sh (pasang VPS 1 perintah), systemd, Caddy, skrip Apps Script
+src/cloudflare/            versi Cloudflare: worker.js, driver SQLite Durable Object, platform
 scripts/                   backup.js, reset-admin.js
 test/api.test.js           tes ujung-ke-ujung (npm test)
 ```

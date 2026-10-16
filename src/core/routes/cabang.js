@@ -2,7 +2,8 @@
    Di perangkat (iMin, mode offline): /api/cabang (status), /sambung, /putus, /sinkron.
    Di server pusat: /api/cabang/daftar, /kirim, /tarik (diakses perangkat dengan token perangkat), dan daftar perangkat untuk admin. */
 import { route, cariRoute } from "../router.js";
-import { one, all, run, tx } from "../db.js";
+import { one, all, run, tx, getSettings, setSetting } from "../db.js";
+import { hapusData, sisipkanBaris, TABEL_DATA } from "../ekspor.js";
 import { platform } from "../platform.js";
 import { HttpError, bad, notFound, teks, denganWaktu } from "../util.js";
 import { cekPassword, cekBatasLogin, catatGagal, resetGagal } from "../auth.js";
@@ -16,7 +17,8 @@ route("POST", "/api/cabang/sambung", "admin", async ({ body }) => sambungCabang(
   password: String(body.password ?? ""),
   perangkat: teks(body.perangkat, { max: 40, nama: "Nama perangkat" }),
   paksa: !!body.paksa,
-}));
+  unggahAwal: !!body.unggahAwal,
+}), { batas: 100_000 });
 route("POST", "/api/cabang/putus", "admin", ({ body }) => putusCabang({ paksa: !!body.paksa }));
 route("POST", "/api/cabang/sinkron", "semua", () => sinkronCabang());
 
@@ -36,6 +38,7 @@ function perangkatDariToken(token){
   run("UPDATE perangkat SET terakhir = datetime('now') WHERE id = ?", [d.id]);
   return d;
 }
+const serverKosong = () => one("SELECT (SELECT COUNT(*) FROM sales) + (SELECT COUNT(*) FROM produksi) + (SELECT COUNT(*) FROM expenses) n").n === 0;
 function kodeBerikutnya(){
   const dipakai = new Set(all("SELECT kode FROM perangkat").map(r => r.kode));
   for (const c of "ABCDEFGHJKLMNPQRSTUVWXYZ") if (!dipakai.has(c)) return c;
@@ -57,12 +60,36 @@ route("POST", "/api/cabang/daftar", false, ({ body, ctx }) => {
   if (noTerakhir && !body.paksa && !one("SELECT 1 x FROM sales WHERE no = ?", [noTerakhir])) {
     throw new HttpError(409, `Transaksi terakhir perangkat ini (${noTerakhir}) belum ada di server. Pindahkan dulu datanya: simpan cadangan di perangkat, lalu pulihkan di server. Atau sambungkan paksa bila transaksi lama memang tidak perlu dipindah.`);
   }
+  if (body.unggahAwal && !serverKosong()) throw new HttpError(409, "Server sudah berisi transaksi, jadi data awal tidak bisa dikirim ke sini. Sambungkan tanpa memindah data, atau pakai server yang masih baru.");
   const token = platform.token();
   const kode = kodeBerikutnya();
   const namaPerangkat = teks(body.perangkat, { max: 40 }) || "Perangkat kasir";
   run("INSERT INTO perangkat(kode, nama, token_hash, admin_id) VALUES (?,?,?,?)", [kode, namaPerangkat, platform.sha256(token), u.id]);
   return { token, kode, nama: namaPerangkat };
 });
+
+/* Unggah awal: perangkat mengirim SELURUH datanya ke server yang masih kosong (pindah ke server baru, mis. Cloudflare).
+   Dikirim bertahap per tabel; bagian pertama (mulai) mengosongkan server, bagian terakhir (selesai) menutup. */
+route("POST", "/api/cabang/unggah-awal", false, ({ body }) => {
+  const alat = perangkatDariToken(body.token);
+  return tx(() => {
+    if (body.mulai) {
+      if (!serverKosong() && String(getSettings().impor_oleh) !== String(alat.id)) throw new HttpError(409, "Server sudah berisi transaksi, jadi data awal tidak bisa dikirim ke sini. Sambungkan tanpa memindah data, atau pakai server yang masih baru.");
+      hapusData();
+      setSetting("impor_oleh", String(alat.id));
+    } else if (String(getSettings().impor_oleh) !== String(alat.id)) {
+      throw new HttpError(409, "Pengiriman data awal belum dimulai. Ulangi dari awal.");
+    }
+    const tabel = String(body.tabel || "");
+    const n = tabel ? sisipkanBaris(tabel, body.rows) : 0;
+    if (body.selesai) {
+      setSetting("impor_oleh", "");
+      const admin = one("SELECT id FROM users WHERE peran = 'admin' AND aktif = 1 ORDER BY id LIMIT 1");
+      if (admin) run("UPDATE perangkat SET admin_id = ? WHERE admin_id NOT IN (SELECT id FROM users)", [admin.id]);
+    }
+    return { ok: true, n };
+  });
+}, { batas: 8_000_000 });
 
 const TABEL = { produk: "products", bahan: "materials" };
 const idBarang = (jenis, kode) => kode ? one(`SELECT id FROM ${TABEL[jenis]} WHERE kode = ? AND dihapus IS NULL`, [kode]) : null;

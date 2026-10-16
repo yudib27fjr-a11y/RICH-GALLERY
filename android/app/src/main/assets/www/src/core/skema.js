@@ -226,4 +226,5 @@ export const DEFAULT_SETTINGS = {
   cabang_token: "",
   cabang_kode: "",
   cabang_nama: "",
+  impor_oleh: "",
 };
