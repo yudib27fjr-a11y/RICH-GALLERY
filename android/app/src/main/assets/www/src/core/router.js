@@ -59,6 +59,7 @@ export async function jalankan(ctx){
     if (e instanceof HttpError) return { status: e.status, data: { error: e.message } };
     if (String(e.message).includes("UNIQUE constraint failed")) return { status: 409, data: { error: "Data yang sama sudah ada (kode atau barcode ganda)" } };
     console.error(new Date().toISOString(), ctx.method, ctx.path, e);
-    return { status: 500, data: { error: "Terjadi kesalahan. Coba lagi; bila berulang, hubungi admin." } };
+    // Sertakan ringkasan galat supaya penyebabnya bisa dilacak dari layar (tanpa isi data).
+    return { status: 500, data: { error: "Terjadi kesalahan. Coba lagi; bila berulang, hubungi admin. (" + String(e && e.message || e).slice(0, 160) + ")" } };
   }
 }
