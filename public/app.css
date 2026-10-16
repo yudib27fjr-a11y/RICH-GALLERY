@@ -236,3 +236,8 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 .ttd-kotak img{top:0;left:0;right:0;bottom:0}
 .kartu-pratinjau{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;align-self:center;max-width:520px;width:100%}
 .kartu-pratinjau canvas{width:100%;height:auto;display:block}
+.pilih-cetak{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
+.opsi-cetak{display:flex;gap:12px;align-items:center;text-align:left;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);font:inherit;cursor:pointer;min-height:64px}
+.opsi-cetak:hover,.opsi-cetak:focus-visible{border-color:var(--brand,#a8325e);outline:none}
+.opsi-cetak .ik{font-size:26px;line-height:1}
+.opsi-cetak small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}

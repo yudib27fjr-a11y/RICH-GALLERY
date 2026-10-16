@@ -1071,6 +1071,32 @@ function kirimWA(s){
   return true;
 }
 
+/** Setelah Bayar & Cetak: pilih cara mencetak (tidak langsung membuka dialog print). */
+function pilihCetak(s){
+  const mode = { langsung: "printer bawaan iMin", rawbt: "aplikasi RawBT", chrome: NATIVE ? "layanan cetak Android" : "printer komputer" }[D.modeCetak] || (NATIVE ? "layanan cetak Android" : "printer komputer");
+  const opsi = [
+    ["struk", "🧾", "Struk kasir", `Kertas ${D.kertas == 80 ? "80" : "58"} mm lewat ${mode}`],
+    ["nota", "📄", "Nota (setengah A4)", "Invoice berlogo & tanda tangan, bisa diedit dulu"],
+    ["pdf", "📥", "PDF struk", "Simpan / kirim sebagai file, ukuran kertas termal"],
+    ...(s.kartu ? [["kartu", "💌", "Kartu ucapan", "Ucapan dari pelanggan, seukuran desain Canva"]] : []),
+    ...(nomorWA(s.hp) ? [["wa", "💬", "Kirim ke WhatsApp", `Struk / ucapan ke ${s.hp}`]] : []),
+    ["lihat", "👁️", "Lihat struk dulu", "Pratinjau, lalu pilih tindakan"],
+  ];
+  modal(`<h3>✅ Tersimpan: ${esc(s.no)}</h3>
+    <p class="small muted" style="margin:0 0 8px">Total ${rp(s.total)}${s.bayar > s.total && s.metode === "Tunai" ? ` · Kembali <b>${rp(s.bayar - s.total)}</b>` : s.bayar < s.total ? ` · Sisa <b>${rp(s.total - s.bayar)}</b>` : ""}. Mau dicetak dengan cara apa?</p>
+    <div class="pilih-cetak">${opsi.map(([k, ik, judul, ket]) => `<button type="button" class="opsi-cetak" data-c="${k}"><span class="ik">${ik}</span><span><b>${judul}</b><small>${esc(ket)}</small></span></button>`).join("")}</div>
+    <div class="actions"><button class="btn" data-close>Lewati (tidak dicetak)</button></div>`, m => {
+    $$(".opsi-cetak", m).forEach(b => b.onclick = () => {
+      const c = b.dataset.c;
+      if (c === "struk") { closeModal(); cetak(s); }
+      else if (c === "nota") bukaNota(s);
+      else if (c === "pdf") pdfStruk(s);
+      else if (c === "kartu") bukaKartu(s.kartu);
+      else if (c === "wa") kirimWA(s);
+      else lihatStruk(s);
+    });
+  });
+}
 async function simpanTransaksi(print, tombol){
   if (!cart.items.length) return;
   await coba(async () => {
@@ -1085,7 +1111,7 @@ async function simpanTransaksi(print, tombol){
     $("#cart")?.classList.remove("open");
     toast(`Tersimpan: ${s.no}`);
     await muatUlang(); drawGrid(); drawCart();
-    if (print) { cetak(s); setTimeout(() => lihatStruk(s), 300); }
+    if (print) setTimeout(() => pilihCetak(s), 200);
     // Ucapan terima kasih otomatis lewat WhatsApp (bila diaktifkan & ada no HP)
     if (B.toko.wa_otomatis && nomorWA(s.hp)) setTimeout(() => kirimWA(s), print ? 1500 : 300);
     if (isAdmin()) setTimeout(cekSync, 3000);
