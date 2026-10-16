@@ -198,12 +198,21 @@ function cetakBaris(lines){
   setTimeout(() => cetakHalaman(mm, tinggi), 60);
 }
 const cetak = s => cetakBaris(strukLines(s));
+/** Cetak lewat browser tanpa judul halaman (judul & alamat web hanya muncul bila "Headers and footers" Chrome dicentang). */
+function cetakBrowser(){
+  const judul = document.title;
+  document.title = " ";
+  const pulih = () => { document.title = judul; window.removeEventListener("afterprint", pulih); };
+  window.addEventListener("afterprint", pulih);
+  try { window.print(); } finally { setTimeout(pulih, 1500); }
+  try { if (!localStorage.getItem("rg_info_header")) { localStorage.setItem("rg_info_header", "1"); setTimeout(() => toast("Tips: di dialog cetak Chrome, buka More settings → hilangkan centang \"Headers and footers\" supaya tidak ada tulisan tambahan."), 400); } } catch {}
+}
 /** Di aplikasi Android, window.print tidak tersedia; cetak lewat layanan cetak Android.
  *  Bila ukuran diketahui (lebar × tinggi mm), kertasnya dipotong pas — tidak ada sisa kertas kosong. */
 function cetakHalaman(lebarMm, tinggiMm){
   if (NATIVE && NATIVE.cetakUkuran && lebarMm && tinggiMm) NATIVE.cetakUkuran(lebarMm, tinggiMm);
   else if (NATIVE && NATIVE.cetak) NATIVE.cetak(D.kertas);
-  else window.print();
+  else cetakBrowser();
 }
 /** Struk sebagai PDF selebar kertas termal, tingginya pas dengan isi struk. */
 function pdfStruk(s){
@@ -440,7 +449,7 @@ function bukaNota(s){
       $("#page-style").textContent = `@page{size:${pw}mm ${ph}mm;margin:0}`;
       $("#print-area").innerHTML = `<img src="${kanvas.toDataURL("image/png")}" alt="" style="width:${pw}mm;height:${ph}mm;display:block">`;
       $("#print-area").classList.add("a4");
-      setTimeout(() => { if (NATIVE) NATIVE.cetakUkuran(pw, ph); else window.print(); setTimeout(() => $("#print-area").classList.remove("a4"), 1500); }, 120);
+      setTimeout(() => { if (NATIVE) NATIVE.cetakUkuran(pw, ph); else cetakBrowser(); setTimeout(() => $("#print-area").classList.remove("a4"), 1500); }, 120);
     };
     gambar();
   });
@@ -1019,7 +1028,7 @@ async function cetakKartuKertas(teks){
   setTimeout(() => {
     if (NATIVE && NATIVE.cetakUkuran) NATIVE.cetakUkuran(lebar, tinggi);
     else if (NATIVE) { NATIVE.cetak(210); toast("Kartu dicetak seukuran aslinya di kertas A4 — gunting sesuai tepi. Pasang aplikasi terbaru untuk cetak langsung di kertas kartu."); }
-    else window.print();
+    else cetakBrowser();
     setTimeout(() => $("#print-area").classList.remove("a4"), 1500);
   }, 120);
 }
@@ -1029,11 +1038,12 @@ function bukaKartu(teks){
   modal(`<h3>💌 Kartu ucapan <span class="small muted">${lebar} × ${tinggi} mm</span></h3>
     <label class="f">Teks ucapan (sesuai permintaan pelanggan)<textarea id="kTeks" rows="4">${esc(teks)}</textarea></label>
     <div class="kartu-pratinjau"><canvas id="kCv"></canvas></div>
-    <div class="actions" style="flex-wrap:wrap"><button class="btn" data-close>Tutup</button><button class="btn" id="kStruk" type="button">Cetak di printer struk</button><button class="btn" id="kUnduh" type="button">Unduh gambar</button><button class="btn pri" id="kCetak" type="button">Cetak kartu</button></div>`, m => {
+    <div class="actions" style="flex-wrap:wrap"><button class="btn" data-close>Tutup</button><button class="btn" id="kStruk" type="button">Cetak di printer struk</button><button class="btn" id="kUnduh" type="button">Unduh gambar</button><button class="btn" id="kPdf" type="button">PDF polos</button><button class="btn pri" id="kCetak" type="button">Cetak kartu</button></div>`, m => {
     let t;
     const gambar = async () => { const c = await gambarKartu($("#kTeks", m).value), cv = $("#kCv", m); if (!cv) return; cv.width = c.width; cv.height = c.height; cv.getContext("2d").drawImage(c, 0, 0); return c; };
     $("#kTeks", m).oninput = () => { clearTimeout(t); t = setTimeout(gambar, 250); };
     $("#kCetak", m).onclick = () => cetakKartuKertas($("#kTeks", m).value);
+    $("#kPdf", m).onclick = async () => { const c = await gambar(); simpanPdf(`kartu-ucapan-${Date.now()}.pdf`, buatPdf(c, lebar, tinggi)); };
     $("#kStruk", m).onclick = () => cetakKartu($("#kTeks", m).value);
     $("#kUnduh", m).onclick = async () => {
       const c = await gambar(), url = c.toDataURL("image/png"), nama = `kartu-ucapan-${Date.now()}.png`;
