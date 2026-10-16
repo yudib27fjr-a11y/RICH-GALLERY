@@ -258,7 +258,7 @@ function lihatStruk(s, setelahBatal){
         await api("DELETE", `/api/penjualan/${s.id}`);
         await muatUlang();
         cart = { ...cartKosong(), pelanggan: s.pelanggan === "CUSTOMER" ? "" : s.pelanggan, hp: s.hp || "", diskon: s.diskon || 0, ongkir: s.ongkir || 0, metode: s.metode, catatan: s.catatan || "", tgl: s.tgl !== today() ? s.tgl : "",
-          kartuOn: !!s.kartu, kartu: s.kartu || "", pesanan: !!s.ambil_tgl, ambil_tgl: s.ambil_tgl || "", ambil_jam: s.ambil_jam || "", ambil_cara: s.ambil_cara || "ambil", request: s.request || "", bayar: s.bayar < s.total ? s.bayar : 0,
+          kartuOn: !!s.kartu, kartu: s.kartu || "", pesanan: !!s.ambil_tgl, ambil_tgl: s.ambil_tgl || "", ambil_jam: s.ambil_jam || "", ambil_cara: s.ambil_cara || "ambil", request: s.request || "", bayar: s.bayar < s.total ? s.bayar : 0, bayarMode: s.bayar < s.total ? "dp" : "lunas",
           items: s.items.map(i => { const p = i.kode ? B.produk.find(x => x.kode === i.kode) : null;
             return { product_id: p ? p.id : null, kode: p ? p.kode : "", nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty, ready: p ? !!i.ready : false }; }) };
         saveCart(); toast("Perbaiki isi keranjang, lalu simpan lagi"); pindah("kasir");
@@ -785,8 +785,12 @@ function drawCart(){
     </div>` : ""}
     <div class="row"><label class="f grow">Diskon (Rp)<input type="number" id="cDisc" value="${cart.diskon || ""}" min="0" step="1000" inputmode="numeric"></label><label class="f grow">Ongkir (Rp)<input type="number" id="cOng" value="${cart.ongkir || ""}" min="0" step="1000" inputmode="numeric"></label></div>
     <div class="seg" id="cMet" role="group" aria-label="Metode bayar">${B.metode.map(m => `<button type="button" class="${cart.metode === m ? "on" : ""}" data-m="${m}">${m}</button>`).join("")}</div>
-    <label class="f">${cart.pesanan ? "Dibayar / DP (kosongkan = lunas)" : "Dibayar (kosongkan = lunas pas)"}<input type="number" id="cBayar" value="${cart.bayar || ""}" min="0" step="1000" inputmode="numeric" placeholder="${tot}"></label>
-    <div class="quickpay" id="qp">${quickPays(tot).map(v => `<button type="button" class="btn sm" data-v="${v}">${v === tot ? "Uang pas" : rp(v)}</button>`).join("")}</div>
+    <div class="seg" id="cMode" role="group" aria-label="Pembayaran" style="display:flex">${[["lunas", "Lunas"], ["dp50", "DP 50%"], ["dp", "DP custom"]].map(([k, l]) => `<button type="button" style="flex:1" data-p="${k}" class="${(cart.bayarMode || "lunas") === k ? "on" : ""}">${l}</button>`).join("")}</div>
+    ${cart.bayarMode === "dp50" ? `<div class="note" id="dp50Info" style="margin:0">DP 50%: <b class="num">${rp(Math.round(tot / 2))}</b> · sisa <b class="num">${rp(tot - Math.round(tot / 2))}</b> dilunasi nanti (menu Pesanan / struk).</div>`
+      : cart.bayarMode === "dp" ? `<label class="f">Nominal DP<input type="number" id="cBayar" value="${cart.bayar || ""}" min="0" step="1000" inputmode="numeric" placeholder="Contoh: 100000"></label>
+        <div class="quickpay" id="qp">${[0.25, 0.3, 0.5, 0.75].map(f => Math.round(tot * f / 1000) * 1000).filter((v, i, a) => v > 0 && v < tot && a.indexOf(v) === i).map(v => `<button type="button" class="btn sm" data-v="${v}">${rp(v)}</button>`).join("")}</div>`
+      : `<label class="f">Dibayar (kosongkan = lunas pas)<input type="number" id="cBayar" value="${cart.bayar || ""}" min="0" step="1000" inputmode="numeric" placeholder="${tot}"></label>
+        <div class="quickpay" id="qp">${quickPays(tot).map(v => `<button type="button" class="btn sm" data-v="${v}">${v === tot ? "Uang pas" : rp(v)}</button>`).join("")}</div>`}
     ${isAdmin() ? `<label class="f">Tanggal transaksi<input type="date" id="cTgl" value="${cart.tgl || today()}"></label>` : ""}
     <label class="f">Catatan (ucapan kartu, jadwal ambil, dll)<textarea id="cNote" rows="2">${esc(cart.catatan)}</textarea></label>
     </div>
@@ -816,11 +820,12 @@ function drawCart(){
     $("#cReq", el).oninput = e => { cart.request = e.target.value; saveCart(); };
   }
   $("#cOng", el).oninput = e => { cart.ongkir = num(e.target.value); upd(); };
-  $("#cBayar", el).oninput = e => { cart.bayar = num(e.target.value); saveCart(); hitKembali(); };
+  if ($("#cBayar", el)) $("#cBayar", el).oninput = e => { cart.bayar = num(e.target.value); saveCart(); hitKembali(); };
+  $$("#cMode button", el).forEach(b => b.onclick = () => { cart.bayarMode = b.dataset.p; cart.bayar = 0; saveCart(); const sc = $(".cart-body", el).scrollTop; drawCart(); $(".cart-body", el).scrollTop = sc; if (cart.bayarMode === "dp") $("#cBayar")?.focus(); });
   if ($("#cTgl", el)) $("#cTgl", el).onchange = e => { cart.tgl = e.target.value; saveCart(); };
   $("#cNote", el).oninput = e => { cart.catatan = e.target.value; saveCart(); };
   $$("#cMet button", el).forEach(b => b.onclick = () => { cart.metode = b.dataset.m; saveCart(); const sc = $(".cart-body", el).scrollTop; drawCart(); $(".cart-body", el).scrollTop = sc; });
-  $$("#qp button", el).forEach(b => b.onclick = () => { cart.bayar = +b.dataset.v; $("#cBayar", el).value = cart.bayar; saveCart(); hitKembali(); });
+  $$("#qp button", el).forEach(b => b.onclick = () => { cart.bayar = +b.dataset.v; if ($("#cBayar", el)) $("#cBayar", el).value = cart.bayar; saveCart(); hitKembali(); });
   $$(".line", el).forEach(row => {
     const i = +row.dataset.i, it = cart.items[i];
     $$("[data-a]", row).forEach(b => b.onclick = () => {
@@ -843,9 +848,17 @@ function drawCart(){
 }
 $("#cartbar").onclick = () => { const c = $("#cart"); if (c) c.classList.add("open"); };
 function quickPays(t){ if (!t) return []; const s = new Set([t]); [10000, 20000, 50000, 100000].forEach(u => s.add(Math.ceil(t / u) * u)); return [...s].sort((a, b) => a - b).slice(0, 5); }
+/** Nominal yang dibayar sekarang menurut pilihan pembayaran (Lunas / DP 50% / DP custom). */
+function nilaiBayar(){
+  const t = cartTotal();
+  if (cart.bayarMode === "dp50") return Math.round(t / 2);
+  if (cart.bayarMode === "dp") return cart.bayar || 0;
+  return cart.bayar || t;
+}
 function hitKembali(){
   const k = $("#kembali"); if (!k) return;
-  const t = cartTotal(), b = cart.bayar || t;
+  const t = cartTotal(), b = nilaiBayar();
+  const info = $("#dp50Info"); if (info) info.innerHTML = `DP 50%: <b class="num">${rp(Math.round(t / 2))}</b> · sisa <b class="num">${rp(t - Math.round(t / 2))}</b> dilunasi nanti (menu Pesanan / struk).`;
   k.innerHTML = b > t ? `Kembalian: <b class="num">${rp(b - t)}</b>` : b < t ? `<span class="pill warn">DP / belum lunas</span> Sisa <b class="num">${rp(t - b)}</b>` : "";
 }
 function resetCart(){ cart = cartKosong(); saveCart(); }
@@ -1109,10 +1122,12 @@ function pilihCetak(s){
 }
 async function simpanTransaksi(print, tombol){
   if (!cart.items.length) return;
+  if (cart.bayarMode === "dp" && !(cart.bayar > 0)) return toast("Isi nominal DP dulu");
+  if (cart.bayarMode === "dp" && cart.bayar >= cartTotal()) return toast("Nominal DP sama atau lebih dari total. Pilih Lunas bila dibayar penuh.");
   await coba(async () => {
     const s = await api("POST", "/api/penjualan", {
       tgl: isAdmin() ? (cart.tgl || today()) : undefined, pelanggan: cart.pelanggan, hp: cart.hp, metode: cart.metode,
-      bayar: cart.bayar || undefined, diskon: cart.diskon || 0, ongkir: cart.ongkir || 0, catatan: cart.catatan,
+      bayar: cart.bayarMode === "dp50" || cart.bayarMode === "dp" ? nilaiBayar() : (cart.bayar || undefined), diskon: cart.diskon || 0, ongkir: cart.ongkir || 0, catatan: cart.catatan,
       kartu: cart.kartuOn ? (cart.kartu || "") : "",
       pesanan: cart.pesanan ? { tgl: cart.ambil_tgl || today(), jam: cart.ambil_jam || "", cara: cart.ambil_cara || "ambil", request: cart.request || "" } : undefined,
       items: cart.items.map(i => ({ product_id: i.product_id, nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty, ready: i.ready })),
