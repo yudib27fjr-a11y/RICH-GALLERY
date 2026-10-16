@@ -8,7 +8,7 @@ import { platform } from "../platform.js";
 import { HttpError, bad, notFound, teks, denganWaktu } from "../util.js";
 import { cekPassword, cekBatasLogin, catatGagal, resetGagal } from "../auth.js";
 import { muatPenjualan, hapusPenjualan } from "./penjualan.js";
-import { statusCabang, sinkronCabang, sambungCabang, putusCabang } from "../cabang-perangkat.js";
+import { statusCabang, sinkronCabang, sambungCabang, putusCabang, gantiNamaPerangkat } from "../cabang-perangkat.js";
 
 /* ================= di perangkat ================= */
 route("GET", "/api/cabang", "admin", () => statusCabang());
@@ -22,6 +22,7 @@ route("POST", "/api/cabang/sambung", "admin", async ({ body }) => sambungCabang(
 }), { batas: 100_000 });
 route("POST", "/api/cabang/putus", "admin", ({ body }) => putusCabang({ paksa: !!body.paksa }));
 route("POST", "/api/cabang/sinkron", "semua", () => sinkronCabang({ paksa: true }));
+route("POST", "/api/cabang/nama", "admin", ({ body }) => gantiNamaPerangkat(teks(body.nama, { wajib: true, max: 40, nama: "Nama perangkat" })));
 /* Penanda versi data (server maupun perangkat): layar memakainya untuk tahu kapan perlu memuat ulang. */
 route("GET", "/api/versi", "semua", () => ({ versi: versiData() }));
 
@@ -262,6 +263,14 @@ route("PUT", "/api/cabang/perangkat/:id", "admin", ({ params, body }) => {
   if (!d) throw notFound("Perangkat tidak ditemukan");
   run("UPDATE perangkat SET nama = ? WHERE id = ?", [teks(body.nama, { wajib: true, max: 40, nama: "Nama perangkat" }), d.id]);
   return { ok: true };
+});
+
+/* Perangkat mengganti namanya sendiri (dari Pengaturan di perangkat). */
+route("POST", "/api/cabang/nama-perangkat", false, ({ body }) => {
+  const alat = perangkatDariToken(body.token);
+  const nama = teks(body.nama, { wajib: true, max: 40, nama: "Nama perangkat" });
+  run("UPDATE perangkat SET nama = ? WHERE id = ?", [nama, alat.id]);
+  return { nama };
 });
 
 route("DELETE", "/api/cabang/perangkat/:id", "admin", ({ params }) => {

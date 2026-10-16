@@ -1234,9 +1234,15 @@ async function aturCabang(){
     <p class="small" style="margin:0">Tersambung ke <b>${esc(st.url)}</b> sebagai perangkat <b>${esc(st.kode)} · ${esc(st.nama)}</b>. Nomor nota perangkat ini: <b>${esc(B.toko.prefix)}${esc(st.kode)}-…</b></p>
     <p class="small" style="margin:0;${masalah ? "color:var(--bad)" : ""}">${st.menunggu ? `<b>${st.menunggu} transaksi menunggu dikirim.</b>` : "Semua transaksi sudah terkirim."} Terakhir sinkron: ${waktuLokal(st.terakhir)}${st.galatTerakhir ? `<br>${esc(st.galatTerakhir)}` : ""}</p>
     ${st.ditolak ? `<p class="small" style="margin:0;color:var(--bad)">${st.ditolak} transaksi ditolak server (7 hari terakhir):<br>${st.ditolakDaftar.map(x => `${esc(x.aksi)}: ${esc(x.galat || "")}`).join("<br>")}</p>` : ""}
-    <p class="small muted" style="margin:0">Sinkron berjalan otomatis tiap 30 detik selama aplikasi terbuka dan ada internet. Produk, akun dan pengaturan toko diubah di server pusat.</p>
+    <p class="small muted" style="margin:0">Sinkron berjalan otomatis setiap ada transaksi, dan memeriksa data baru tiap 10 detik selama aplikasi terbuka dan ada internet. Tarik layar ke bawah untuk sinkron seketika. Produk, akun dan pengaturan toko diubah di server pusat.</p>
     ${st.url.replace(/\/+$/, "") !== SERVER_TOKO ? `<p class="note" style="margin:0">Server toko sekarang ada di Cloudflare: <b>${esc(SERVER_TOKO)}</b>. Untuk pindah: tekan <b>Putuskan</b> (setelah semua transaksi terkirim), lalu sambungkan lagi. Alamat Cloudflare sudah terisi otomatis.</p>` : ""}
-    <div class="row"><button class="btn pri" id="cbSync" type="button">Sinkron sekarang</button><button class="btn" id="cbPutus" type="button">Putuskan</button></div>`;
+    <div class="row"><button class="btn pri" id="cbSync" type="button">Sinkron sekarang</button><button class="btn" id="cbNama" type="button">Ganti nama perangkat</button><button class="btn" id="cbPutus" type="button">Putuskan</button></div>`;
+  $("#cbNama").onclick = () => modal(`<h3>Ganti nama perangkat</h3>
+    <label class="f">Nama perangkat<input type="text" id="pn" value="${esc(st.nama)}" maxlength="40" placeholder="Contoh: iMin Kasir Depan"></label>
+    <p class="small muted" style="margin:0">Nama ini tampil di server pusat. Seri nota (${esc(st.kode)}) tidak berubah. Butuh internet.</p>
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="pok" type="button">Simpan</button></div>`, m => {
+    $("#pok", m).onclick = e => coba(async () => { await api("POST", "/api/cabang/nama", { nama: $("#pn", m).value }); closeModal(); toast("Nama perangkat diganti"); aturCabang(); }, e.target);
+  });
   $("#cbSync").onclick = e => coba(async () => { const r = await api("POST", "/api/cabang/sinkron"); await muatUlang(); toast(r.galatTerakhir ? "Belum terkirim: " + r.galatTerakhir : r.menunggu ? `${r.menunggu} masih menunggu` : "Sinkron selesai"); aturCabang(); cekSync(); }, e.target);
   $("#cbPutus").onclick = () => konfirmasi("Putuskan dari server pusat?", st.menunggu ? `Masih ada ${st.menunggu} transaksi yang belum terkirim. Bila diputuskan sekarang, transaksi itu TIDAK akan dikirim.` : "Perangkat kembali bekerja sendiri. Data yang sudah terkirim tetap ada di server.", "Putuskan", async () => {
     await api("POST", "/api/cabang/putus", { paksa: !!st.menunggu }); toast("Diputuskan dari server pusat"); aturCabang(); cekSync();

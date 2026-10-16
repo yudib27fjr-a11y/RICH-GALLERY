@@ -274,6 +274,12 @@ test("ganti nama perangkat di server → ikut di perangkat", async () => {
   const st = await sinkron();
   assert.equal(st.nama, "iMin Kasir Depan");
   assert.equal(st.kode, "A");
+  // Dari Pengaturan di perangkat
+  const r = await cabang("POST", "/api/cabang/nama", { nama: "iMin Belakang" });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.nama, "iMin Belakang");
+  assert.equal((await pusat("GET", "/api/cabang/perangkat")).data.find(x => x.kode === "A").nama, "iMin Belakang");
+  assert.equal((await sinkron()).nama, "iMin Belakang");
 });
 
 test("server mati: transaksi menunggu, lalu terkirim saat server hidup lagi", async () => {

@@ -264,6 +264,17 @@ export async function sambungCabang({ url, nama, password, perangkat, paksa, ung
   return sinkronCabang({ paksa: true });
 }
 
+/** Ganti nama perangkat ini di server pusat (butuh internet), lalu simpan di sini. */
+export async function gantiNamaPerangkat(nama){
+  if (!cabangAktif()) throw new HttpError(409, "Perangkat ini belum tersambung ke server pusat");
+  const s = getSettings();
+  let j;
+  try { j = await panggil(s.cabang_url, "/api/cabang/nama-perangkat", { token: s.cabang_token, nama }); }
+  catch (e) { throw new HttpError(e.status && e.status < 500 ? e.status : 502, e.message); }
+  setSetting("cabang_nama", j.nama || nama);
+  return statusCabang();
+}
+
 export function putusCabang({ paksa } = {}){
   const n = one("SELECT COUNT(*) n FROM cabang_kirim WHERE terkirim IS NULL").n;
   if (n && !paksa) throw new HttpError(409, `Masih ada ${n} transaksi yang belum terkirim ke server pusat. Sinkronkan dulu, atau putuskan paksa (transaksi itu tidak akan terkirim).`);
