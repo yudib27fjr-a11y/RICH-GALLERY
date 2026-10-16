@@ -95,6 +95,17 @@ test("Cloudflare: tampilan & API berjalan, data awal terisi", async () => {
   assert.equal(B2.produk.find(x => x.kode === "RG001").stok, p.stok - 1, "stok hanya berkurang dari transaksi yang berhasil");
 });
 
+test("Cloudflare: mesin absen bisa mengirim scan tanpa header aplikasi", async () => {
+  const mesin = (alamat, isi) => fetch(`http://127.0.0.1:${PORT_CF}${alamat}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(isi) });
+  assert.equal((await mesin("/api/produk", {})).status, 403, "alamat biasa tetap wajib header aplikasi");
+  assert.equal((await cf("PUT", "/api/absen/pengaturan", { aktif: true })).status, 200);
+  const A = (await cf("GET", "/api/absen/pengaturan")).data;
+  const r = await mesin(A.alamat, { type: "attlog", cloud_id: "X", data: { pin: "5", scan: "2026-10-16 08:00" } });
+  assert.equal(r.status, 200);
+  assert.equal((await cf("GET", "/api/absen?dari=2026-10-16&sampai=2026-10-16")).data.takDikenal[0].pin, "5");
+  assert.equal((await cf("PUT", "/api/absen/pengaturan", { aktif: false })).status, 200);
+});
+
 let iminB, noIminLama;
 test("iMin berisi transaksi pindah ke Cloudflare dengan kirim semua data", async () => {
   // Siapkan iMin dengan data sendiri

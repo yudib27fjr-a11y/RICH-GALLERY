@@ -282,6 +282,45 @@ test("ganti nama perangkat di server → ikut di perangkat", async () => {
   assert.equal((await sinkron()).nama, "iMin Belakang");
 });
 
+test("absensi sidik jari: mesin kirim scan → rekap di server & di cabang", async () => {
+  await segarkan();
+  const hari = BC.hariIni;
+  const kirimMesin = (alamat, isi) => fetch(`http://127.0.0.1:${PORT_P}${alamat}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(isi) });
+  // Belum aktif: alamat apa pun ditolak
+  assert.equal((await kirimMesin("/api/absen/mesin/apa-saja", { type: "attlog", data: { pin: "1", scan: `${hari} 08:00` } })).status, 403);
+  assert.equal((await pusat("PUT", "/api/absen/pengaturan", { aktif: true, jam_masuk: "08:00", jam_pulang: "17:00" })).status, 200);
+  const A = (await pusat("GET", "/api/absen/pengaturan")).data;
+  assert.match(A.alamat, /^\/api\/absen\/mesin\/.{20,}$/);
+  const iza = A.karyawan.find(k => k.nama === "IZA"), eva = A.karyawan.find(k => k.nama === "EVA");
+  assert.equal((await pusat("PUT", "/api/absen/pengaturan", { pin: [{ user_id: iza.id, pin: "1" }, { user_id: eva.id, pin: "1" }] })).status, 400, "PIN ganda ditolak");
+  assert.equal((await pusat("PUT", "/api/absen/pengaturan", { pin: [{ user_id: iza.id, pin: "1" }, { user_id: eva.id, pin: "2" }] })).status, 200);
+  // Mesin mengirim (tanpa header aplikasi), alamat salah ditolak
+  assert.equal((await kirimMesin("/api/absen/mesin/salah", { type: "attlog", data: { pin: "1", scan: `${hari} 07:55` } })).status, 403);
+  for (const [pin, jam] of [["1", "07:55"], ["1", "07:55"], ["2", "08:20:31"], ["1", "17:05"], ["9", "09:00"]]) {
+    const r = await kirimMesin(A.alamat, { type: "attlog", cloud_id: "ABC123", data: { pin, scan: `${hari} ${jam}`, verify: "1", status_scan: "0" } });
+    assert.equal(r.status, 200);
+  }
+  assert.equal((await kirimMesin(A.alamat, { type: "uji" })).status, 200);
+  const R = (await pusat("GET", `/api/absen?dari=${hari}&sampai=${hari}`)).data;
+  const hIza = R.harian.find(h => h.nama === "IZA"), hEva = R.harian.find(h => h.nama === "EVA");
+  assert.equal(hIza.scan.length, 2, "scan dobel dari mesin tidak tercatat dua kali");
+  assert.equal(hIza.masuk, "07:55"); assert.equal(hIza.pulang, "17:05"); assert.equal(hIza.terlambat, false);
+  assert.equal(hEva.masuk, "08:20"); assert.equal(hEva.pulang, ""); assert.equal(hEva.terlambat, true);
+  assert.deepEqual(R.takDikenal.map(t => t.pin), ["9"]);
+  // Absen manual & hapus
+  const man = await pusat("POST", "/api/absen/manual", { user_id: eva.id, tgl: hari, jam: "17:10", ket: "lupa scan pulang" });
+  assert.equal(man.status, 200);
+  assert.equal((await pusat("GET", `/api/absen?dari=${hari}&sampai=${hari}`)).data.harian.find(h => h.nama === "EVA").pulang, "17:10");
+  assert.equal((await pusat("DELETE", `/api/absen/${man.data.id}`)).status, 200);
+  // Di cabang: menu absensi aktif & rekapnya diambil dari server pusat
+  await sinkron(); await segarkan();
+  assert.equal(BC.toko.absen_aktif, true);
+  assert.equal(BC.cabang, true);
+  const RC = (await cabang("GET", `/api/absen?dari=${hari}&sampai=${hari}`)).data;
+  assert.equal(RC.harian.find(h => h.nama === "IZA").pulang, "17:05");
+  assert.equal((await cabang("POST", "/api/absen/manual", { user_id: eva.id, tgl: hari, jam: "17:00" })).status, 409, "diatur di server pusat");
+});
+
 test("server mati: transaksi menunggu, lalu terkirim saat server hidup lagi", async () => {
   const pusatProc = procs[0];
   pusatProc.kill(); await new Promise(r => pusatProc.on("exit", r));

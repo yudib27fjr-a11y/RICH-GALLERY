@@ -57,8 +57,9 @@ export async function handle(req, res){
   }
   try {
     // Lindungi dari permintaan lintas situs: semua perubahan data wajib membawa header khusus aplikasi.
-    if (req.method !== "GET" && req.headers["x-rg"] !== "1") return kirimJSON(res, 403, { error: "Permintaan ditolak" });
     const r = cariRoute(req.method, url.pathname);
+    // (kecuali alamat untuk mesin, mis. mesin absen, yang dilindungi kunci rahasia di alamatnya)
+    if (req.method !== "GET" && req.headers["x-rg"] !== "1" && !(r && r.opsi.tanpaRG)) return kirimJSON(res, 403, { error: "Permintaan ditolak" });
     const body = req.method === "GET" || !r ? {} : await bacaBody(req, r.batas);
     let cookieKeluar = null;
     const hasil = await jalankan({

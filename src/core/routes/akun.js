@@ -1,3 +1,4 @@
+import { cabangAktif } from "../cabang-perangkat.js";
 import { route } from "../router.js";
 import { one, all, run, tx, getSettings , versiData } from "../db.js";
 import { HttpError, bad, notFound, teks, pilihan, hariIni } from "../util.js";
@@ -53,7 +54,8 @@ route("GET", "/api/bootstrap", "semua", ({ user }) => {
   const produkKolom = `id, kode, nama, kategori, harga, ${admin ? "hpp," : ""} stok, stok_min, barcode, insentif, aktif`;
   return {
     me: user, hariIni: hariIni(),
-    toko: { nama_toko: s.nama_toko, alamat: s.alamat, telp: s.telp, footer: s.footer, prefix: s.prefix, hpp_persen: s.hpp_persen, insentif: s.insentif, periode_mulai: s.periode_mulai },
+    toko: { nama_toko: s.nama_toko, alamat: s.alamat, telp: s.telp, footer: s.footer, prefix: s.prefix, hpp_persen: s.hpp_persen, insentif: s.insentif, periode_mulai: s.periode_mulai, absen_aktif: !!s.absen_aktif, absen_jam_masuk: s.absen_jam_masuk },
+    cabang: cabangAktif(),
     kategori: KATEGORI, katBahan: KAT_BAHAN, katPengeluaran: KAT_PENGELUARAN, metode: METODE,
     produk: all(`SELECT ${produkKolom} FROM products WHERE dihapus IS NULL ORDER BY kode`),
     bahan: all("SELECT id, kode, nama, kategori, harga, satuan, stok, stok_min, barcode FROM materials WHERE dihapus IS NULL ORDER BY kode"),

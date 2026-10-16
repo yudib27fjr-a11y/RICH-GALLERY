@@ -207,6 +207,27 @@ CREATE TABLE perangkat(
   terakhir TEXT,
   dicabut TEXT
 );`,
+
+/* 3: absensi sidik jari (mesin Fingerspot mengirim setiap scan ke server lewat webhook). */
+`ALTER TABLE users ADD COLUMN pin_absen TEXT;
+CREATE UNIQUE INDEX users_pin_absen ON users(pin_absen) WHERE pin_absen IS NOT NULL AND pin_absen <> '';
+CREATE TABLE absen(
+  id INTEGER PRIMARY KEY,
+  tgl TEXT NOT NULL,
+  jam TEXT NOT NULL,
+  pin TEXT NOT NULL DEFAULT '',
+  user_id INTEGER,
+  sumber TEXT NOT NULL DEFAULT 'mesin' CHECK (sumber IN ('mesin','manual')),
+  mesin TEXT NOT NULL DEFAULT '',
+  verify TEXT,
+  status_scan TEXT,
+  ket TEXT NOT NULL DEFAULT '',
+  oleh TEXT NOT NULL DEFAULT '',
+  dihapus TEXT,
+  dibuat TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX absen_tgl ON absen(tgl);
+CREATE UNIQUE INDEX absen_scan ON absen(mesin, pin, tgl, jam) WHERE sumber = 'mesin';`,
 ];
 
 export const DEFAULT_SETTINGS = {
@@ -227,4 +248,11 @@ export const DEFAULT_SETTINGS = {
   cabang_kode: "",
   cabang_nama: "",
   impor_oleh: "",
+  // Absensi sidik jari
+  absen_aktif: false,
+  absen_token: "",
+  absen_mesin: "",
+  absen_jam_masuk: "08:00",
+  absen_jam_pulang: "17:00",
+  absen_terakhir: "",
 };

@@ -44,6 +44,13 @@ async function panggil(url, path, body){
   return j;
 }
 
+/** Ambil data langsung dari server pusat (mis. rekap absensi). Butuh internet. */
+export async function mintaPusat(path, body){
+  const s = getSettings();
+  try { return await panggil(s.cabang_url, path, { token: s.cabang_token, ...body }); }
+  catch (e) { throw new HttpError(e.status && e.status < 500 ? e.status : 502, e.message); }
+}
+
 export function statusCabang(){
   const s = getSettings();
   const n = sql => one(sql).n;
@@ -113,7 +120,7 @@ const KOLOM = {
   products: ["nama", "kategori", "harga", "hpp", "stok", "stok_min", "barcode", "insentif", "aktif"],
   materials: ["nama", "kategori", "harga", "satuan", "stok", "stok_min", "barcode"],
 };
-const SETELAN_TOKO = ["nama_toko", "alamat", "telp", "footer", "prefix", "hpp_persen", "insentif", "periode_mulai"];
+const SETELAN_TOKO = ["nama_toko", "alamat", "telp", "footer", "prefix", "hpp_persen", "insentif", "periode_mulai", "absen_aktif", "absen_jam_masuk", "absen_jam_pulang"];
 
 /** Samakan katalog, stok, akun, dan pengaturan toko dengan server pusat. */
 export function terapkanSnapshot(snap){

@@ -5,9 +5,10 @@ import { route, cariRoute } from "../router.js";
 import { one, all, run, tx, getSettings, setSetting, versiData } from "../db.js";
 import { hapusData, sisipkanBaris, TABEL_DATA } from "../ekspor.js";
 import { platform } from "../platform.js";
-import { HttpError, bad, notFound, teks, denganWaktu } from "../util.js";
+import { HttpError, bad, notFound, teks, denganWaktu, tanggal } from "../util.js";
 import { cekPassword, cekBatasLogin, catatGagal, resetGagal } from "../auth.js";
 import { muatPenjualan, hapusPenjualan } from "./penjualan.js";
+import { rekapAbsen } from "./absen.js";
 import { statusCabang, sinkronCabang, sambungCabang, putusCabang, gantiNamaPerangkat } from "../cabang-perangkat.js";
 
 /* ================= di perangkat ================= */
@@ -33,6 +34,7 @@ for (const [m, p] of [
   ["POST", "/api/users"], ["PUT", "/api/users/1"], ["POST", "/api/akun/password"],
   ["PUT", "/api/pengaturan"], ["POST", "/api/insentif/bayar"],
   ["POST", "/api/pulihkan"], ["POST", "/api/impor-lama"], ["POST", "/api/sync/tarik"],
+  ["PUT", "/api/absen/pengaturan"], ["POST", "/api/absen/manual"], ["DELETE", "/api/absen/1"],
 ]) { const r = cariRoute(m, p); if (r) r.opsi.pusatSaja = true; }
 
 /* ================= di server pusat ================= */
@@ -240,7 +242,7 @@ route("POST", "/api/cabang/tarik", false, ({ body }) => {
   const versi = versiData() || "awal";
   if (body.versi && body.versi === versi) return { tetap: true, versi, perangkat: alat.nama };
   const sejak = one("SELECT date('now', '+7 hours', '-40 days') d").d;
-  const s = Object.fromEntries(all("SELECT kunci, nilai FROM settings WHERE kunci IN ('nama_toko','alamat','telp','footer','prefix','hpp_persen','insentif','periode_mulai')").map(r => [r.kunci, JSON.parse(r.nilai)]));
+  const s = Object.fromEntries(all("SELECT kunci, nilai FROM settings WHERE kunci IN ('nama_toko','alamat','telp','footer','prefix','hpp_persen','insentif','periode_mulai','absen_aktif','absen_jam_masuk','absen_jam_pulang')").map(r => [r.kunci, JSON.parse(r.nilai)]));
   return {
     produk: all("SELECT kode, nama, kategori, harga, hpp, stok, stok_min, barcode, insentif, aktif FROM products WHERE dihapus IS NULL ORDER BY id"),
     bahan: all("SELECT kode, nama, kategori, harga, satuan, stok, stok_min, barcode FROM materials WHERE dihapus IS NULL ORDER BY id"),
@@ -250,6 +252,13 @@ route("POST", "/api/cabang/tarik", false, ({ body }) => {
     sejak, ...keuanganTerbaru(sejak),
     versi, perangkat: alat.nama,
   };
+});
+
+/* Rekap absensi untuk perangkat cabang (data mesin absen ada di server pusat). */
+route("POST", "/api/cabang/absen", false, ({ body }) => {
+  perangkatDariToken(body.token);
+  const dari = tanggal(body.dari), sampai = tanggal(body.sampai || body.dari);
+  return rekapAbsen(dari, sampai);
 });
 
 route("GET", "/api/cabang/perangkat", "admin", () =>

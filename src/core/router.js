@@ -16,6 +16,7 @@ const TANPA_VERSI = new Set(["/api/login", "/api/logout", "/api/cabang/tarik", "
  * opsi.pra({ params, body }): dibaca sebelum handler berjalan (mis. uid baris yang akan dihapus).
  * opsi.uid: beri body.uid acak supaya baris baru bisa dirujuk di server pusat.
  * opsi.pusatSaja: di mode cabang, perubahan ini hanya boleh di server pusat.
+ * opsi.tanpaRG: boleh dipanggil tanpa header X-RG (dipanggil mesin dari luar, dilindungi kunci di alamat).
  */
 export function route(method, pola, akses, handler, opsi = {}){
   const keys = [];

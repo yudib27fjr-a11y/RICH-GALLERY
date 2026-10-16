@@ -6,6 +6,7 @@ import "./routes/stok.js";
 import "./routes/produksi.js";
 import "./routes/keuangan.js";
 import "./routes/admin.js";
+import "./routes/absen.js";
 import "./routes/cabang.js";
 export { jalankan, cariRoute } from "./router.js";
 export { pasangDriver, migrasi } from "./db.js";

@@ -392,10 +392,11 @@ const ICON = {
   opname: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4.5h6M9 10l2 2 4-4M9 16h6"/>',
   biaya: '<rect x="3.5" y="6" width="17" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M7 9.5v5M17 9.5v5"/>',
   laporan: '<path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/>',
+  absen: '<path d="M8.5 20c1-2 1.5-4.5 1.5-8a2 2 0 0 1 4 0c0 2.5-.3 4.8-1 7"/><path d="M5.5 17c.7-1.6 1-3.3 1-5a5.5 5.5 0 0 1 11 0c0 1.2-.1 2.4-.3 3.5"/><path d="M4 9.5A8.5 8.5 0 0 1 20 9"/><path d="M12 12c0 3.5-.6 6.3-2 8.5"/>',
   atur: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
 };
-const SEMUA_VIEW = [["kasir", "Kasir"], ["riwayat", "Transaksi"], ["produksi", "Produksi"], ["stok", "Stok"], ["mutasi", "Masuk/Keluar"], ["opname", "Opname"], ["biaya", "Pengeluaran", 1], ["laporan", "Laporan", 1], ["atur", "Pengaturan"]];
-const daftarView = () => SEMUA_VIEW.filter(v => !v[2] || isAdmin());
+const SEMUA_VIEW = [["kasir", "Kasir"], ["riwayat", "Transaksi"], ["produksi", "Produksi"], ["stok", "Stok"], ["mutasi", "Masuk/Keluar"], ["opname", "Opname"], ["biaya", "Pengeluaran", 1], ["laporan", "Laporan", 1], ["absen", "Absensi", 1], ["atur", "Pengaturan"]];
+const daftarView = () => SEMUA_VIEW.filter(v => (!v[2] || isAdmin()) && (v[0] !== "absen" || (B && B.toko.absen_aktif)));
 let view = "kasir";
 function shell(){
   $("#root").innerHTML = `<div class="app">
@@ -435,7 +436,7 @@ function render(){
   if (!daftarView().some(v => v[0] === view)) view = "kasir";
   renderNav();
   $("#cartbar").hidden = view !== "kasir";
-  return ({ kasir: vKasir, riwayat: vRiwayat, produksi: vProduksi, stok: vStok, mutasi: vMutasi, opname: vOpname, biaya: vBiaya, laporan: vLaporan, atur: vAtur })[view]();
+  return ({ kasir: vKasir, riwayat: vRiwayat, produksi: vProduksi, stok: vStok, mutasi: vMutasi, opname: vOpname, biaya: vBiaya, laporan: vLaporan, absen: vAbsen, atur: vAtur })[view]();
 }
 
 /* ================= KASIR ================= */
@@ -649,6 +650,105 @@ async function hapusRentang(){
     }, e.target);
   });
 }
+
+/* ================= ABSENSI (mesin sidik jari) ================= */
+let aDari = "", aSampai = "";
+async function vAbsen(){
+  if (!aDari) aDari = aSampai = today();
+  $("#main").innerHTML = `
+    <div class="view-head"><h2>Absensi</h2><span class="sp"></span>
+      <input type="date" id="aD" value="${aDari}" style="width:auto" aria-label="Dari"><span class="muted">s/d</span><input type="date" id="aS" value="${aSampai}" style="width:auto" aria-label="Sampai">
+      <button class="btn sm" id="aHari" type="button">Hari ini</button><button class="btn sm" id="aBulan" type="button">Bulan ini</button></div>
+    <div id="aIsi"><div class="empty">Memuat…</div></div>`;
+  $("#aD").onchange = e => { aDari = e.target.value; if (aSampai < aDari) aSampai = aDari; vAbsen(); };
+  $("#aS").onchange = e => { aSampai = e.target.value; if (aSampai < aDari) aDari = aSampai; vAbsen(); };
+  $("#aHari").onclick = () => { aDari = aSampai = today(); vAbsen(); };
+  $("#aBulan").onclick = () => { aDari = today().slice(0, 8) + "01"; aSampai = today(); vAbsen(); };
+  const R = await coba(() => api("GET", `/api/absen?dari=${aDari}&sampai=${aSampai}`));
+  if (!R || view !== "absen") { if (view === "absen" && !R) $("#aIsi").innerHTML = `<div class="empty">Data absensi belum bisa dimuat${LOKAL ? " (perangkat ini mengambilnya dari server pusat, butuh internet)" : ""}.</div>`; return; }
+  const satuHari = aDari === aSampai;
+  $("#aIsi").innerHTML = `
+    <p class="small muted" style="margin:0 0 12px">Jam masuk ${esc(R.jam_masuk)} · jam pulang ${esc(R.jam_pulang)}. Masuk = scan pertama hari itu, pulang = scan terakhir.</p>
+    ${R.takDikenal.length ? `<p class="note" style="margin:0 0 12px">Ada scan dari PIN mesin yang belum dihubungkan ke karyawan: <b>${R.takDikenal.map(t => esc(t.pin) + " (" + t.jumlah + "×)").join(", ")}</b>. Hubungkan di Pengaturan → Absensi sidik jari.</p>` : ""}
+    ${!satuHari ? `<section class="panel" style="margin-bottom:12px"><h3 style="font-size:16px;margin:0 0 8px">Ringkasan ${esc(tglID(aDari))} – ${esc(tglID(aSampai))}</h3>
+      ${R.ringkas.length ? `<div class="list">${R.ringkas.map(r => `<div class="li"><div class="main"><div class="t">${esc(r.nama)}</div><div class="small muted">${r.tanpaPulang ? r.tanpaPulang + " hari tanpa scan pulang" : "Lengkap"}</div></div>
+        <div style="text-align:right"><div class="num" style="font-weight:700">${r.hadir} hari</div>${r.terlambat ? `<span class="pill warn">${r.terlambat}× terlambat</span>` : `<span class="pill ok">tepat waktu</span>`}</div></div>`).join("")}</div>` : `<div class="empty">Belum ada data.</div>`}</section>` : ""}
+    <div class="row" style="margin-bottom:8px"><h3 style="font-size:16px;margin:0;flex:1">${satuHari ? "Kehadiran " + esc(tglID(aDari)) : "Per hari"}</h3>
+      ${LOKAL && B.me ? "" : `<button class="btn sm" id="aManual" type="button">+ Absen manual</button>`}<button class="btn sm" id="aCsv" type="button">Unduh CSV</button></div>
+    ${R.harian.length ? `<div class="list">${R.harian.map(h => `<div class="li click" data-k="${h.tgl}|${h.user_id}">
+      <div class="main"><div class="t">${esc(h.nama)}${satuHari ? "" : ` <span class="small muted">${tglPendek(h.tgl)}</span>`}</div>
+        <div class="small muted">${h.scan.length} scan${h.scan.some(x => x.sumber === "manual") ? " · ada manual" : ""}</div></div>
+      <div style="text-align:right"><div class="num" style="font-weight:700">${h.masuk} – ${h.pulang || "…"}</div>
+        ${h.terlambat ? `<span class="pill warn">terlambat</span>` : `<span class="pill ok">tepat</span>`}${h.pulangCepat ? ` <span class="pill mut">pulang cepat</span>` : ""}</div></div>`).join("")}</div>`
+      : `<div class="list"><div class="empty">Belum ada scan pada ${satuHari ? "tanggal" : "periode"} ini.</div></div>`}`;
+  $("#aCsv").onclick = () => unduhCSV(`absensi-${aDari}_${aSampai}.csv`, [["Tanggal", "Nama", "Masuk", "Pulang", "Jumlah scan", "Terlambat", "Pulang cepat"],
+    ...R.harian.slice().reverse().map(h => [h.tgl, h.nama, h.masuk, h.pulang, h.scan.length, h.terlambat ? "YA" : "", h.pulangCepat ? "YA" : ""])]);
+  const man = $("#aManual"); if (man) man.onclick = () => absenManual();
+  $$("#aIsi .li.click").forEach(el => el.onclick = () => {
+    const h = R.harian.find(x => `${x.tgl}|${x.user_id}` === el.dataset.k); if (!h) return;
+    modal(`<h3>${esc(h.nama)} · ${esc(tglID(h.tgl))}</h3>
+      <div class="list">${h.scan.map(x => `<div class="li"><div class="main"><div class="t num">${x.jam}</div><div class="small muted">${x.sumber === "manual" ? "Manual oleh " + esc(x.oleh) + (x.ket ? " · " + esc(x.ket) : "") : "Mesin sidik jari"}</div></div>
+        ${LOKAL ? "" : `<button class="btn sm danger" data-hapus="${x.id}" type="button">Hapus</button>`}</div>`).join("")}</div>
+      <div class="actions"><button class="btn" data-close>Tutup</button></div>`, m => {
+      m.querySelectorAll("[data-hapus]").forEach(b => b.onclick = () => konfirmasi("Hapus scan ini?", "Scan dihapus dari rekap absensi.", "Hapus", () => coba(async () => { await api("DELETE", `/api/absen/${b.dataset.hapus}`); toast("Scan dihapus"); vAbsen(); })));
+    });
+  });
+}
+function absenManual(){
+  modal(`<h3>Absen manual</h3><p class="small muted" style="margin:0">Untuk karyawan yang lupa scan atau saat mesin bermasalah.</p>
+    <div class="stack">
+      <label class="f">Karyawan<select id="amU">${B.staf.map(s => `<option value="${s.id}">${esc(s.nama)}</option>`).join("")}</select></label>
+      <div class="row"><label class="f grow">Tanggal<input type="date" id="amT" value="${aSampai || today()}" max="${today()}"></label><label class="f grow">Jam<input type="time" id="amJ" value="${esc(B.toko.absen_jam_masuk || "08:00")}"></label></div>
+      <label class="f">Keterangan<input type="text" id="amK" placeholder="Contoh: lupa scan pulang"></label>
+    </div>
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="amOk" type="button">Simpan</button></div>`, m => {
+    $("#amOk", m).onclick = e => coba(async () => { await api("POST", "/api/absen/manual", { user_id: +$("#amU", m).value, tgl: $("#amT", m).value, jam: $("#amJ", m).value, ket: $("#amK", m).value }); closeModal(); toast("Absen manual disimpan"); vAbsen(); }, e.target);
+  });
+}
+
+/** Pengaturan: aktifkan absensi, alamat untuk mesin, jam kerja, dan PIN mesin tiap karyawan. */
+async function aturAbsen(){
+  const el = $("#aAbsen"); if (!el) return;
+  if (LOKAL && cabangAktifDiSini()) {
+    el.innerHTML = `<h3 style="font-size:17px">Absensi sidik jari</h3>
+      <p class="small muted" style="margin:0">${B.toko.absen_aktif ? "Aktif. Mesin absen mengirim data ke server pusat; rekapnya bisa dilihat di menu <b>Absensi</b> (butuh internet)." : "Belum aktif."} Pengaturan absensi dan PIN mesin diatur di server pusat (buka server lewat browser → Pengaturan).</p>`;
+    return;
+  }
+  const A = await coba(() => api("GET", "/api/absen/pengaturan")); if (!A || !$("#aAbsen")) return;
+  const alamatPenuh = A.alamat ? location.origin + A.alamat : "";
+  el.innerHTML = `<h3 style="font-size:17px">Absensi sidik jari</h3>
+    <p class="small muted" style="margin:0">Untuk mesin absen <b>Fingerspot Revo</b> yang tersambung WiFi ke layanan <b>developer.fingerspot.io</b>. Setiap scan dikirim otomatis ke ${LOKAL ? "aplikasi ini" : "server ini"} dan tampil di menu <b>Absensi</b>.</p>
+    <label class="row"><input type="checkbox" id="abAktif" ${A.aktif ? "checked" : ""}> <b>Aktifkan absensi sidik jari</b></label>
+    ${A.aktif ? `
+      ${LOKAL ? `<p class="note" style="margin:0">Mesin absen mengirim data lewat internet, jadi alamat penerimanya harus server online. Sambungkan perangkat ini ke server pusat, lalu aktifkan absensi di server.</p>` : `
+      <label class="f">Alamat webhook (tempel di developer.fingerspot.io)<input type="text" id="abUrl" value="${esc(alamatPenuh)}" readonly></label>
+      <div class="row"><button class="btn sm" id="abSalin" type="button">Salin alamat</button><button class="btn sm" id="abUji" type="button">Uji alamat</button><button class="btn sm ghost" id="abBaru" type="button">Buat alamat baru</button></div>
+      <p class="small ${A.terakhir ? "" : "muted"}" style="margin:0">${A.terakhir ? `Data terakhir diterima: <b>${esc(waktuLokal(A.terakhir.waktu))}</b> (${esc(A.terakhir.jenis)}${A.terakhir.baru ? ", " + A.terakhir.baru + " scan baru" : ""})` : "Belum ada data dari mesin."}</p>`}
+      <div class="row"><label class="f grow">Jam masuk<input type="time" id="abMasuk" value="${esc(A.jam_masuk)}"></label><label class="f grow">Jam pulang<input type="time" id="abPulang" value="${esc(A.jam_pulang)}"></label></div>
+      <label class="f">Cloud ID mesin (opsional, untuk menolak mesin lain)<input type="text" id="abMesin" value="${esc(A.mesin)}" placeholder="Lihat di aplikasi/akun Fingerspot"></label>
+      <p class="small" style="margin:0"><b>PIN mesin tiap karyawan</b> — isi dengan nomor ID karyawan saat mendaftarkan sidik jarinya di mesin.</p>
+      <div class="stack" id="abPin">${A.karyawan.filter(k => k.aktif).map(k => `<div class="row" style="align-items:center"><span style="flex:1">${esc(k.nama)} <span class="small muted">${k.peran}</span></span><input type="text" inputmode="numeric" data-uid="${k.id}" value="${esc(k.pin_absen || "")}" placeholder="PIN" style="width:110px"></div>`).join("")}</div>
+      <button class="btn pri" id="abSimpan" type="button">Simpan pengaturan absensi</button>
+      <details><summary class="small"><b>Cara menyambungkan mesin</b></summary><ol class="small" style="margin:8px 0 0;padding-left:20px">
+        <li>Pasang mesin Fingerspot Revo, sambungkan ke WiFi toko, dan daftarkan ke akun <b>Fingerspot.io</b> (ikuti buku panduan mesin).</li>
+        <li>Daftarkan sidik jari tiap karyawan di mesin. Catat nomor ID (PIN) masing-masing, lalu isi di kolom PIN di atas.</li>
+        <li>Masuk ke <b>developer.fingerspot.io</b>, pilih mesin, lalu isi <b>Webhook URL</b> dengan alamat di atas.</li>
+        <li>Coba scan satu jari, lalu buka menu <b>Absensi</b>: scan harus muncul dalam beberapa detik.</li></ol></details>` : ""}`;
+  $("#abAktif").onchange = e => coba(async () => { await api("PUT", "/api/absen/pengaturan", { aktif: e.target.checked }); await muatUlang(); renderNav(); toast(e.target.checked ? "Absensi diaktifkan" : "Absensi dimatikan"); aturAbsen(); });
+  if (!A.aktif) return;
+  const salin = $("#abSalin"); if (salin) salin.onclick = async () => { const i = $("#abUrl"); try { await navigator.clipboard.writeText(i.value); } catch { i.select(); try { document.execCommand("copy"); } catch {} } toast("Alamat disalin"); };
+  const uji = $("#abUji"); if (uji) uji.onclick = e => coba(async () => {
+    const r = await fetch(A.alamat, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "uji", cloud_id: A.mesin || "" }) });
+    toast(r.ok ? "Alamat berfungsi: siap menerima data dari mesin" : "Alamat tidak berfungsi (HTTP " + r.status + ")"); aturAbsen();
+  }, e.target);
+  const baru = $("#abBaru"); if (baru) baru.onclick = () => konfirmasi("Buat alamat baru?", "Alamat lama berhenti berfungsi. Alamat baru harus ditempel lagi di developer.fingerspot.io.", "Buat baru", () => coba(async () => { await api("PUT", "/api/absen/pengaturan", { kunciBaru: true }); aturAbsen(); }));
+  $("#abSimpan").onclick = e => coba(async () => {
+    await api("PUT", "/api/absen/pengaturan", { jam_masuk: $("#abMasuk").value, jam_pulang: $("#abPulang").value, mesin: $("#abMesin").value,
+      pin: $$("#abPin input").map(i => ({ user_id: +i.dataset.uid, pin: i.value.trim() })) });
+    await muatUlang(); toast("Pengaturan absensi disimpan"); aturAbsen();
+  }, e.target);
+}
+const cabangAktifDiSini = () => !!(B && B.cabang);
 
 /* ================= PRODUKSI & INSENTIF ================= */
 let pPer = null, pOleh = null;
@@ -1059,6 +1159,7 @@ function vAtur(){
       <section class="panel stack" id="aUser"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aCabang"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aSync"><div class="empty">Memuat…</div></section>
+      <section class="panel stack" id="aAbsen"><div class="empty">Memuat…</div></section>
       <section class="panel stack"><h3 style="font-size:17px">Cadangan &amp; impor</h3>
         <p class="small muted" style="margin:0">${LOKAL ? "Aplikasi menyimpan cadangan otomatis setiap hari di folder Download/RichGallery (7 hari terakhir)." : "Server juga membuat cadangan otomatis setiap hari (lihat panduan pemasangan)."}</p>
         ${LOKAL ? `<button class="btn" id="bkDb" type="button">Simpan cadangan database sekarang</button>` : `<a class="btn" href="/api/cadangan" download>Unduh cadangan database</a>`}
@@ -1078,7 +1179,7 @@ function vAtur(){
   $("#pTest").onclick = () => cetak({ no: B.toko.prefix + "UJI", tgl: today(), jam: "00:00", kasir: B.me.nama, pelanggan: "UJI CETAK", hp: "", items: [{ nama: "BUKET BUNGA 100K", harga: 100000, qty: 1 }, { nama: "COKLAT SILVERQUEEN", harga: 15000, qty: 2 }], subtotal: 130000, diskon: 0, ongkir: 0, total: 130000, metode: "Tunai", bayar: 150000, catatan: "" });
   $("#pwSave").onclick = e => coba(async () => { await api("POST", "/api/akun/password", { lama: $("#pwL").value, baru: $("#pwB").value }); $("#pwL").value = $("#pwB").value = ""; toast("Password diganti"); }, e.target);
   if (!isAdmin()) return;
-  aturToko(); aturUser(); aturSync(); aturCabang();
+  aturToko(); aturUser(); aturSync(); aturCabang(); aturAbsen();
   if ($("#bkDb")) $("#bkDb").onclick = e => coba(async () => { const r = await api("GET", "/api/cadangan"); toast(`Cadangan tersimpan di ${r.disimpan}`); }, e.target);
   $("#rsFile").onchange = e => { const f = e.target.files[0]; if (!f) return; e.target.value = "";
     const r = new FileReader();

@@ -48,8 +48,9 @@ export class Toko {
     }
     try {
       // Lindungi dari permintaan lintas situs: semua perubahan data wajib membawa header khusus aplikasi.
-      if (req.method !== "GET" && req.headers.get("x-rg") !== "1") return json(403, { error: "Permintaan ditolak" });
       const r = cariRoute(req.method, url.pathname);
+      // (kecuali alamat untuk mesin, mis. mesin absen, yang dilindungi kunci rahasia di alamatnya)
+      if (req.method !== "GET" && req.headers.get("x-rg") !== "1" && !(r && r.opsi.tanpaRG)) return json(403, { error: "Permintaan ditolak" });
       let body = {};
       if (req.method !== "GET" && r) {
         const panjang = +req.headers.get("content-length") || 0;

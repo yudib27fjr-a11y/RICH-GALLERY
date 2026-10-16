@@ -5,7 +5,7 @@ import { all, run, getSettings } from "./db.js";
 import { versiSkema } from "./db.js";
 
 /** Urutan induk → anak (untuk menyisipkan). Menghapus memakai urutan terbalik. */
-export const TABEL_DATA = ["settings", "users", "products", "materials", "sales", "sale_items", "stock_moves", "produksi", "insentif_bayar", "expenses"];
+export const TABEL_DATA = ["settings", "users", "products", "materials", "sales", "sale_items", "stock_moves", "produksi", "insentif_bayar", "expenses", "absen"];
 const NAMA_AMAN = /^[a-z_][a-z0-9_]*$/;
 /** Pengaturan milik perangkat/server masing-masing, tidak ikut dipindah. */
 const SETELAN_LOKAL = k => k.startsWith("cabang_") || k === "impor_oleh";
