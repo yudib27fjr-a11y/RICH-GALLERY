@@ -168,6 +168,23 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** Cetak dengan ukuran kertas bebas (mis. kartu ucapan seukuran desain Canva), berwarna, tanpa margin. */
+    void cetakUkuran(float lebarMm, float tinggiMm) {
+        try {
+            PrintManager pm = (PrintManager) getSystemService(Context.PRINT_SERVICE);
+            PrintDocumentAdapter adapter = web.createPrintDocumentAdapter("Kartu ucapan Rich Gallery");
+            int w = Math.round(lebarMm / 25.4f * 1000), h = Math.round(tinggiMm / 25.4f * 1000);
+            PrintAttributes attr = new PrintAttributes.Builder()
+                    .setMediaSize(new PrintAttributes.MediaSize("RGK" + w + "x" + h, "Kartu " + Math.round(lebarMm) + " x " + Math.round(tinggiMm) + " mm", w, h))
+                    .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+                    .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
+                    .build();
+            pm.print("Kartu ucapan Rich Gallery", adapter, attr);
+        } catch (Exception e) {
+            Toast.makeText(this, "Tidak bisa membuka layanan cetak: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
     /* ---------- Unduhan dari website (mode online), mis. cadangan .db ---------- */
     private void unduh(String url, String ua, String disposisi, String mime, long panjang) {
         try {

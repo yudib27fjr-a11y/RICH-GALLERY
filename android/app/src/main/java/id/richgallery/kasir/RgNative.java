@@ -23,7 +23,7 @@ public class RgNative {
     private final MainActivity act;
     private static final int ITERASI = 60000;
     /** Versi kemampuan native. Naikkan bila menambah metode baru yang dipakai halaman; paket web yang butuh versi lebih tinggi tidak akan dipasang di APK lama. */
-    static final int API = 6;
+    static final int API = 7;
     /** Versi native minimum yang dibutuhkan paket tampilan saat ini. Halaman memeriksa sendiri metode baru (mis. cetakLangsung),
      *  jadi angka ini hanya dinaikkan bila halaman benar-benar tidak bisa jalan di APK lama. Dibaca oleh workflow rilis. */
     static final int WEB_BUTUH_API = 2;
@@ -149,6 +149,10 @@ public class RgNative {
     /* ---------- Cetak struk/label lewat layanan cetak Android ---------- */
     @JavascriptInterface
     public void cetak(int kertasMm) { act.runOnUiThread(() -> act.cetak(kertasMm)); }
+
+    /** Cetak halaman dengan ukuran kertas tertentu (mm), mis. kartu ucapan. */
+    @JavascriptInterface
+    public void cetakUkuran(float lebarMm, float tinggiMm) { act.runOnUiThread(() -> act.cetakUkuran(lebarMm, tinggiMm)); }
 
     /** Cetak ESC/POS langsung ke printer bawaan (iMin "BluetoothPrinter" / Sunmi "InnerPrinter"). Data dalam base64. */
     @JavascriptInterface

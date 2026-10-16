@@ -3,10 +3,14 @@ import { one, run, tx, getSettings, setSetting, migrasi } from "../db.js";
 import { platform } from "../platform.js";
 import { bad, teks, angka } from "../util.js";
 import { kirimOutbox, statusSync, tarikSheet } from "../sync.js";
+import { cabangAktif, mintaPusat } from "../cabang-perangkat.js";
 import { KATEGORI, KAT_BAHAN, KAT_PENGELUARAN, barcodeDefault, tebakKategori } from "../../../public/shared.js";
 
 /* ---- Pengaturan toko ---- */
-route("GET", "/api/pengaturan", "admin", () => { const { cabang_token, ...s } = getSettings(); return { ...s, sync: statusSync() }; });
+route("GET", "/api/pengaturan", "admin", () => { const { cabang_token, kartu_latar, ...s } = getSettings(); return { ...s, sync: statusSync() }; });
+
+/* Gambar latar kartu ucapan (desain Canva yang diunduh). Disimpan terpisah supaya data lain tetap ringan. */
+route("GET", "/api/kartu/latar", "semua", async () => cabangAktif() ? mintaPusat("/api/cabang/kartu-latar", {}) : { latar: getSettings().kartu_latar || "" });
 
 route("PUT", "/api/pengaturan", "admin", ({ body }) => tx(() => {
   const s = getSettings(), b = body;
@@ -26,6 +30,12 @@ route("PUT", "/api/pengaturan", "admin", ({ body }) => tx(() => {
     wa_otomatis: b.wa_otomatis != null ? !!b.wa_otomatis : undefined,
     canva_url: b.canva_url != null ? teks(b.canva_url, { max: 500, nama: "Link Canva" }) : undefined,
     canva_email: b.canva_email != null ? teks(b.canva_email, { max: 120, nama: "Email Canva" }) : undefined,
+    kartu_lebar: b.kartu_lebar != null ? angka(b.kartu_lebar, { min: 30, max: 300, nama: "Lebar kartu" }) : undefined,
+    kartu_tinggi: b.kartu_tinggi != null ? angka(b.kartu_tinggi, { min: 30, max: 300, nama: "Tinggi kartu" }) : undefined,
+    kartu_huruf: b.kartu_huruf != null ? (["script", "serif", "sans"].includes(b.kartu_huruf) ? b.kartu_huruf : "script") : undefined,
+    kartu_warna: b.kartu_warna != null ? (/^#[0-9a-fA-F]{6}$/.test(b.kartu_warna) ? b.kartu_warna : "#3a2a2a") : undefined,
+    kartu_area: b.kartu_area != null ? (["tengah", "atas", "bawah", "kiri", "kanan"].includes(b.kartu_area) ? b.kartu_area : "tengah") : undefined,
+    kartu_latar: b.kartu_latar != null ? String(b.kartu_latar) : undefined,
     inv_tagline: b.inv_tagline != null ? teks(b.inv_tagline, { max: 120, nama: "Keterangan toko di nota" }) : undefined,
     inv_bank: b.inv_bank != null ? teks(b.inv_bank, { max: 300, nama: "Info rekening di nota" }) : undefined,
     inv_ttd_nama: b.inv_ttd_nama != null ? teks(b.inv_ttd_nama, { max: 60, nama: "Nama penanda tangan" }) : undefined,
@@ -33,6 +43,8 @@ route("PUT", "/api/pengaturan", "admin", ({ body }) => tx(() => {
     inv_ttd: b.inv_ttd != null ? String(b.inv_ttd) : undefined,
     wa_nomor: b.wa_nomor != null ? teks(b.wa_nomor, { max: 30, nama: "Nomor WA toko" }) : undefined,
   };
+  if (v.kartu_latar && (!/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(v.kartu_latar) || v.kartu_latar.length > 1_400_000)) throw bad("Gambar latar kartu tidak valid atau terlalu besar (maks ± 1 MB)");
+  if (v.kartu_latar !== undefined) setSetting("kartu_latar_kode", v.kartu_latar ? platform.sha256(v.kartu_latar).slice(0, 12) : "");
   if (v.inv_ttd && (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(v.inv_ttd) || v.inv_ttd.length > 150_000)) throw bad("Tanda tangan tidak valid atau terlalu besar");
   if (v.wa_nomor && String(v.wa_nomor).replace(/\D/g, "").length < 9) throw bad("Nomor WA toko tidak valid");
   if (v.canva_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.canva_email)) throw bad("Email Canva tidak valid");
@@ -42,7 +54,7 @@ route("PUT", "/api/pengaturan", "admin", ({ body }) => tx(() => {
   if ((v.prefix !== undefined || v.no_berikutnya !== undefined) && one("SELECT 1 x FROM sales WHERE no = ?", [prefix + String(no).padStart(9, "0")])) throw bad("Nomor invoice itu sudah pernah dipakai. Isi nomor yang lebih besar.");
   for (const [k, val] of Object.entries(v)) if (val !== undefined) setSetting(k, val);
   return { ok: true };
-}));
+}), { batas: 2_000_000 });
 
 /* ---- Sinkron Google Sheet ---- */
 route("GET", "/api/sync", "admin", () => statusSync());

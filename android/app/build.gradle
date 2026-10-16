@@ -11,8 +11,8 @@ android {
         minSdk 24          // Android 7.0 ke atas (termasuk perangkat iMin lama)
         targetSdk 34
         // Naikkan versionCode setiap kali membuat APK baru, supaya bisa dipasang menimpa versi lama tanpa kehilangan data.
-        versionCode 8
-        versionName '1.7.0'
+        versionCode 9
+        versionName '1.8.0'
     }
 
     // Kunci tanda tangan TIDAK disimpan di GitHub. Di GitHub Actions diambil dari Secret RG_KEYSTORE_B64;

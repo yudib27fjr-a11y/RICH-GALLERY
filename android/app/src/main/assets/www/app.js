@@ -705,7 +705,7 @@ function drawCart(){
     </div>` : ""}
     <label class="row pesanan-cek"><input type="checkbox" id="cKartuOn" ${cart.kartuOn ? "checked" : ""}> <b>Kartu ucapan</b> <span class="small muted">— dicetak / dibuat di Canva</span></label>
     ${cart.kartuOn ? `<div class="pesanan-isi stack">
-      <label class="f">Isi kartu<textarea id="cKartu" rows="4" placeholder="Happy Birthday!&#10;Semoga panjang umur dan sehat selalu.&#10;Dari: Rina">${esc(cart.kartu || "")}</textarea></label>
+      <label class="f">Ucapan yang dicetak di kartu (sesuai permintaan pelanggan)<textarea id="cKartu" rows="4" placeholder="Happy Birthday!&#10;Semoga panjang umur dan sehat selalu.&#10;Dari: Rina">${esc(cart.kartu || "")}</textarea></label>
       ${tombolKartu("keranjang")}
       ${B.toko.canva_url ? "" : `<p class="small muted" style="margin:0">Atur link desain Canva di Pengaturan → Canva supaya tombol Buka Canva langsung ke desain kartu toko.</p>`}
     </div>` : ""}
@@ -879,7 +879,103 @@ function pasangTombolKartu(akar, teks){
     if (!String(t || "").trim()) return toast("Isi kartu ucapan masih kosong");
     if (b.dataset.kartu === "salin") salinTeks(t, "Teks kartu disalin");
     else if (b.dataset.kartu === "canva") keCanva(t);
-    else cetakKartu(t);
+    else bukaKartu(t);
+  });
+}
+
+/* ---------- Kartu ucapan seukuran desain Canva: teks ucapan pelanggan di atas latar desain ---------- */
+const PX_MM = 12; // ± 300 dpi
+let latarKartu = { kode: "", img: null };
+async function ambilLatarKartu(){
+  const kode = B.toko.kartu_latar_kode || "";
+  if (!kode) return null;
+  if (latarKartu.kode === kode) return latarKartu.img;
+  let data = "";
+  try { const c = JSON.parse(localStorage.getItem("rg_kartu_latar") || "null"); if (c && c.kode === kode) data = c.data; } catch {}
+  if (!data) {
+    try { data = (await api("GET", "/api/kartu/latar")).latar || ""; } catch { return null; }
+    try { localStorage.setItem("rg_kartu_latar", JSON.stringify({ kode, data })); } catch {}
+  }
+  latarKartu = { kode, img: await muatGambar(data) };
+  return latarKartu.img;
+}
+const HURUF_KARTU = { script: '"Great Vibes", "Snell Roundhand", "Apple Chancery", "Segoe Script", "Brush Script MT", "Dancing Script", cursive', serif: 'Georgia, "Times New Roman", serif', sans: '"Helvetica Neue", Arial, sans-serif' };
+/** Gambar kartu: ukuran sesuai pengaturan (mm), latar desain (bila ada), teks ucapan di area yang dipilih — ukuran huruf menyesuaikan panjang teks. */
+async function gambarKartu(teks, o = {}){
+  const t = { ...B.toko, ...o };
+  const lebar = Number(t.kartu_lebar) || 100, tinggi = Number(t.kartu_tinggi) || 70;
+  const W = Math.round(lebar * PX_MM), H = Math.round(tinggi * PX_MM);
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d");
+  g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
+  const latar = o.latarImg !== undefined ? o.latarImg : await ambilLatarKartu();
+  if (latar) { const s = Math.max(W / latar.width, H / latar.height); g.drawImage(latar, (W - latar.width * s) / 2, (H - latar.height * s) / 2, latar.width * s, latar.height * s); }
+  // Area teks
+  const m = Math.min(W, H) * 0.09;
+  let ax = m, ay = m, aw = W - 2 * m, ah = H - 2 * m;
+  if (t.kartu_area === "atas") ah = H / 2 - m; else if (t.kartu_area === "bawah") { ay = H / 2; ah = H / 2 - m; }
+  else if (t.kartu_area === "kiri") aw = W / 2 - m; else if (t.kartu_area === "kanan") { ax = W / 2; aw = W / 2 - m; }
+  const font = HURUF_KARTU[t.kartu_huruf] || HURUF_KARTU.script, skala = t.kartu_huruf === "script" ? 1.15 : 1;
+  const paragraf = String(teks || "").replace(/\r/g, "").split("\n");
+  const susun = size => {
+    const out = [];
+    paragraf.forEach((p, i) => {
+      const sz = i === 0 && paragraf.length > 1 ? size * 1.25 : size;
+      g.font = `${i === 0 && paragraf.length > 1 ? "700 " : ""}${sz}px ${font}`;
+      if (!p.trim()) { out.push({ t: "", sz: size * 0.6 }); return; }
+      let baris = "";
+      p.split(/\s+/).forEach(k => { const coba = baris ? baris + " " + k : k; if (g.measureText(coba).width > aw && baris) { out.push({ t: baris, sz, b: i === 0 && paragraf.length > 1 }); baris = k; } else baris = coba; });
+      out.push({ t: baris, sz, b: i === 0 && paragraf.length > 1 });
+    });
+    return out;
+  };
+  let size = Math.min(ah / 3, aw / 8) * skala, L;
+  for (let n = 0; n < 40; n++) {
+    L = susun(size);
+    const tinggiTeks = L.reduce((a, l) => a + l.sz * 1.3, 0);
+    const lebarMaks = Math.max(...L.map(l => { g.font = `${l.b ? "700 " : ""}${l.sz}px ${font}`; return g.measureText(l.t).width; }));
+    if (tinggiTeks <= ah && lebarMaks <= aw) break;
+    size *= 0.92;
+  }
+  const tinggiTeks = L.reduce((a, l) => a + l.sz * 1.3, 0);
+  let y = ay + (ah - tinggiTeks) / 2;
+  g.fillStyle = t.kartu_warna || "#3a2a2a"; g.textAlign = "center"; g.textBaseline = "top";
+  L.forEach(l => { g.font = `${l.b ? "700 " : ""}${l.sz}px ${font}`; g.fillText(l.t, ax + aw / 2, y + l.sz * 0.12); y += l.sz * 1.3; });
+  return c;
+}
+/** Cetak kartu di printer biasa dengan ukuran kertas = ukuran kartu. */
+async function cetakKartuKertas(teks){
+  const lebar = Number(B.toko.kartu_lebar) || 100, tinggi = Number(B.toko.kartu_tinggi) || 70;
+  const c = await gambarKartu(teks);
+  if (NATIVE && versiApi() < 6) return toast("Cetak kartu butuh aplikasi versi terbaru. Sementara pakai Unduh gambar.");
+  $("#page-style").textContent = `@page{size:${lebar}mm ${tinggi}mm;margin:0}`;
+  $("#print-area").innerHTML = `<img src="${c.toDataURL("image/png")}" alt="" style="width:${lebar}mm;height:${tinggi}mm;display:block">`;
+  $("#print-area").classList.add("a4");
+  setTimeout(() => {
+    if (NATIVE && NATIVE.cetakUkuran) NATIVE.cetakUkuran(lebar, tinggi);
+    else if (NATIVE) { NATIVE.cetak(210); toast("Kartu dicetak seukuran aslinya di kertas A4 — gunting sesuai tepi. Pasang aplikasi terbaru untuk cetak langsung di kertas kartu."); }
+    else window.print();
+    setTimeout(() => $("#print-area").classList.remove("a4"), 1500);
+  }, 120);
+}
+/** Pratinjau kartu ucapan: teks dari pelanggan, bisa diedit, lalu cetak / unduh. */
+function bukaKartu(teks){
+  const lebar = Number(B.toko.kartu_lebar) || 100, tinggi = Number(B.toko.kartu_tinggi) || 70;
+  modal(`<h3>💌 Kartu ucapan <span class="small muted">${lebar} × ${tinggi} mm</span></h3>
+    <label class="f">Teks ucapan (sesuai permintaan pelanggan)<textarea id="kTeks" rows="4">${esc(teks)}</textarea></label>
+    <div class="kartu-pratinjau"><canvas id="kCv"></canvas></div>
+    <div class="actions" style="flex-wrap:wrap"><button class="btn" data-close>Tutup</button><button class="btn" id="kStruk" type="button">Cetak di printer struk</button><button class="btn" id="kUnduh" type="button">Unduh gambar</button><button class="btn pri" id="kCetak" type="button">Cetak kartu</button></div>`, m => {
+    let t;
+    const gambar = async () => { const c = await gambarKartu($("#kTeks", m).value), cv = $("#kCv", m); if (!cv) return; cv.width = c.width; cv.height = c.height; cv.getContext("2d").drawImage(c, 0, 0); return c; };
+    $("#kTeks", m).oninput = () => { clearTimeout(t); t = setTimeout(gambar, 250); };
+    $("#kCetak", m).onclick = () => cetakKartuKertas($("#kTeks", m).value);
+    $("#kStruk", m).onclick = () => cetakKartu($("#kTeks", m).value);
+    $("#kUnduh", m).onclick = async () => {
+      const c = await gambar(), url = c.toDataURL("image/png"), nama = `kartu-ucapan-${Date.now()}.png`;
+      if (NATIVE && NATIVE.simpanFile) { const lok = NATIVE.simpanFile(nama, "image/png", url.split(",")[1]); toast(lok ? `Tersimpan di ${lok}` : "Gagal menyimpan"); return; }
+      const a = document.createElement("a"); a.href = url; a.download = nama; document.body.appendChild(a); a.click(); a.remove();
+    };
+    gambar();
   });
 }
 
@@ -1708,6 +1804,7 @@ function vAtur(){
       <section class="panel stack" id="aCabang"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aWa"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aCanva"><div class="empty">Memuat…</div></section>
+      <section class="panel stack" id="aKartu"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aNota"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aSync"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aAbsen"><div class="empty">Memuat…</div></section>
@@ -1731,7 +1828,7 @@ function vAtur(){
   $("#pKartu").onclick = () => cetakKartu("Happy Birthday!\nSemoga panjang umur, sehat selalu,\ndan bahagia.\n\nDari: Rina");
   $("#pwSave").onclick = e => coba(async () => { await api("POST", "/api/akun/password", { lama: $("#pwL").value, baru: $("#pwB").value }); $("#pwL").value = $("#pwB").value = ""; toast("Password diganti"); }, e.target);
   if (!isAdmin()) return;
-  aturToko(); aturUser(); aturWA(); aturCanva(); aturNota(); aturSync(); aturCabang(); aturAbsen();
+  aturToko(); aturUser(); aturWA(); aturCanva(); aturKartu(); aturNota(); aturSync(); aturCabang(); aturAbsen();
   if ($("#bkDb")) $("#bkDb").onclick = e => coba(async () => { const r = await api("GET", "/api/cadangan"); toast(`Cadangan tersimpan di ${r.disimpan}`); }, e.target);
   $("#rsFile").onchange = e => { const f = e.target.files[0]; if (!f) return; e.target.value = "";
     const r = new FileReader();
@@ -1802,6 +1899,46 @@ async function aturWA(){
     await api("PUT", "/api/pengaturan", { wa_nomor: $("#waNo").value.trim(), wa_template: $("#waTpl").value, wa_otomatis: $("#waAuto").checked });
     await muatUlang(); toast("Pengaturan WhatsApp tersimpan"); aturWA();
   }, e.target);
+}
+
+/** Kartu ucapan: ukuran sama dengan desain Canva, latar dari desain Canva (opsional), gaya teks. */
+async function aturKartu(){
+  const s = await coba(() => api("GET", "/api/pengaturan")); if (!s || !$("#aKartu")) return;
+  const pusat = LOKAL && B.cabang, dis = pusat ? "disabled" : "";
+  let latarBaru; // undefined = tidak berubah, "" = dihapus, data URL = baru
+  $("#aKartu").innerHTML = `<h3 style="font-size:17px">💌 Kartu ucapan</h3>
+    <p class="small muted" style="margin:0">Teks ucapan dari pelanggan (kolom <b>Kartu ucapan</b> di kasir) dicetak di kartu dengan ukuran yang sama seperti desain Canva. Lihat ukurannya di Canva: <b>Ubah ukuran</b> / <b>File → Lihat pengaturan</b>.</p>
+    ${pusat ? `<p class="note" style="margin:0">Diatur di server (browser), lalu otomatis ikut ke perangkat ini.</p>` : ""}
+    <div class="row"><label class="f grow">Lebar (mm)<input type="number" id="kaL" value="${s.kartu_lebar}" min="30" max="300" step="0.5" ${dis}></label><label class="f grow">Tinggi (mm)<input type="number" id="kaT" value="${s.kartu_tinggi}" min="30" max="300" step="0.5" ${dis}></label></div>
+    <p class="small muted" style="margin:0">Bila ukuran di Canva dalam cm, kalikan 10 (10 cm = 100 mm). Dalam inci, kalikan 25,4. Dalam px (96 dpi), bagi 3,78.</p>
+    <div class="row"><label class="f grow">Huruf<select id="kaH" ${dis}><option value="script" ${s.kartu_huruf === "script" ? "selected" : ""}>Tulisan indah (script)</option><option value="serif" ${s.kartu_huruf === "serif" ? "selected" : ""}>Klasik (serif)</option><option value="sans" ${s.kartu_huruf === "sans" ? "selected" : ""}>Modern (sans)</option></select></label>
+      <label class="f grow">Warna teks<input type="color" id="kaW" value="${esc(s.kartu_warna || "#3a2a2a")}" ${dis} style="height:44px"></label>
+      <label class="f grow">Posisi teks<select id="kaA" ${dis}>${[["tengah", "Tengah"], ["atas", "Setengah atas"], ["bawah", "Setengah bawah"], ["kiri", "Setengah kiri"], ["kanan", "Setengah kanan"]].map(([v, l]) => `<option value="${v}" ${s.kartu_area === v ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>
+    <p class="small" style="margin:0"><b>Latar desain (opsional):</b> di Canva tekan <b>Bagikan → Unduh → PNG/JPG</b>, lalu pilih file itu di sini. Ucapan pelanggan dicetak di atas desain tersebut. Pilih posisi teks di bagian kosong desain.</p>
+    ${pusat ? "" : `<div class="row"><label class="btn sm" for="kaFile">Pilih gambar desain</label><input type="file" id="kaFile" accept="image/png,image/jpeg" hidden><button class="btn sm ghost" id="kaHapus" type="button" ${s.kartu_latar_kode ? "" : "hidden"}>Hapus latar</button></div>`}
+    <div class="kartu-pratinjau"><canvas id="kaCv"></canvas></div>
+    ${pusat ? "" : `<button class="btn pri" id="kaSimpan" type="button">Simpan pengaturan kartu</button>`}`;
+  const opsi = () => ({ kartu_lebar: num($("#kaL").value) || 100, kartu_tinggi: num($("#kaT").value) || 70, kartu_huruf: $("#kaH").value, kartu_warna: $("#kaW").value, kartu_area: $("#kaA").value });
+  let latarImg = await ambilLatarKartu();
+  const contoh = async () => { const c = await gambarKartu("Happy Birthday, Sinta!\nSemoga panjang umur, sehat selalu, dan semua impianmu tercapai.\n\nDari: Rina", { ...opsi(), latarImg }); const cv = $("#kaCv"); if (!cv) return; cv.width = c.width; cv.height = c.height; cv.getContext("2d").drawImage(c, 0, 0); };
+  $$("#aKartu input:not([type=file]), #aKartu select").forEach(i => i.oninput = i.onchange = contoh);
+  const f = $("#kaFile"); if (f) f.onchange = e => { const file = e.target.files[0]; if (!file) return; e.target.value = "";
+    const r = new FileReader(); r.onload = async () => {
+      const img = await muatGambar(String(r.result)); if (!img) return toast("Gambar tidak terbaca");
+      const o = opsi(), W = Math.round(o.kartu_lebar * PX_MM), H = Math.round(o.kartu_tinggi * PX_MM);
+      const c = document.createElement("canvas"); c.width = W; c.height = H; const g = c.getContext("2d");
+      const sk = Math.max(W / img.width, H / img.height); g.fillStyle = "#fff"; g.fillRect(0, 0, W, H); g.drawImage(img, (W - img.width * sk) / 2, (H - img.height * sk) / 2, img.width * sk, img.height * sk);
+      let q = 0.88; latarBaru = c.toDataURL("image/jpeg", q); while (latarBaru.length > 1_300_000 && q > 0.4) { q -= 0.1; latarBaru = c.toDataURL("image/jpeg", q); }
+      latarImg = await muatGambar(latarBaru); $("#kaHapus").hidden = false;
+      if (Math.abs(img.width / img.height - W / H) > 0.03) toast("Perbandingan gambar berbeda dengan ukuran kartu — gambar dipotong menyesuaikan. Periksa ukuran kartu.");
+      contoh();
+    }; r.readAsDataURL(file); };
+  const hp = $("#kaHapus"); if (hp) hp.onclick = () => { latarBaru = ""; latarImg = null; hp.hidden = true; contoh(); };
+  const sv = $("#kaSimpan"); if (sv) sv.onclick = e => coba(async () => {
+    const body = opsi(); if (latarBaru !== undefined) body.kartu_latar = latarBaru;
+    await api("PUT", "/api/pengaturan", body); await muatUlang(); latarKartu = { kode: "", img: null }; toast("Pengaturan kartu tersimpan"); aturKartu();
+  }, e.target);
+  contoh();
 }
 
 /** Nota / invoice A4: keterangan toko, rekening, dan tanda tangan elektronik (digambar langsung di layar). */

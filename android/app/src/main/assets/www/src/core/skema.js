@@ -299,7 +299,15 @@ export const DEFAULT_SETTINGS = {
   wa_otomatis: false,
   wa_template: "Halo {nama}, terima kasih sudah berbelanja di {toko} 🌸\n\nNo. nota: {no}\nTanggal: {tanggal}\nPesanan: {barang}\nTotal: {total}\n\nSemoga suka dengan pesanannya. Ditunggu kedatangannya kembali!",
   // Link template kartu ucapan di Canva
-  canva_url: "",
+  canva_url: "https://www.canva.com/design/DAGUxNBXd4E/goxmLsKxdhdJwkpg7AbxmA/edit",
+  // Kartu ucapan: dicetak seukuran desain Canva, berisi ucapan dari pelanggan
+  kartu_lebar: 100,
+  kartu_tinggi: 70,
+  kartu_huruf: "script",
+  kartu_warna: "#3a2a2a",
+  kartu_area: "tengah",
+  kartu_latar: "",
+  kartu_latar_kode: "",
   canva_email: "",
   wa_nomor: "",
   // Absensi sidik jari

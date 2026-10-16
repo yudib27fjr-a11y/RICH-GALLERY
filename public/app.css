@@ -231,3 +231,5 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 .ttd-kotak canvas{width:100%;height:auto;display:block;cursor:crosshair}
 .ttd-kotak img{position:absolute;inset:0;margin:auto;max-width:90%;max-height:90%;pointer-events:none}
 .ttd-kotak img{top:0;left:0;right:0;bottom:0}
+.kartu-pratinjau{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;align-self:center;max-width:520px;width:100%}
+.kartu-pratinjau canvas{width:100%;height:auto;display:block}
