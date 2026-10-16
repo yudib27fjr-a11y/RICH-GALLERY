@@ -152,6 +152,24 @@ test("perubahan di pusat (harga, produk baru, PIN) masuk ke cabang", async () =>
   await sinkron();
   const jual = (await pusat("GET", `/api/penjualan?dari=${BC.hariIni}&sampai=${BC.hariIni}`)).data.find(s => s.no === r.data.no);
   assert.equal(jual.kasir, "EVA");
+  // Penjualan yang dibuat langsung di pusat juga muncul di riwayat cabang, termasuk status batal
+  const pr = BP.produk.find(x => x.kode === "RG005");
+  const jp = await pusat("POST", "/api/penjualan", { items: [{ product_id: pr.id, harga: pr.harga, qty: 1, ready: true }], pelanggan: "dari pusat" });
+  assert.equal(jp.status, 200);
+  const jb = await pusat("POST", "/api/penjualan", { items: [{ nama: "jasa rangkai", harga: 20000, qty: 1 }] });
+  assert.equal((await pusat("POST", `/api/penjualan/${jb.data.id}/batal`, { alasan: "uji" })).status, 200);
+  await sinkron();
+  const riwayatC = (await cabang("GET", `/api/penjualan?dari=${BC.hariIni}&sampai=${BC.hariIni}`)).data;
+  const riwayatP = (await pusat("GET", `/api/penjualan?dari=${BC.hariIni}&sampai=${BC.hariIni}`)).data;
+  assert.deepEqual(riwayatC.map(x => x.no).sort(), riwayatP.map(x => x.no).sort(), "daftar transaksi cabang = pusat");
+  assert.ok(riwayatC.find(x => x.no === jb.data.no).batal_at, "status batal ikut");
+  assert.equal(riwayatC.find(x => x.no === jp.data.no).items[0].kode, "RG005");
+  // Disalin tidak membuat stok berubah dua kali: stok cabang tetap = stok pusat
+  await segarkan();
+  assert.equal(BC.produk.find(x => x.kode === "RG005").stok, prodP("RG005").stok);
+  // Sinkron ulang tidak menggandakan salinan
+  await sinkron();
+  assert.equal((await cabang("GET", `/api/penjualan?dari=${BC.hariIni}&sampai=${BC.hariIni}`)).data.length, riwayatC.length);
 });
 
 test("server mati: transaksi menunggu, lalu terkirim saat server hidup lagi", async () => {

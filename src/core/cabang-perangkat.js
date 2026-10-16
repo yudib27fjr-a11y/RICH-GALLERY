@@ -56,12 +56,15 @@ export function statusCabang(){
   };
 }
 
-let jalan = false;
-/** Kirim antrean lalu ambil data terbaru. Aman dipanggil kapan saja; tidak berjalan dobel. */
-export async function sinkronCabang(){
+let jalan = false, tarikTerakhir = 0;
+const JEDA_TARIK = 5 * 60_000; // hemat kuota server gratis: ambil katalog & riwayat paling sering 5 menit sekali
+/** Kirim antrean lalu ambil data terbaru. Aman dipanggil kapan saja; tidak berjalan dobel.
+ *  paksa: ambil data terbaru sekarang juga (tombol "Sinkron sekarang"). */
+export async function sinkronCabang({ paksa = false } = {}){
   if (!cabangAktif() || jalan) return statusCabang();
   jalan = true;
   const s = getSettings();
+  let terkirim = 0;
   try {
     for (let putaran = 0; putaran < 40; putaran++) {
       const batch = all("SELECT uid, aksi, data, waktu, oleh FROM cabang_kirim WHERE terkirim IS NULL ORDER BY id LIMIT 40");
@@ -74,6 +77,7 @@ export async function sinkronCabang(){
       tx(() => {
         for (const h of j.hasil || []) {
           if (h.status === "ok" || h.status === "ditolak") {
+            terkirim++;
             run("UPDATE cabang_kirim SET terkirim = datetime('now'), hasil = ?, galat = ? WHERE uid = ?", [h.status, h.status === "ditolak" ? String(h.pesan || "").slice(0, 300) : null, h.uid]);
           } else {
             run("UPDATE cabang_kirim SET percobaan = percobaan + 1, galat = ? WHERE uid = ?", [String(h.pesan || "gagal").slice(0, 300), h.uid]);
@@ -84,9 +88,11 @@ export async function sinkronCabang(){
       if (berhenti || (j.hasil || []).length < batch.length) break; // urutan dijaga: berhenti di perintah yang gagal
     }
     // Ambil data terbaru hanya bila tidak ada yang menunggu, supaya stok lokal tidak tertimpa sebelum transaksinya sampai.
-    if (!one("SELECT COUNT(*) n FROM cabang_kirim WHERE terkirim IS NULL").n) {
+    const perluTarik = paksa || terkirim > 0 || Date.now() - tarikTerakhir > JEDA_TARIK;
+    if (perluTarik && !one("SELECT COUNT(*) n FROM cabang_kirim WHERE terkirim IS NULL").n) {
       const snap = await panggil(s.cabang_url, "/api/cabang/tarik", { token: s.cabang_token });
       terapkanSnapshot(snap);
+      tarikTerakhir = Date.now();
     }
     setSetting("cabang_terakhir", new Date().toISOString());
     setSetting("cabang_galat", "");
@@ -132,6 +138,22 @@ export function terapkanSnapshot(snap){
       else run("INSERT INTO users(nama, nama_key, peran, pass_hash, aktif) VALUES (?,?,?,?,?)", [u.nama, u.nama_key, u.peran, u.pass_hash, u.aktif]);
     }
     for (const k of SETELAN_TOKO) if (snap.toko && snap.toko[k] !== undefined) setSetting(k, snap.toko[k]);
+    // Penjualan dari perangkat lain / dari server ikut disalin (hanya untuk riwayat & laporan; stok sudah mengikuti server).
+    for (const x of Array.isArray(snap.penjualan) ? snap.penjualan : []) {
+      if (!x || !x.no) continue;
+      const lokal = one("SELECT id, batal_at FROM sales WHERE no = ?", [x.no]);
+      if (lokal) {
+        if (x.batal_at && !lokal.batal_at) run("UPDATE sales SET batal_at = ?, batal_oleh = ?, batal_alasan = ? WHERE id = ?", [x.batal_at, x.batal_oleh, x.batal_alasan, lokal.id]);
+        continue;
+      }
+      const id = Number(run(`INSERT INTO sales(no, tgl, jam, kasir, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan, batal_at, batal_oleh, batal_alasan)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [x.no, x.tgl, x.jam, x.kasir, x.pelanggan, x.hp || "", x.subtotal, x.diskon || 0, x.ongkir || 0, x.total, x.metode, x.bayar, x.catatan || "", x.batal_at, x.batal_oleh, x.batal_alasan]).lastInsertRowid);
+      for (const it of Array.isArray(x.items) ? x.items : []) {
+        const p = it.kode ? one("SELECT id FROM products WHERE kode = ? AND dihapus IS NULL", [it.kode]) : null;
+        run("INSERT INTO sale_items(sale_id, product_id, kode, nama, kategori, harga, qty, hpp, ready) VALUES (?,?,?,?,?,?,?,?,?)",
+          [id, p ? p.id : null, it.kode || "", it.nama, it.kategori, it.harga, it.qty, it.hpp || 0, it.ready || 0]);
+      }
+    }
   });
 }
 
@@ -158,6 +180,7 @@ export async function sambungCabang({ url, nama, password, perangkat, paksa, ung
   try {
     j = await panggil(url, "/api/cabang/daftar", { nama, password, perangkat: perangkat || "Perangkat kasir", noTerakhir: terakhir ? terakhir.no : "", paksa: !!(paksa || kirimSemua), unggahAwal: !!kirimSemua });
     if (kirimSemua) await unggahAwal(url, j.token);
+    tarikTerakhir = 0;
   } catch (e) { throw new HttpError(e.status && e.status < 500 ? e.status : 502, e.message); }
   tx(() => {
     setSetting("cabang_url", url);
@@ -168,7 +191,7 @@ export async function sambungCabang({ url, nama, password, perangkat, paksa, ung
     // Antrean Google Sheet perangkat ini tidak dikirim lagi: server pusat yang mengirim ke sheet.
     run("UPDATE outbox SET terkirim = datetime('now') WHERE terkirim IS NULL");
   });
-  return sinkronCabang();
+  return sinkronCabang({ paksa: true });
 }
 
 export function putusCabang({ paksa } = {}){
