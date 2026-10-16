@@ -2,7 +2,7 @@
    Di perangkat (iMin, mode offline): /api/cabang (status), /sambung, /putus, /sinkron.
    Di server pusat: /api/cabang/daftar, /kirim, /tarik (diakses perangkat dengan token perangkat), dan daftar perangkat untuk admin. */
 import { route, cariRoute } from "../router.js";
-import { one, all, run, tx, getSettings, setSetting } from "../db.js";
+import { one, all, run, tx, getSettings, setSetting, versiData } from "../db.js";
 import { hapusData, sisipkanBaris, TABEL_DATA } from "../ekspor.js";
 import { platform } from "../platform.js";
 import { HttpError, bad, notFound, teks, denganWaktu } from "../util.js";
@@ -21,6 +21,8 @@ route("POST", "/api/cabang/sambung", "admin", async ({ body }) => sambungCabang(
 }), { batas: 100_000 });
 route("POST", "/api/cabang/putus", "admin", ({ body }) => putusCabang({ paksa: !!body.paksa }));
 route("POST", "/api/cabang/sinkron", "semua", () => sinkronCabang({ paksa: true }));
+/* Penanda versi data (server maupun perangkat): layar memakainya untuk tahu kapan perlu memuat ulang. */
+route("GET", "/api/versi", "semua", () => ({ versi: versiData() }));
 
 /* Di mode cabang, data induk hanya diubah di server pusat (perangkat menerimanya saat sinkron). */
 for (const [m, p] of [
@@ -35,7 +37,8 @@ for (const [m, p] of [
 function perangkatDariToken(token){
   const d = token ? one("SELECT * FROM perangkat WHERE token_hash = ? AND dicabut IS NULL", [platform.sha256(String(token))]) : null;
   if (!d) throw new HttpError(401, "Perangkat tidak dikenal atau sudah dicabut. Sambungkan ulang dari Pengaturan di perangkat.");
-  run("UPDATE perangkat SET terakhir = datetime('now') WHERE id = ?", [d.id]);
+  // Dicatat paling sering 2 menit sekali: perangkat bertanya tiap beberapa detik, jangan boros tulis.
+  run("UPDATE perangkat SET terakhir = datetime('now') WHERE id = ? AND (terakhir IS NULL OR terakhir < datetime('now', '-2 minutes'))", [d.id]);
   return d;
 }
 const serverKosong = () => one("SELECT (SELECT COUNT(*) FROM sales) + (SELECT COUNT(*) FROM produksi) + (SELECT COUNT(*) FROM expenses) n").n === 0;
@@ -95,6 +98,14 @@ const TABEL = { produk: "products", bahan: "materials" };
 const idBarang = (jenis, kode) => kode ? one(`SELECT id FROM ${TABEL[jenis]} WHERE kode = ? AND dihapus IS NULL`, [kode]) : null;
 const userNama = nama => nama ? one("SELECT id, nama, peran FROM users WHERE nama_key = ? AND aktif = 1", [String(nama).toLowerCase()]) : null;
 
+/** Baris yang dibuat di server tidak punya uid; ke perangkat dikirim sebagai "srv:<id>". */
+const kunciBaris = r => r.uid || "srv:" + r.id;
+function barisUid(tabel, uid){
+  uid = String(uid || "");
+  const m = uid.match(/^srv:(\d+)$/);
+  return m ? one(`SELECT * FROM ${tabel} WHERE id = ? AND uid IS NULL`, [+m[1]]) : one(`SELECT * FROM ${tabel} WHERE uid = ?`, [uid]);
+}
+
 /** Jalankan handler endpoint biasa di server, sebagai user pembuat dan pada waktu asli transaksinya. */
 function panggil(method, path, body, user, waktu, replay = {}){
   const r = cariRoute(method, path);
@@ -141,15 +152,15 @@ function terapkan(p, d, alat){
       return panggil("POST", "/api/produksi", { uid: x.uid, tgl: x.tgl, pembuat_id: pembuat.id, restock: x.restock, items }, user, w);
     }
     case "hapus_produksi": {
-      const r = one("SELECT id FROM produksi WHERE uid = ?", [String(x.uid || "")]);
+      const r = barisUid("produksi", x.uid);
       if (!r) throw bad("Catatan produksi yang dihapus tidak ada di server");
       return panggil("DELETE", `/api/produksi/${r.id}`, {}, user, w);
     }
     case "pengeluaran":
       return panggil("POST", "/api/pengeluaran", { uid: x.uid, tgl: x.tgl, kategori: x.kategori, ket: x.ket, nominal: x.nominal }, user, w);
     case "hapus_pengeluaran": {
-      const r = one("SELECT id FROM expenses WHERE uid = ? AND dihapus IS NULL", [String(x.uid || "")]);
-      if (!r) return { ok: true };
+      const r = barisUid("expenses", x.uid);
+      if (!r || r.dihapus) return { ok: true };
       return panggil("DELETE", `/api/pengeluaran/${r.id}`, {}, user, w);
     }
     default: throw bad(`Jenis perintah tidak dikenal: ${p.aksi}`);
@@ -199,8 +210,25 @@ function penjualanTerbaru(){
   return sales.map(x => { delete x.id; return x; });
 }
 
+/** Produksi, pengeluaran, dan pembayaran insentif 40 hari terakhir (cukup untuk periode insentif berjalan & sebelumnya). */
+function keuanganTerbaru(sejak){
+  return {
+    produksi: all(`SELECT p.id, p.uid, p.tgl, p.kode, p.nama, p.qty, u.nama_key pembuat, p.tarif, p.restock, p.oleh, p.dibuat
+      FROM produksi p JOIN users u ON u.id = p.pembuat_id WHERE p.tgl >= ? ORDER BY p.id`, [sejak]).map(r => { r.kunci = kunciBaris(r); delete r.id; delete r.uid; return r; }),
+    pengeluaran: all("SELECT id, uid, tgl, kategori, ket, nominal, oleh, dihapus, dibuat FROM expenses WHERE tgl >= ? ORDER BY id", [sejak])
+      .map(r => { r.kunci = kunciBaris(r); delete r.id; delete r.uid; return r; }),
+    insentif: all(`SELECT u.nama_key pembuat, b.periode_dari, b.periode_sampai, b.qty, b.hitung, b.nominal, b.tgl, b.ket, b.oleh
+      FROM insentif_bayar b JOIN users u ON u.id = b.pembuat_id WHERE b.periode_sampai >= ?`, [sejak]),
+  };
+}
+
+/* Perangkat bertanya "ada yang baru?" dengan versi terakhir yang ia punya. Bila sama, jawabannya kecil sekali (hemat kuota);
+   bila berbeda, dikirim data lengkap terbaru. */
 route("POST", "/api/cabang/tarik", false, ({ body }) => {
   perangkatDariToken(body.token);
+  const versi = versiData() || "awal";
+  if (body.versi && body.versi === versi) return { tetap: true, versi };
+  const sejak = one("SELECT date('now', '+7 hours', '-40 days') d").d;
   const s = Object.fromEntries(all("SELECT kunci, nilai FROM settings WHERE kunci IN ('nama_toko','alamat','telp','footer','prefix','hpp_persen','insentif','periode_mulai')").map(r => [r.kunci, JSON.parse(r.nilai)]));
   return {
     produk: all("SELECT kode, nama, kategori, harga, hpp, stok, stok_min, barcode, insentif, aktif FROM products WHERE dihapus IS NULL ORDER BY id"),
@@ -208,6 +236,8 @@ route("POST", "/api/cabang/tarik", false, ({ body }) => {
     users: all("SELECT nama, nama_key, peran, pass_hash, aktif FROM users ORDER BY id"),
     toko: s,
     penjualan: penjualanTerbaru(),
+    sejak, ...keuanganTerbaru(sejak),
+    versi,
   };
 });
 

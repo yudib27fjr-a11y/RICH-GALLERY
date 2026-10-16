@@ -52,3 +52,6 @@ export function getSettings(){
   return s;
 }
 export function setSetting(k, v){ run("INSERT OR REPLACE INTO settings(kunci, nilai) VALUES (?, ?)", [k, JSON.stringify(v)]); }
+/** Penanda "data berubah": perangkat & layar cukup membandingkan nilai kecil ini untuk tahu ada transaksi baru. */
+export function tandaiBerubah(){ setSetting("data_versi", Date.now().toString(36) + Math.random().toString(36).slice(2, 6)); }
+export function versiData(){ const r = one("SELECT nilai FROM settings WHERE kunci = 'data_versi'"); try { return r ? JSON.parse(r.nilai) : ""; } catch { return ""; } }

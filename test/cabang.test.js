@@ -172,6 +172,65 @@ test("perubahan di pusat (harga, produk baru, PIN) masuk ke cabang", async () =>
   assert.equal((await cabang("GET", `/api/penjualan?dari=${BC.hariIni}&sampai=${BC.hariIni}`)).data.length, riwayatC.length);
 });
 
+test("produksi, pengeluaran & insentif dari pusat masuk ke cabang; versi sama = jawaban kecil", async () => {
+  await segarkan();
+  const hari = BC.hariIni;
+  // Perangkat bertanya dengan versi terakhir: bila tidak ada perubahan, server tidak mengirim data.
+  const d = (await pusat("POST", "/api/cabang/daftar", { nama: "Yudi", password: "rahasia-123", perangkat: "uji versi" })).data;
+  const t1 = (await pusat("POST", "/api/cabang/tarik", { token: d.token })).data;
+  assert.ok(t1.versi && Array.isArray(t1.produk) && Array.isArray(t1.produksi) && t1.sejak);
+  const t2 = (await pusat("POST", "/api/cabang/tarik", { token: d.token, versi: t1.versi })).data;
+  assert.deepEqual(t2, { tetap: true, versi: t1.versi });
+  const v1 = (await pusat("GET", "/api/versi")).data.versi;
+  assert.equal(v1, t1.versi);
+
+  // Dicatat langsung di pusat
+  const anis = BP.staf.find(s => s.nama === "ANIS") || BP.staf.find(s => s.peran === "karyawan" && s.nama !== "IZA");
+  const pr = prodP("RG006");
+  assert.equal((await pusat("POST", "/api/produksi", { pembuat_id: anis.id, restock: false, items: [{ product_id: pr.id, qty: 5 }, { product_id: prodP("RG007").id, qty: 2 }] })).status, 200);
+  const ex = await pusat("POST", "/api/pengeluaran", { tgl: hari, kategori: "Operasional", ket: "listrik pusat", nominal: 50000 });
+  const exHapus = await pusat("POST", "/api/pengeluaran", { tgl: hari, kategori: "Operasional", ket: "batal pusat", nominal: 1 });
+  assert.equal(ex.status, 200);
+  assert.equal((await pusat("DELETE", `/api/pengeluaran/${exHapus.data.id}`)).status, 200);
+  const t3 = (await pusat("POST", "/api/cabang/tarik", { token: d.token, versi: t1.versi })).data;
+  assert.ok(!t3.tetap && t3.versi !== t1.versi, "ada perubahan → data lengkap");
+
+  await sinkron();
+  const prodC = (await cabang("GET", `/api/produksi?dari=${hari}&sampai=${hari}`)).data;
+  const prodP2 = (await pusat("GET", `/api/produksi?dari=${hari}&sampai=${hari}`)).data;
+  assert.deepEqual(prodC.map(x => `${x.kode}:${x.qty}:${x.pembuat}`).sort(), prodP2.map(x => `${x.kode}:${x.qty}:${x.pembuat}`).sort(), "produksi cabang = pusat");
+  const keluarC = (await cabang("GET", `/api/pengeluaran?dari=${hari}&sampai=${hari}`)).data;
+  const keluarP = (await pusat("GET", `/api/pengeluaran?dari=${hari}&sampai=${hari}`)).data;
+  assert.deepEqual(keluarC.map(x => `${x.ket}:${x.nominal}`).sort(), keluarP.map(x => `${x.ket}:${x.nominal}`).sort(), "pengeluaran cabang = pusat");
+  assert.ok(keluarC.some(x => x.ket === "ganda"), "pengeluaran dari perangkat lain juga masuk");
+  assert.ok(!keluarC.some(x => x.ket === "batal pusat"), "yang dihapus di pusat ikut terhapus");
+  // Stok tidak berubah karena salinan produksi
+  await segarkan();
+  assert.equal(BC.produk.find(x => x.kode === "RG006").stok, prodP("RG006").stok);
+
+  // Hapus di cabang catatan produksi yang dibuat di pusat → terhapus juga di pusat
+  const dariPusat = prodC.find(x => x.kode === "RG007");
+  assert.equal((await cabang("DELETE", `/api/produksi/${dariPusat.id}`)).status, 200);
+  const st = await sinkron();
+  assert.equal(st.ditolak, 0, JSON.stringify(st.ditolakDaftar));
+  assert.ok(!(await pusat("GET", `/api/produksi?dari=${hari}&sampai=${hari}`)).data.some(x => x.kode === "RG007"));
+  // Sinkron ulang tidak menggandakan
+  await sinkron(); await sinkron();
+  assert.equal((await cabang("GET", `/api/produksi?dari=${hari}&sampai=${hari}`)).data.length, (await pusat("GET", `/api/produksi?dari=${hari}&sampai=${hari}`)).data.length);
+  assert.equal((await cabang("GET", `/api/pengeluaran?dari=${hari}&sampai=${hari}`)).data.length, keluarP.length);
+
+  // Insentif dibayar di pusat → cabang tahu (status dibayar & pengeluarannya)
+  const ins = (await pusat("GET", `/api/insentif?tgl=${hari}`)).data;
+  const baris = ins.rows.find(r => r.pembuat_id === anis.id);
+  assert.equal((await pusat("POST", "/api/insentif/bayar", { pembuat_id: anis.id, periode_dari: ins.dari, catat_pengeluaran: true })).status, 200);
+  await sinkron();
+  const insC = (await cabang("GET", `/api/insentif?tgl=${hari}`)).data;
+  assert.ok(insC.rows.find(r => r.nama === baris.nama).bayar, "status dibayar ikut");
+  assert.ok((await cabang("GET", `/api/pengeluaran?dari=${hari}&sampai=${hari}`)).data.some(x => x.kategori === "Insentif Produksi"));
+  // Versi data di cabang ikut berubah (layar memakainya untuk memuat ulang otomatis)
+  assert.ok((await cabang("GET", "/api/versi")).data.versi);
+});
+
 test("server mati: transaksi menunggu, lalu terkirim saat server hidup lagi", async () => {
   const pusatProc = procs[0];
   pusatProc.kill(); await new Promise(r => pusatProc.on("exit", r));

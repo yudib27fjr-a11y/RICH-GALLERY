@@ -21,7 +21,7 @@ server.listen(config.port, config.host, () => {
 const syncTimer = setInterval(() => kirimOutbox().catch(e => console.error("sync:", e.message)), config.syncIntervalSec * 1000);
 const sesiTimer = setInterval(bersihkanSesiKadaluarsa, 3600_000);
 // Bila server ini disambungkan sebagai cabang dari server lain: kirim transaksi & ambil data terbaru tiap 30 detik.
-const cabangTimer = setInterval(() => sinkronCabang().catch(e => console.error("cabang:", e.message)), 30_000);
+const cabangTimer = setInterval(() => sinkronCabang().catch(e => console.error("cabang:", e.message)), 10_000);
 
 function berhenti(){
   console.log("Menutup server…");

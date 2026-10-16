@@ -1,10 +1,12 @@
 import { HttpError } from "./util.js";
 import { userDariCtx } from "./auth.js";
-import { tx } from "./db.js";
+import { tx, tandaiBerubah } from "./db.js";
 import { platform } from "./platform.js";
 import { cabangAktif, catatPerintah, jadwalkanSinkron, PESAN_PUSAT } from "./cabang-perangkat.js";
 
 const routes = [];
+/* Permintaan yang tidak mengubah data toko (tidak perlu memicu sinkron/muat ulang di perangkat lain). */
+const TANPA_VERSI = new Set(["/api/login", "/api/logout", "/api/cabang/tarik", "/api/cabang/sinkron", "/api/cabang/daftar"]);
 /**
  * Daftarkan endpoint. akses: false (publik), "semua" (harus login), "admin".
  * Handler menerima { user, params, query, body, ctx } dan mengembalikan data,
@@ -53,6 +55,7 @@ export async function jalankan(ctx){
     } else {
       hasil = await r.handler({ user, params, query: ctx.query || {}, body: ctx.body || {}, ctx });
     }
+    if (ctx.method !== "GET" && !TANPA_VERSI.has(ctx.path)) { try { tandaiBerubah(); } catch { /* bukan penentu */ } }
     if (hasil && hasil.unduh) return { status: 200, unduh: hasil.unduh };
     return { status: 200, data: hasil ?? { ok: true } };
   } catch (e) {

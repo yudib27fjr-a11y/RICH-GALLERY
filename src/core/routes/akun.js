@@ -1,5 +1,5 @@
 import { route } from "../router.js";
-import { one, all, run, tx, getSettings } from "../db.js";
+import { one, all, run, tx, getSettings , versiData } from "../db.js";
 import { HttpError, bad, notFound, teks, pilihan, hariIni } from "../util.js";
 import { hashPassword, cekPassword, validasiPassword, buatSesi, hapusSesi, hapusSemuaSesiUser, cekBatasLogin, catatGagal, resetGagal } from "../auth.js";
 import { KATEGORI, KAT_BAHAN, KAT_PENGELUARAN, METODE } from "../../../public/shared.js";
@@ -56,6 +56,7 @@ route("GET", "/api/bootstrap", "semua", ({ user }) => {
     produk: all(`SELECT ${produkKolom} FROM products WHERE dihapus IS NULL ORDER BY kode`),
     bahan: all("SELECT id, kode, nama, kategori, harga, satuan, stok, stok_min, barcode FROM materials WHERE dihapus IS NULL ORDER BY kode"),
     staf: all("SELECT id, nama, peran FROM users WHERE aktif = 1 ORDER BY peran, nama"),
+    versi: versiData(),
   };
 });
 

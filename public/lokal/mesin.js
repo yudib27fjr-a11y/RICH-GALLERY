@@ -1,6 +1,6 @@
 /* Mesin lokal: menjalankan seluruh API Rich Gallery di dalam aplikasi Android, tanpa server.
    Aturan bisnisnya sama persis dengan server (src/core), hanya database dan platformnya yang berbeda. */
-import { pasangDriver, migrasi, seedJikaKosong, jalankan, kirimOutbox, bersihkanSesiKadaluarsa, sinkronCabang } from "/src/core/semua.js";
+import { pasangDriver, migrasi, seedJikaKosong, jalankan, kirimOutbox, bersihkanSesiKadaluarsa, sinkronCabang, pendengar } from "/src/core/semua.js";
 import { buatDriver } from "./driver.js";
 import { pasangPlatformLokal } from "./platform.js";
 
@@ -31,9 +31,17 @@ const kirim = () => { if (navigator.onLine) kirimOutbox().catch(() => {}); };
 setInterval(kirim, 60_000);
 window.addEventListener("online", kirim);
 setTimeout(kirim, 5000);
-// Mode cabang: kirim transaksi ke server pusat & ambil data terbaru tiap 30 detik, dan begitu internet kembali.
+// Mode cabang: transaksi di perangkat ini langsung dikirim (beberapa detik setelah tersimpan).
+// Selain itu perangkat bertanya ke server "ada yang baru?" tiap 10 detik selama aplikasi terbuka
+// (jawaban "tidak ada" sangat kecil); saat aplikasi di latar belakang cukup tiap 2 menit.
 const sinkron = () => { if (navigator.onLine) sinkronCabang().catch(() => {}); };
-setInterval(sinkron, 30_000);
+let terakhir = 0;
+setInterval(() => {
+  const jeda = document.hidden ? 120_000 : 10_000;
+  if (Date.now() - terakhir >= jeda - 500) { terakhir = Date.now(); sinkron(); }
+}, 5_000);
 window.addEventListener("online", sinkron);
-document.addEventListener("visibilitychange", () => { if (!document.hidden) sinkron(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { terakhir = Date.now(); sinkron(); } });
 setTimeout(sinkron, 3000);
+// Data baru dari server sudah masuk: beri tahu layar supaya menampilkan angka terbaru.
+pendengar.dataBaru = () => { try { window.dispatchEvent(new Event("rg-data-baru")); } catch { /* abaikan */ } };

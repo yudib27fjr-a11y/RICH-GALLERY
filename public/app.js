@@ -16,6 +16,7 @@ const bulanAkhir = ym => { const [y, m] = ym.split("-").map(Number); return `${y
 
 /* ================= state ================= */
 let B = null;              // data dari /api/bootstrap
+let versiLayar = "";       // versi data yang sedang tampil (lihat "data selalu terbaru")
 const isAdmin = () => B?.me.peran === "admin";
 const today = () => B?.hariIni || new Date().toISOString().slice(0, 10);
 const prodBy = id => B.produk.find(p => p.id === id);
@@ -101,7 +102,7 @@ async function coba(fn, tombol){
   catch (e) { if (e.status !== 401) toast(e.message); }
   finally { if (tombol) tombol.disabled = false; }
 }
-async function muatUlang(){ const b = await api("GET", "/api/bootstrap"); B = b; }
+async function muatUlang(){ const b = await api("GET", "/api/bootstrap"); B = b; if (b && b.versi !== undefined) versiLayar = b.versi; }
 
 /* Galat tak terduga ditampilkan, bukan diam saja (mis. fitur browser yang belum ada di WebView perangkat lama). */
 window.addEventListener("error", e => { try { toast("Galat: " + (e.message || "tidak diketahui")); } catch {} });
@@ -420,7 +421,7 @@ function render(){
   if (!daftarView().some(v => v[0] === view)) view = "kasir";
   renderNav();
   $("#cartbar").hidden = view !== "kasir";
-  ({ kasir: vKasir, riwayat: vRiwayat, produksi: vProduksi, stok: vStok, mutasi: vMutasi, opname: vOpname, biaya: vBiaya, laporan: vLaporan, atur: vAtur })[view]();
+  return ({ kasir: vKasir, riwayat: vRiwayat, produksi: vProduksi, stok: vStok, mutasi: vMutasi, opname: vOpname, biaya: vBiaya, laporan: vLaporan, atur: vAtur })[view]();
 }
 
 /* ================= KASIR ================= */
@@ -1252,8 +1253,90 @@ function halamanTampil(){
   try { NATIVE?.webSiap?.(); const s = NATIVE?.statusPembaruan?.(); if (s) { const o = JSON.parse(s); window.rgPembaruan(o.jenis, o.teks); } } catch {}
 }
 mulai();
-// Perbarui stok & daftar barang saat aplikasi kembali dibuka, supaya kasir melihat angka terbaru dari perangkat lain.
-document.addEventListener("visibilitychange", async () => {
-  if (document.hidden || !B || $("#modalRoot .modal")) return;
-  try { await muatUlang(); if (view === "kasir") drawGrid(); else if (["stok", "opname"].includes(view)) render(); } catch {}
-});
+/* ================= data selalu terbaru =================
+   - Perangkat cabang: begitu data dari server masuk (transaksi perangkat lain, produksi, pengeluaran), layar dimuat ulang.
+   - Server (browser): memeriksa penanda versi data tiap 15 detik; bila berubah, layar dimuat ulang.
+   - Tarik layar ke bawah: sinkron sekarang juga (perangkat cabang) lalu muat ulang.
+   Isian formulir yang sedang diketik tidak pernah tertimpa. */
+let formKotor = false, sedangSegarkan = false;
+document.addEventListener("input", e => {
+  const t = e.target;
+  if (!t || !t.closest || !t.closest("#main") || t.closest(".view-head")) return;
+  if (["search", "date", "month"].includes(t.type)) return; // filter tampilan disimpan terpisah, aman dimuat ulang
+  formKotor = true;
+}, true);
+const _render = render;
+render = function(){ formKotor = false; return _render(); };
+const bisaGambarUlang = () => !formKotor && !$("#modalRoot .modal") &&
+  !(document.activeElement && document.activeElement.closest && document.activeElement.closest("#main") && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) && !["search", "date", "month"].includes(document.activeElement.type));
+/** Ambil data terbaru dari server (paksa: dari tarikan layar) lalu tampilkan. */
+async function segarkan({ paksa = false } = {}){
+  if (!B || sedangSegarkan) return false;
+  sedangSegarkan = true;
+  let pesan = "";
+  try {
+    if (paksa && LOKAL) {
+      try {
+        const c = await api("POST", "/api/cabang/sinkron");
+        if (c && c.aktif) pesan = c.galatTerakhir ? "Belum tersinkron: " + c.galatTerakhir : c.menunggu ? `${c.menunggu} transaksi masih menunggu dikirim` : "Sudah sinkron dengan server";
+      } catch (e) { pesan = e.message; }
+    }
+    await muatUlang();
+    const main = $("#main"), atas = main ? main.scrollTop : 0;
+    if (view === "kasir") drawGrid(); // keranjang & isian kasir tidak disentuh
+    else if (bisaGambarUlang()) { await render(); if ($("#main")) $("#main").scrollTop = atas; }
+    else if (paksa) pesan = (pesan ? pesan + ". " : "") + "Simpan atau batalkan isian dulu untuk melihat data terbaru";
+    if (paksa) toast(pesan || "Data terbaru sudah dimuat");
+    if (isAdmin()) cekSync();
+    return true;
+  } catch (e) { if (paksa) toast(e.message); return false; }
+  finally { sedangSegarkan = false; }
+}
+window.addEventListener("rg-data-baru", () => { if (!document.hidden) segarkan(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && B && !$("#modalRoot .modal")) segarkan(); });
+// Pemeriksaan versi data: murah (satu angka kecil). Di perangkat cabang ini memeriksa database lokal.
+setInterval(async () => {
+  if (document.hidden || !B || sedangSegarkan) return;
+  try {
+    const v = (await api("GET", "/api/versi")).versi || "";
+    if (v !== versiLayar) segarkan();
+  } catch {}
+}, LOKAL ? 5_000 : 15_000);
+
+/* Tarik ke bawah untuk sinkron (layar sentuh). */
+(function tarikSegarkan(){
+  let mulaiY = null, jarak = 0, aktif = false;
+  const AMBANG = 70;
+  const tanda = () => {
+    let el = document.getElementById("tarikSegar");
+    if (!el) { el = document.createElement("div"); el.id = "tarikSegar"; el.className = "tarik-segar"; document.body.appendChild(el); }
+    return el;
+  };
+  const sembunyi = () => { const el = document.getElementById("tarikSegar"); if (el) { el.style.opacity = "0"; el.style.transform = "translate(-50%, -60px)"; } };
+  document.addEventListener("touchstart", e => {
+    const main = e.target && e.target.closest && e.target.closest("#main");
+    mulaiY = main && main.scrollTop <= 0 && e.touches.length === 1 && !$("#modalRoot .modal") ? e.touches[0].clientY : null;
+    jarak = 0; aktif = false;
+  }, { passive: true });
+  document.addEventListener("touchmove", e => {
+    if (mulaiY === null) return;
+    const main = $("#main");
+    jarak = e.touches[0].clientY - mulaiY;
+    if (jarak <= 0 || (main && main.scrollTop > 0)) { if (aktif) sembunyi(); aktif = false; return; }
+    aktif = true;
+    const el = tanda(), geser = Math.min(jarak, 120);
+    el.textContent = sedangSegarkan ? "Menyinkronkan…" : jarak >= AMBANG ? "↻ Lepas untuk sinkron" : "↓ Tarik untuk sinkron";
+    el.classList.toggle("siap", jarak >= AMBANG);
+    el.style.opacity = String(Math.min(1, jarak / AMBANG));
+    el.style.transform = `translate(-50%, ${geser * 0.6 - 20}px)`;
+  }, { passive: true });
+  document.addEventListener("touchend", async () => {
+    if (mulaiY === null) return;
+    const lepas = aktif && jarak >= AMBANG;
+    mulaiY = null; aktif = false;
+    if (!lepas) { sembunyi(); return; }
+    const el = tanda();
+    el.textContent = "Menyinkronkan…"; el.classList.add("siap");
+    try { await segarkan({ paksa: true }); } finally { sembunyi(); }
+  });
+})();

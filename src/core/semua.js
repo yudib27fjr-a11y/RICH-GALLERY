@@ -13,4 +13,4 @@ export { pasangPlatform } from "./platform.js";
 export { seedJikaKosong } from "./seed.js";
 export { kirimOutbox } from "./sync.js";
 export { bersihkanSesiKadaluarsa } from "./auth.js";
-export { sinkronCabang, cabangAktif } from "./cabang-perangkat.js";
+export { sinkronCabang, cabangAktif, pendengar } from "./cabang-perangkat.js";

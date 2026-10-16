@@ -3,7 +3,7 @@
    - Perintah dikirim berurutan; server menyimpan uid yang sudah diterima, jadi kiriman ulang tidak pernah tercatat dobel.
    - Setelah antrean kosong, perangkat mengambil data terbaru dari server: produk, bahan, stok, akun, pengaturan toko.
    - Di mode cabang, katalog/akun/pengaturan hanya diubah di server pusat (perangkat menolak dengan pesan jelas). */
-import { one, all, run, tx, getSettings, setSetting } from "./db.js";
+import { one, all, run, tx, getSettings, setSetting, tandaiBerubah } from "./db.js";
 import { platform } from "./platform.js";
 import { HttpError, sekarang } from "./util.js";
 import { TABEL_DATA, eksporData } from "./ekspor.js";
@@ -56,15 +56,17 @@ export function statusCabang(){
   };
 }
 
-let jalan = false, tarikTerakhir = 0;
-const JEDA_TARIK = 5 * 60_000; // hemat kuota server gratis: ambil katalog & riwayat paling sering 5 menit sekali
-/** Kirim antrean lalu ambil data terbaru. Aman dipanggil kapan saja; tidak berjalan dobel.
- *  paksa: ambil data terbaru sekarang juga (tombol "Sinkron sekarang"). */
+let jalan = false, lagi = false, versiServer = "";
+/** Kirim antrean lalu ambil data terbaru. Aman dipanggil kapan saja; tidak berjalan dobel
+ *  (panggilan yang datang saat sedang berjalan diulang sekali begitu selesai).
+ *  Perangkat menyebut versi data terakhir yang ia punya: bila server belum berubah, jawabannya kecil sekali.
+ *  paksa: ambil data lengkap sekarang juga (tombol "Sinkron sekarang" / tarik layar ke bawah). */
 export async function sinkronCabang({ paksa = false } = {}){
-  if (!cabangAktif() || jalan) return statusCabang();
+  if (!cabangAktif()) return statusCabang();
+  if (jalan) { lagi = true; return statusCabang(); }
   jalan = true;
   const s = getSettings();
-  let terkirim = 0;
+  let berubah = false;
   try {
     for (let putaran = 0; putaran < 40; putaran++) {
       const batch = all("SELECT uid, aksi, data, waktu, oleh FROM cabang_kirim WHERE terkirim IS NULL ORDER BY id LIMIT 40");
@@ -77,7 +79,6 @@ export async function sinkronCabang({ paksa = false } = {}){
       tx(() => {
         for (const h of j.hasil || []) {
           if (h.status === "ok" || h.status === "ditolak") {
-            terkirim++;
             run("UPDATE cabang_kirim SET terkirim = datetime('now'), hasil = ?, galat = ? WHERE uid = ?", [h.status, h.status === "ditolak" ? String(h.pesan || "").slice(0, 300) : null, h.uid]);
           } else {
             run("UPDATE cabang_kirim SET percobaan = percobaan + 1, galat = ? WHERE uid = ?", [String(h.pesan || "gagal").slice(0, 300), h.uid]);
@@ -88,20 +89,24 @@ export async function sinkronCabang({ paksa = false } = {}){
       if (berhenti || (j.hasil || []).length < batch.length) break; // urutan dijaga: berhenti di perintah yang gagal
     }
     // Ambil data terbaru hanya bila tidak ada yang menunggu, supaya stok lokal tidak tertimpa sebelum transaksinya sampai.
-    const perluTarik = paksa || terkirim > 0 || Date.now() - tarikTerakhir > JEDA_TARIK;
-    if (perluTarik && !one("SELECT COUNT(*) n FROM cabang_kirim WHERE terkirim IS NULL").n) {
-      const snap = await panggil(s.cabang_url, "/api/cabang/tarik", { token: s.cabang_token });
-      terapkanSnapshot(snap);
-      tarikTerakhir = Date.now();
+    if (!one("SELECT COUNT(*) n FROM cabang_kirim WHERE terkirim IS NULL").n) {
+      const snap = await panggil(s.cabang_url, "/api/cabang/tarik", { token: s.cabang_token, versi: paksa ? "" : versiServer });
+      if (!snap.tetap && terapkanSnapshot(snap)) { berubah = true; versiServer = snap.versi || ""; }
     }
     setSetting("cabang_terakhir", new Date().toISOString());
     setSetting("cabang_galat", "");
   } catch (e) {
     if (e.status === 401) setSetting("cabang_galat", "Perangkat ini sudah dicabut dari server pusat. Sambungkan ulang di Pengaturan.");
     else setSetting("cabang_galat", String(e.message || e).slice(0, 300));
-  } finally { jalan = false; }
-  return statusCabang();
+  } finally {
+    jalan = false;
+    if (berubah && pendengar.dataBaru) { try { pendengar.dataBaru(); } catch { /* abaikan */ } }
+    if (lagi) { lagi = false; jadwalkanSinkron(200); }
+  }
+  return { ...statusCabang(), berubah };
 }
+/** Dipasang mesin lokal: dipanggil setelah data dari server masuk, supaya layar dimuat ulang. */
+export const pendengar = { dataBaru: null };
 
 const KOLOM = {
   products: ["nama", "kategori", "harga", "hpp", "stok", "stok_min", "barcode", "insentif", "aktif"],
@@ -111,8 +116,8 @@ const SETELAN_TOKO = ["nama_toko", "alamat", "telp", "footer", "prefix", "hpp_pe
 
 /** Samakan katalog, stok, akun, dan pengaturan toko dengan server pusat. */
 export function terapkanSnapshot(snap){
-  tx(() => {
-    if (one("SELECT COUNT(*) n FROM cabang_kirim WHERE terkirim IS NULL").n) return; // ada transaksi baru: tunggu kiriman berikutnya
+  return tx(() => {
+    if (one("SELECT COUNT(*) n FROM cabang_kirim WHERE terkirim IS NULL").n) return false; // ada transaksi baru: tunggu kiriman berikutnya
     for (const [tabel, rows] of [["products", snap.produk], ["materials", snap.bahan]]) {
       if (!Array.isArray(rows) || !rows.length) continue; // jangan pernah mengosongkan katalog karena jawaban aneh
       const kol = KOLOM[tabel];
@@ -154,8 +159,63 @@ export function terapkanSnapshot(snap){
           [id, p ? p.id : null, it.kode || "", it.nama, it.kategori, it.harga, it.qty, it.hpp || 0, it.ready || 0]);
       }
     }
+    salinKeuangan(snap);
+    tandaiBerubah();
+    return true;
   });
 }
+
+/** Produksi, pengeluaran, dan pembayaran insentif: dalam rentang snap.sejak, isi perangkat disamakan persis dengan server
+ *  (termasuk yang dicatat di server atau perangkat lain, dan yang sudah dihapus). Stok tidak disentuh: stok sudah mengikuti server. */
+function salinKeuangan(snap){
+  const sejak = /^\d{4}-\d{2}-\d{2}$/.test(String(snap.sejak || "")) ? snap.sejak : null;
+  if (!sejak) return; // server versi lama
+  const idUser = new Map(all("SELECT id, nama_key FROM users").map(u => [u.nama_key, u.id]));
+  const idProduk = kode => (one("SELECT id FROM products WHERE kode = ? AND dihapus IS NULL", [kode]) || {}).id ?? null;
+
+  if (Array.isArray(snap.pengeluaran)) {
+    const ada = new Set();
+    for (const x of snap.pengeluaran) {
+      if (!x || !x.kunci) continue;
+      ada.add(x.kunci);
+      const nilai = [x.tgl, x.kategori, x.ket || "", x.nominal, x.oleh || "", x.dihapus || null];
+      const lokal = one("SELECT id FROM expenses WHERE uid = ?", [x.kunci]);
+      if (lokal) run("UPDATE expenses SET tgl = ?, kategori = ?, ket = ?, nominal = ?, oleh = ?, dihapus = ? WHERE id = ?", [...nilai, lokal.id]);
+      else run("INSERT INTO expenses(tgl, kategori, ket, nominal, oleh, dihapus, uid, dibuat) VALUES (?,?,?,?,?,?,?,?)", [...nilai, x.kunci, x.dibuat || sekarangSql()]);
+    }
+    for (const r of all("SELECT id, uid FROM expenses WHERE tgl >= ? AND dihapus IS NULL", [sejak])) {
+      if (!r.uid || !ada.has(r.uid)) run("DELETE FROM expenses WHERE id = ?", [r.id]);
+    }
+  }
+
+  if (Array.isArray(snap.produksi)) {
+    const ada = new Set();
+    for (const x of snap.produksi) {
+      const pembuat = x && idUser.get(x.pembuat);
+      if (!x || !x.kunci || !pembuat) continue;
+      ada.add(x.kunci);
+      const nilai = [x.tgl, idProduk(x.kode), x.kode, x.nama, x.qty, pembuat, x.tarif, x.restock ? 1 : 0, x.oleh || ""];
+      const lokal = one("SELECT id FROM produksi WHERE uid = ?", [x.kunci]);
+      if (lokal) run("UPDATE produksi SET tgl = ?, product_id = ?, kode = ?, nama = ?, qty = ?, pembuat_id = ?, tarif = ?, restock = ?, oleh = ? WHERE id = ?", [...nilai, lokal.id]);
+      else run("INSERT INTO produksi(tgl, product_id, kode, nama, qty, pembuat_id, tarif, restock, oleh, uid, dibuat) VALUES (?,?,?,?,?,?,?,?,?,?,?)", [...nilai, x.kunci, x.dibuat || sekarangSql()]);
+    }
+    for (const r of all("SELECT id, uid FROM produksi WHERE tgl >= ?", [sejak])) {
+      if (!r.uid || !ada.has(r.uid)) run("DELETE FROM produksi WHERE id = ?", [r.id]);
+    }
+  }
+
+  if (Array.isArray(snap.insentif)) {
+    for (const x of snap.insentif) {
+      const pembuat = x && idUser.get(x.pembuat);
+      if (!pembuat || !x.periode_dari) continue;
+      const nilai = [x.periode_sampai, x.qty, x.hitung, x.nominal, x.tgl, x.ket || "", x.oleh || ""];
+      const lokal = one("SELECT id FROM insentif_bayar WHERE pembuat_id = ? AND periode_dari = ?", [pembuat, x.periode_dari]);
+      if (lokal) run("UPDATE insentif_bayar SET periode_sampai = ?, qty = ?, hitung = ?, nominal = ?, tgl = ?, ket = ?, oleh = ? WHERE id = ?", [...nilai, lokal.id]);
+      else run("INSERT INTO insentif_bayar(periode_sampai, qty, hitung, nominal, tgl, ket, oleh, pembuat_id, periode_dari) VALUES (?,?,?,?,?,?,?,?,?)", [...nilai, pembuat, x.periode_dari]);
+    }
+  }
+}
+const sekarangSql = () => new Date().toISOString().slice(0, 19).replace("T", " ");
 
 /** Kirim seluruh data perangkat ini ke server (yang masih kosong), bertahap supaya tiap kiriman tidak terlalu besar. */
 async function unggahAwal(url, token){
@@ -180,7 +240,7 @@ export async function sambungCabang({ url, nama, password, perangkat, paksa, ung
   try {
     j = await panggil(url, "/api/cabang/daftar", { nama, password, perangkat: perangkat || "Perangkat kasir", noTerakhir: terakhir ? terakhir.no : "", paksa: !!(paksa || kirimSemua), unggahAwal: !!kirimSemua });
     if (kirimSemua) await unggahAwal(url, j.token);
-    tarikTerakhir = 0;
+    versiServer = "";
   } catch (e) { throw new HttpError(e.status && e.status < 500 ? e.status : 502, e.message); }
   tx(() => {
     setSetting("cabang_url", url);
