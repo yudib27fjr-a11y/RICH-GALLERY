@@ -146,6 +146,15 @@ public class MainActivity extends Activity {
     void cetak(int kertasMm) {
         try {
             PrintManager pm = (PrintManager) getSystemService(Context.PRINT_SERVICE);
+            if (kertasMm == 210) { // nota / invoice A4 mendatar, berwarna (printer biasa)
+                PrintDocumentAdapter a4 = web.createPrintDocumentAdapter("Nota Rich Gallery");
+                PrintAttributes attrA4 = new PrintAttributes.Builder()
+                        .setMediaSize(PrintAttributes.MediaSize.ISO_A4.asLandscape())
+                        .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
+                        .build();
+                pm.print("Nota Rich Gallery", a4, attrA4);
+                return;
+            }
             PrintDocumentAdapter adapter = web.createPrintDocumentAdapter("Struk Rich Gallery");
             int lebarMils = Math.round((kertasMm == 80 ? 80 : 58) / 25.4f * 1000);
             PrintAttributes attr = new PrintAttributes.Builder()

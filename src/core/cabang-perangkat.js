@@ -121,7 +121,7 @@ const KOLOM = {
   products: ["nama", "kategori", "harga", "hpp", "stok", "stok_min", "barcode", "insentif", "aktif"],
   materials: ["nama", "kategori", "harga", "satuan", "stok", "stok_min", "barcode"],
 };
-const SETELAN_TOKO = ["nama_toko", "alamat", "telp", "footer", "prefix", "hpp_persen", "insentif", "periode_mulai", "absen_aktif", "absen_jam_masuk", "absen_jam_pulang", "wa_otomatis", "wa_template", "canva_url", "canva_email", "wa_nomor", "absen_pin_aktif", "absen_lat", "absen_lng", "absen_radius"];
+const SETELAN_TOKO = ["nama_toko", "alamat", "telp", "footer", "prefix", "hpp_persen", "insentif", "periode_mulai", "absen_aktif", "absen_jam_masuk", "absen_jam_pulang", "wa_otomatis", "wa_template", "canva_url", "canva_email", "wa_nomor", "absen_pin_aktif", "absen_lat", "absen_lng", "absen_radius", "inv_tagline", "inv_bank", "inv_ttd", "inv_ttd_nama", "inv_ttd_jabatan"];
 
 /** Samakan katalog, stok, akun, dan pengaturan toko dengan server pusat. */
 export function terapkanSnapshot(snap){

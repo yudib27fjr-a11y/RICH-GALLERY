@@ -204,11 +204,13 @@ function lihatStruk(s, setelahBatal){
     <div class="actions">
       ${!s.batal_at && isAdmin() ? `<button class="btn danger" id="voidBtn">Batalkan transaksi</button>` : ""}
       ${isAdmin() ? `<button class="btn" id="koreksiBtn" type="button">Koreksi</button><button class="btn danger" id="hapusBtn" type="button">Hapus</button>` : ""}
+      <button class="btn" id="notaBtn" type="button">📄 Nota A4</button>
       <a class="btn" href="${waLink(s)}" target="_blank" rel="noopener">Kirim WA</a>
       <button class="btn" data-close>Tutup</button>
       <button class="btn pri" id="printBtn">Cetak struk</button>
     </div>`, m => {
       $("#printBtn", m).onclick = () => cetak(s);
+      $("#notaBtn", m).onclick = () => bukaNota(s);
       if (s.kartu) pasangTombolKartu(m, s.kartu);
       const hb = $("#hapusBtn", m);
       if (hb) hb.onclick = () => konfirmasi(`Hapus ${s.no}?`, `Transaksi dihapus sepenuhnya dari daftar & laporan${s.batal_at ? "" : ", stok produk READY dikembalikan"}. Pakai untuk salah input atau data uji coba. Tidak bisa dibatalkan.`, "Hapus transaksi", () => coba(async () => {
@@ -231,6 +233,152 @@ function lihatStruk(s, setelahBatal){
           $("#okv", m2).onclick = e => coba(async () => { await api("POST", `/api/penjualan/${s.id}/batal`, { alasan: $("#alasan", m2).value }); closeModal(); toast("Transaksi dibatalkan, stok dikembalikan"); await muatUlang(); setelahBatal ? setelahBatal() : render(); }, e.target);
         });
     });
+}
+
+/* ================= NOTA / INVOICE A4 (bisa diedit sebelum dicetak / dikirim) ================= */
+const muatGambar = src => new Promise(ok => { if (!src) return ok(null); const i = new Image(); i.onload = () => ok(i); i.onerror = () => ok(null); i.src = src; });
+const rpNota = n => angka(n || 0);
+/** Gambar nota di kanvas (dipakai untuk pratinjau, unduh gambar, dan cetak A4). */
+async function gambarNota(d){
+  const W = 1414, rowH = 78, baris = d.rows.filter(r => r.desc || r.harga);
+  if (d.ongkir) baris.push({ desc: "Ongkir", harga: d.ongkir, qty: "", ongkir: 1 });
+  const tTop = 380, rTop = tTop + 88, rEnd = rTop + Math.max(1, baris.length) * rowH;
+  const H = rEnd + 60 + 100 + 88 + 230;
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d");
+  const SANS = '"Helvetica Neue", Arial, sans-serif', ABU = "#3f3f3f", PINK = "#f9d0ec";
+  const teks = (t, x, y, { size = 28, bold = false, warna = "#111", rata = "left", font = SANS, maks = 0 } = {}) => {
+    g.font = `${bold ? "700 " : "400 "}${size}px ${font}`; g.fillStyle = warna; g.textAlign = rata; g.textBaseline = "alphabetic";
+    t = String(t ?? "");
+    if (maks) while (t.length > 1 && g.measureText(t).width > maks) t = t.slice(0, -2) + "…";
+    g.fillText(t, x, y);
+  };
+  const garis = (x1, y1, x2, y2, w = 2.5, warna = "#555") => { g.strokeStyle = warna; g.lineWidth = w; g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); };
+  g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
+  // Kepala: logo, nama toko, keterangan, "Invoice"
+  const [logo, ttd] = await Promise.all([muatGambar("/monogram.png"), muatGambar(d.ttdImg)]);
+  if (logo) { g.save(); g.beginPath(); g.arc(170, 132, 78, 0, Math.PI * 2); g.clip(); g.drawImage(logo, 92, 54, 156, 156); g.restore(); }
+  teks(String(d.toko || "").toUpperCase(), 268, 122, { size: 54, bold: true, warna: ABU, maks: 560 });
+  garis(270, 140, 665, 140, 3, "#111");
+  teks(d.tagline, 272, 167, { size: 17, font: 'Georgia, "Times New Roman", serif', warna: "#222", maks: 400 });
+  teks("Invoice", 1356, 128, { size: 78, bold: true, warna: ABU, rata: "right", font: '"Arial Black", ' + SANS });
+  if (d.no) teks("No. " + d.no, 1354, 165, { size: 20, warna: "#666", rata: "right" });
+  // Kepada / Dari / Tanggal
+  teks("Bill To:", 107, 272, { size: 26, bold: true, font: '"Arial Black", ' + SANS });
+  teks(d.billTo, 95, 322, { size: 33, maks: 400 });
+  teks("From:", 645, 267, { size: 25, bold: true, rata: "center", font: '"Arial Black", ' + SANS });
+  teks(d.toko ? toTitle(d.toko) : "", 663, 328, { size: 33, bold: true, rata: "center", maks: 330 });
+  teks("Date", 967, 272, { size: 31 }); teks(d.tanggal, 1071, 272, { size: 33, bold: true, maks: 300 });
+  teks("No hp :", 962, 328, { size: 31 }); teks(d.hp, 1080, 328, { size: 31, maks: 300 });
+  // Tabel
+  g.fillStyle = PINK; g.fillRect(0, tTop, W, 88);
+  teks("Description", 103, tTop + 59, { size: 28, bold: true });
+  teks("Price", 616, tTop + 61, { size: 28, bold: true, rata: "center" });
+  teks("Qty", 1001, tTop + 59, { size: 28, bold: true, rata: "center" });
+  teks("Total", 1330, tTop + 58, { size: 28, bold: true, rata: "right" });
+  let sub = 0;
+  baris.forEach((r, i) => {
+    const y = rTop + i * rowH, q = r.ongkir ? 1 : Number(r.qty) || 0, jml = Math.round((Number(r.harga) || 0) * (r.ongkir ? 1 : q));
+    if (!r.ongkir) sub += jml;
+    teks(`${i + 1}.${r.desc}`, 28, y + 56, { size: 33, bold: true, maks: 470 });
+    teks(rpNota(r.harga), 616, y + 58, { size: 32, bold: true, rata: "center" });
+    if (!r.ongkir) teks(String(r.qty), 1001, y + 60, { size: 32, bold: true, rata: "center" });
+    teks(rpNota(jml), 1326, y + 58, { size: 32, bold: true, rata: "right" });
+    garis(0, y + rowH, W - 10, y + rowH);
+  });
+  garis(0, rEnd + 60, W, rEnd + 60);
+  // Ringkasan
+  const yS = rEnd + 60;
+  teks("Subtotal :", 1112, yS + 26, { size: 23, bold: true, warna: "#555", font: '"Arial Black", ' + SANS });
+  teks(rpNota(sub), 1355, yS + 26, { size: 23, bold: true, warna: "#555", rata: "right" });
+  teks("Disc", 1114, yS + 56, { size: 23, bold: true, warna: "#555", font: '"Arial Black", ' + SANS }); teks(":", 1194, yS + 56, { size: 23, bold: true, warna: "#555" });
+  if (d.diskon) teks("-" + rpNota(d.diskon), 1355, yS + 56, { size: 23, bold: true, warna: "#555", rata: "right" });
+  const total = Math.max(0, sub - (Number(d.diskon) || 0) + (Number(d.ongkir) || 0));
+  const yB = yS + 100;
+  g.fillStyle = PINK; g.fillRect(0, yB, W, 88);
+  teks("payment method:" + (d.metode || ""), 100, yB + 50, { size: 34, bold: true, warna: ABU, font: '"Arial Black", ' + SANS, maks: 700 });
+  teks("Grand Total:", 1145, yB + 54, { size: 34, bold: true, warna: ABU, rata: "right", font: '"Arial Black", ' + SANS });
+  teks(rpNota(total), 1170, yB + 54, { size: 33, bold: true });
+  if (d.dibayar != null && d.dibayar < total) teks(`Dibayar ${rpNota(d.dibayar)} · Sisa ${rpNota(total - d.dibayar)}`, 1355, yB + 120, { size: 22, bold: true, warna: "#b45309", rata: "right" });
+  // Rekening & tanda tangan
+  String(d.bank || "").split("\n").slice(0, 4).forEach((b, i) => teks(b, 86, yB + 145 + i * 33, { size: 25, bold: true, warna: ABU, font: '"Arial Black", ' + SANS, maks: 620 }));
+  const yT = yB + 190;
+  if (ttd) {
+    const s = Math.min(280 / ttd.width, 100 / ttd.height);
+    g.drawImage(ttd, 1232 - ttd.width * s / 2, yT - 8 - ttd.height * s, ttd.width * s, ttd.height * s);
+  } else {
+    teks(d.ttdNama, 1232, yT - 22, { size: 42, warna: "#1e2a5a", rata: "center", font: '"Brush Script MT", "Segoe Script", "Snell Roundhand", cursive', maks: 300 });
+  }
+  garis(1082, yT, 1380, yT, 2.5, "#444");
+  teks(d.ttdJabatan || "", 1232, yT + 34, { size: 27, rata: "center", warna: "#222", maks: 300 });
+  if (d.ttdNama) teks("TTE: " + d.ttdNama, 1232, yT + 60, { size: 16, rata: "center", warna: "#777", maks: 330 });
+  return c;
+}
+/** Data nota awal dari transaksi (semua bisa diubah di layar nota). */
+function dataNota(s){
+  const t = B.toko;
+  return {
+    no: s.no, toko: t.nama_toko, tagline: t.inv_tagline || "", billTo: s.pelanggan && s.pelanggan !== "CUSTOMER" ? toTitle(s.pelanggan) : "", hp: s.hp || "",
+    tanggal: tglID(s.tgl), rows: s.items.map(i => ({ desc: toTitle(i.nama), harga: i.harga, qty: i.qty })), ongkir: s.ongkir || 0, diskon: s.diskon || 0,
+    metode: { Tunai: "Cash", Transfer: "Transfer", QRIS: "QRIS" }[s.metode] || s.metode, dibayar: s.bayar < s.total ? s.bayar : null,
+    bank: t.inv_bank || "", ttdNama: t.inv_ttd_nama || "", ttdJabatan: t.inv_ttd_jabatan || "", ttdImg: t.inv_ttd || "",
+  };
+}
+const versiApi = () => { try { return Number(JSON.parse(NATIVE.info()).api) || 0; } catch { return 0; } };
+/** Layar nota: isian di atas (bisa diedit), pratinjau di bawah, lalu unduh gambar / cetak A4. */
+function bukaNota(s){
+  const d = dataNota(s);
+  const baris = () => d.rows.map((r, i) => `<div class="row nota-baris" data-i="${i}"><input type="text" data-k="desc" value="${esc(r.desc)}" placeholder="Barang / jasa" style="flex:3 1 160px"><input type="number" data-k="harga" value="${r.harga}" placeholder="Harga" inputmode="numeric" style="flex:1 1 90px"><input type="number" data-k="qty" value="${r.qty}" placeholder="Qty" inputmode="decimal" style="flex:0 1 64px"><button type="button" class="btn ghost sm" data-hapus="${i}" aria-label="Hapus baris">✕</button></div>`).join("");
+  modal(`<h3>📄 Nota ${esc(s.no)}</h3>
+    <div class="nota-edit stack">
+      <div class="row"><label class="f grow">Bill To (kepada)<input type="text" id="nBill" value="${esc(d.billTo)}"></label><label class="f grow">No HP<input type="tel" id="nHp" value="${esc(d.hp)}"></label></div>
+      <div class="row"><label class="f grow">Tanggal<input type="text" id="nTgl" value="${esc(d.tanggal)}"></label><label class="f grow">No. nota<input type="text" id="nNo" value="${esc(d.no)}"></label></div>
+      <div class="small muted">Barang (Deskripsi · Harga · Qty)</div>
+      <div id="nRows" class="stack" style="gap:6px">${baris()}</div>
+      <button type="button" class="btn sm" id="nTambah">+ Tambah baris</button>
+      <div class="row"><label class="f grow">Ongkir<input type="number" id="nOng" value="${d.ongkir || ""}" inputmode="numeric"></label><label class="f grow">Diskon<input type="number" id="nDisc" value="${d.diskon || ""}" inputmode="numeric"></label><label class="f grow">Payment method<input type="text" id="nMet" value="${esc(d.metode)}"></label></div>
+      <label class="f">Info rekening<textarea id="nBank" rows="2">${esc(d.bank)}</textarea></label>
+      <div class="row"><label class="f grow">Penanda tangan<input type="text" id="nTtdN" value="${esc(d.ttdNama)}"></label><label class="f grow">Jabatan<input type="text" id="nTtdJ" value="${esc(d.ttdJabatan)}"></label></div>
+      ${d.ttdImg ? "" : `<p class="small muted" style="margin:0">Tanda tangan elektronik belum dibuat — nama ditulis miring. Buat tanda tangan di Pengaturan → Nota / Invoice.</p>`}
+    </div>
+    <div class="nota-pratinjau"><canvas id="nCv"></canvas></div>
+    <div class="actions" style="flex-wrap:wrap"><button class="btn" data-close>Tutup</button><button class="btn" id="nUnduh" type="button">Unduh gambar</button><button class="btn pri" id="nCetak" type="button">Cetak A4</button></div>`, m => {
+    m.closest(".modal")?.classList.add("modal-lebar");
+    let kanvas = null, t;
+    const baca = () => {
+      d.billTo = $("#nBill", m).value; d.hp = $("#nHp", m).value; d.tanggal = $("#nTgl", m).value; d.no = $("#nNo", m).value;
+      d.ongkir = num($("#nOng", m).value); d.diskon = num($("#nDisc", m).value); d.metode = $("#nMet", m).value; d.bank = $("#nBank", m).value;
+      d.ttdNama = $("#nTtdN", m).value; d.ttdJabatan = $("#nTtdJ", m).value;
+      $$(".nota-baris", m).forEach(r => { const x = d.rows[+r.dataset.i]; if (!x) return; x.desc = $('[data-k="desc"]', r).value; x.harga = num($('[data-k="harga"]', r).value); x.qty = $('[data-k="qty"]', r).value; });
+    };
+    const gambar = async () => {
+      baca(); kanvas = await gambarNota(d);
+      const cv = $("#nCv", m); if (!cv) return;
+      cv.width = kanvas.width; cv.height = kanvas.height; cv.getContext("2d").drawImage(kanvas, 0, 0);
+    };
+    const nanti = () => { clearTimeout(t); t = setTimeout(gambar, 250); };
+    const pasangBaris = () => {
+      $$(".nota-baris input", m).forEach(i => i.oninput = nanti);
+      $$("[data-hapus]", m).forEach(b => b.onclick = () => { baca(); d.rows.splice(+b.dataset.hapus, 1); $("#nRows", m).innerHTML = baris(); pasangBaris(); gambar(); });
+    };
+    $$(".nota-edit > .row input, .nota-edit textarea, #nBill, #nHp", m).forEach(i => i.oninput = nanti);
+    pasangBaris();
+    $("#nTambah", m).onclick = () => { baca(); d.rows.push({ desc: "", harga: 0, qty: 1 }); $("#nRows", m).innerHTML = baris(); pasangBaris(); gambar(); };
+    $("#nUnduh", m).onclick = async () => {
+      await gambar(); const url = kanvas.toDataURL("image/png"), nama = `nota-${(d.no || "rich-gallery").replace(/[^\w-]+/g, "-")}.png`;
+      if (NATIVE && NATIVE.simpanFile) { const lok = NATIVE.simpanFile(nama, "image/png", url.split(",")[1]); toast(lok ? `Tersimpan di ${lok}` : "Gagal menyimpan gambar"); return; }
+      const a = document.createElement("a"); a.href = url; a.download = nama; document.body.appendChild(a); a.click(); a.remove();
+    };
+    $("#nCetak", m).onclick = async () => {
+      await gambar();
+      if (NATIVE && versiApi() < 6) return toast("Cetak A4 butuh aplikasi versi 1.7.0. Untuk sementara pakai Unduh gambar lalu cetak dari galeri.");
+      $("#page-style").textContent = "@page{size:A4 landscape;margin:8mm}";
+      $("#print-area").innerHTML = `<img src="${kanvas.toDataURL("image/png")}" alt="" style="width:100%;display:block">`;
+      $("#print-area").classList.add("a4");
+      setTimeout(() => { if (NATIVE && NATIVE.cetak) NATIVE.cetak(210); else window.print(); setTimeout(() => $("#print-area").classList.remove("a4"), 1500); }, 120);
+    };
+    gambar();
+  });
 }
 
 /* ================= barcode ================= */
@@ -1560,6 +1708,7 @@ function vAtur(){
       <section class="panel stack" id="aCabang"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aWa"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aCanva"><div class="empty">Memuat…</div></section>
+      <section class="panel stack" id="aNota"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aSync"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aAbsen"><div class="empty">Memuat…</div></section>
       <section class="panel stack"><h3 style="font-size:17px">Cadangan &amp; impor</h3>
@@ -1582,7 +1731,7 @@ function vAtur(){
   $("#pKartu").onclick = () => cetakKartu("Happy Birthday!\nSemoga panjang umur, sehat selalu,\ndan bahagia.\n\nDari: Rina");
   $("#pwSave").onclick = e => coba(async () => { await api("POST", "/api/akun/password", { lama: $("#pwL").value, baru: $("#pwB").value }); $("#pwL").value = $("#pwB").value = ""; toast("Password diganti"); }, e.target);
   if (!isAdmin()) return;
-  aturToko(); aturUser(); aturWA(); aturCanva(); aturSync(); aturCabang(); aturAbsen();
+  aturToko(); aturUser(); aturWA(); aturCanva(); aturNota(); aturSync(); aturCabang(); aturAbsen();
   if ($("#bkDb")) $("#bkDb").onclick = e => coba(async () => { const r = await api("GET", "/api/cadangan"); toast(`Cadangan tersimpan di ${r.disimpan}`); }, e.target);
   $("#rsFile").onchange = e => { const f = e.target.files[0]; if (!f) return; e.target.value = "";
     const r = new FileReader();
@@ -1652,6 +1801,44 @@ async function aturWA(){
   const sv = $("#waSimpan"); if (sv) sv.onclick = e => coba(async () => {
     await api("PUT", "/api/pengaturan", { wa_nomor: $("#waNo").value.trim(), wa_template: $("#waTpl").value, wa_otomatis: $("#waAuto").checked });
     await muatUlang(); toast("Pengaturan WhatsApp tersimpan"); aturWA();
+  }, e.target);
+}
+
+/** Nota / invoice A4: keterangan toko, rekening, dan tanda tangan elektronik (digambar langsung di layar). */
+async function aturNota(){
+  const s = await coba(() => api("GET", "/api/pengaturan")); if (!s || !$("#aNota")) return;
+  const pusat = LOKAL && B.cabang;
+  $("#aNota").innerHTML = `<h3 style="font-size:17px">📄 Nota / Invoice A4</h3>
+    <p class="small muted" style="margin:0">Format nota seperti invoice toko. Dibuka dari struk transaksi → <b>📄 Nota A4</b>; isinya bisa diedit sebelum diunduh / dicetak.</p>
+    ${pusat ? `<p class="note" style="margin:0">Diatur di server (browser), lalu otomatis ikut ke perangkat ini.</p>` : ""}
+    <label class="f">Keterangan di bawah nama toko<input type="text" id="ivTag" value="${esc(s.inv_tagline)}" ${pusat ? "disabled" : ""}></label>
+    <label class="f">Info rekening (kiri bawah)<textarea id="ivBank" rows="2" ${pusat ? "disabled" : ""}>${esc(s.inv_bank)}</textarea></label>
+    <div class="row"><label class="f grow">Nama penanda tangan<input type="text" id="ivNama" value="${esc(s.inv_ttd_nama)}" ${pusat ? "disabled" : ""}></label><label class="f grow">Jabatan<input type="text" id="ivJab" value="${esc(s.inv_ttd_jabatan)}" ${pusat ? "disabled" : ""}></label></div>
+    <div class="small"><b>Tanda tangan elektronik</b> — ${esc(s.inv_ttd_nama || "penanda tangan")} menggambar tanda tangannya sendiri di kotak ini (jari / mouse / pena).</div>
+    <div class="ttd-kotak"><canvas id="ivPad" width="560" height="200" aria-label="Kotak tanda tangan"></canvas>${s.inv_ttd ? `<img id="ivLama" src="${s.inv_ttd}" alt="Tanda tangan tersimpan">` : ""}</div>
+    <div class="row">${pusat ? "" : `<button class="btn sm" id="ivUlang" type="button">${s.inv_ttd ? "Gambar ulang" : "Hapus coretan"}</button>${s.inv_ttd ? `<button class="btn sm danger" id="ivHapus" type="button">Hapus tanda tangan</button>` : ""}`}</div>
+    ${pusat ? "" : `<button class="btn pri" id="ivSimpan" type="button">Simpan pengaturan nota</button>`}`;
+  if (pusat) return;
+  const pad = $("#ivPad"), g = pad.getContext("2d"), lama = $("#ivLama");
+  let ada = false, coret = false, minX = 1e9, minY = 1e9, maxX = 0, maxY = 0;
+  g.lineWidth = 3.2; g.lineCap = "round"; g.lineJoin = "round"; g.strokeStyle = "#14213d";
+  const titik = e => { const r = pad.getBoundingClientRect(); return [(e.clientX - r.left) * pad.width / r.width, (e.clientY - r.top) * pad.height / r.height]; };
+  const catat = (x, y) => { minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); };
+  pad.style.touchAction = "none";
+  pad.onpointerdown = e => { if (lama) lama.hidden = true; coret = true; ada = true; pad.setPointerCapture?.(e.pointerId); const [x, y] = titik(e); catat(x, y); g.beginPath(); g.moveTo(x, y); };
+  pad.onpointermove = e => { if (!coret) return; const [x, y] = titik(e); catat(x, y); g.lineTo(x, y); g.stroke(); };
+  pad.onpointerup = pad.onpointercancel = () => { coret = false; };
+  const kosongkan = () => { g.clearRect(0, 0, pad.width, pad.height); ada = false; minX = minY = 1e9; maxX = maxY = 0; };
+  $("#ivUlang").onclick = () => { kosongkan(); if (lama) lama.hidden = true; };
+  const hp = $("#ivHapus"); if (hp) hp.onclick = () => konfirmasi("Hapus tanda tangan?", "Nota akan menampilkan nama penanda tangan saja.", "Hapus", () => coba(async () => { await api("PUT", "/api/pengaturan", { inv_ttd: "" }); await muatUlang(); aturNota(); }));
+  $("#ivSimpan").onclick = e => coba(async () => {
+    const body = { inv_tagline: $("#ivTag").value, inv_bank: $("#ivBank").value, inv_ttd_nama: $("#ivNama").value, inv_ttd_jabatan: $("#ivJab").value };
+    if (ada && maxX > minX) { // potong ke area coretan supaya ringan
+      const p = 8, x = Math.max(0, minX - p), y = Math.max(0, minY - p), w = Math.min(pad.width, maxX + p) - x, h = Math.min(pad.height, maxY + p) - y;
+      const c = document.createElement("canvas"); c.width = w; c.height = h; c.getContext("2d").drawImage(pad, x, y, w, h, 0, 0, w, h);
+      body.inv_ttd = c.toDataURL("image/png");
+    }
+    await api("PUT", "/api/pengaturan", body); await muatUlang(); toast("Pengaturan nota tersimpan"); aturNota();
   }, e.target);
 }
 

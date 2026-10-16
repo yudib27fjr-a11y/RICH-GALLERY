@@ -309,6 +309,12 @@ export const DEFAULT_SETTINGS = {
   absen_jam_masuk: "08:00",
   absen_jam_pulang: "17:00",
   absen_terakhir: "",
+  // Nota (invoice) A4
+  inv_tagline: "Buket, Gift, Hampers, Dekorasi, Seserahan & Mahar",
+  inv_bank: "Bank BRI 421201022815539\nSiti Nur Khodijah",
+  inv_ttd: "",
+  inv_ttd_nama: "Siti Nur Khodijah",
+  inv_ttd_jabatan: "Financial Manager",
   // Absen PIN + selfie di perangkat kasir
   absen_pin_aktif: false,
   absen_lat: "",

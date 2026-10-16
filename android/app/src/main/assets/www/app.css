@@ -223,3 +223,11 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 .absen-kamera video,.absen-kamera img{width:100%;display:block;transform:scaleX(-1)}
 .absen-kamera img{transform:none}
 .absen-kamera #akKet{position:absolute;left:8px;right:8px;bottom:8px;color:#fff;text-align:center;text-shadow:0 1px 3px #000}
+.modal.modal-lebar .sheet{max-width:1100px;width:calc(100% - 24px)}
+.nota-pratinjau{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;margin-top:8px}
+.nota-pratinjau canvas{width:100%;height:auto;display:block}
+@media print{#print-area.a4{width:100%;right:0}#print-area.a4 img{width:100%}}
+.ttd-kotak{position:relative;border:1.5px dashed var(--line);border-radius:10px;background:#fff;max-width:560px}
+.ttd-kotak canvas{width:100%;height:auto;display:block;cursor:crosshair}
+.ttd-kotak img{position:absolute;inset:0;margin:auto;max-width:90%;max-height:90%;pointer-events:none}
+.ttd-kotak img{top:0;left:0;right:0;bottom:0}

@@ -26,8 +26,14 @@ route("PUT", "/api/pengaturan", "admin", ({ body }) => tx(() => {
     wa_otomatis: b.wa_otomatis != null ? !!b.wa_otomatis : undefined,
     canva_url: b.canva_url != null ? teks(b.canva_url, { max: 500, nama: "Link Canva" }) : undefined,
     canva_email: b.canva_email != null ? teks(b.canva_email, { max: 120, nama: "Email Canva" }) : undefined,
+    inv_tagline: b.inv_tagline != null ? teks(b.inv_tagline, { max: 120, nama: "Keterangan toko di nota" }) : undefined,
+    inv_bank: b.inv_bank != null ? teks(b.inv_bank, { max: 300, nama: "Info rekening di nota" }) : undefined,
+    inv_ttd_nama: b.inv_ttd_nama != null ? teks(b.inv_ttd_nama, { max: 60, nama: "Nama penanda tangan" }) : undefined,
+    inv_ttd_jabatan: b.inv_ttd_jabatan != null ? teks(b.inv_ttd_jabatan, { max: 60, nama: "Jabatan penanda tangan" }) : undefined,
+    inv_ttd: b.inv_ttd != null ? String(b.inv_ttd) : undefined,
     wa_nomor: b.wa_nomor != null ? teks(b.wa_nomor, { max: 30, nama: "Nomor WA toko" }) : undefined,
   };
+  if (v.inv_ttd && (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(v.inv_ttd) || v.inv_ttd.length > 150_000)) throw bad("Tanda tangan tidak valid atau terlalu besar");
   if (v.wa_nomor && String(v.wa_nomor).replace(/\D/g, "").length < 9) throw bad("Nomor WA toko tidak valid");
   if (v.canva_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.canva_email)) throw bad("Email Canva tidak valid");
   if (v.canva_url && !/^https:\/\/(www\.)?canva\.(com|link)\//.test(v.canva_url)) throw bad("Link Canva harus diawali https://www.canva.com/ atau https://canva.link/");
