@@ -1220,8 +1220,9 @@ function aturMode(){
     ${NATIVE.periksaPembaruan ? `<button class="btn" id="mCek" type="button">Periksa pembaruan sekarang</button>` : ""}
     ${info.mode === "online" ? `<p class="small muted" style="margin:0">Data offline di HP ini tetap tersimpan dan bisa dibuka lagi kapan saja.</p>
       <button class="btn" id="mOff" type="button">Kembali ke mode offline</button>`
-    : `<p class="small muted" style="margin:0">Untuk pindah ke server online: (1) simpan cadangan database di atas, (2) buka website server di browser, masuk sebagai admin, lalu Pengaturan → Pulihkan dari cadangan, (3) isi alamat server di bawah.</p>
-      <label class="f">Alamat server<input type="url" id="mUrl" value="${esc(info.server || SERVER_TOKO)}" placeholder="${esc(SERVER_TOKO)}"></label>
+    : `<p class="note" style="margin:0"><b>Disarankan:</b> tetap offline dan pakai bagian <b>Server pusat (sinkron otomatis)</b> di atas. Kasir tetap cepat walau internet putus, dan semua transaksi otomatis terkirim ke server.</p>
+      <p class="small muted" style="margin:0">Atau buka website server langsung di aplikasi ini (butuh internet setiap saat):</p>
+      <label class="f">Alamat server<input type="url" id="mUrl" value="${esc(SERVER_TOKO)}" placeholder="${esc(SERVER_TOKO)}"></label>
       <button class="btn pri" id="mOn" type="button">Pakai server online</button>`}`;
   const cek = $("#mCek"); if (cek) cek.onclick = () => { toast("Memeriksa pembaruan…"); NATIVE.periksaPembaruan(); };
   const off = $("#mOff"); if (off) off.onclick = () => NATIVE.setMode("offline", "");
