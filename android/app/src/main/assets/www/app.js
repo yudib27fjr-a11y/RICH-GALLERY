@@ -353,7 +353,7 @@ function tampilLogin(pesan = ""){
   $("#root").innerHTML = `<div class="auth"><form class="card" id="fLogin" autocomplete="on">
     <div class="merek"><img src="/logo.png" alt="Rich Gallery POS" width="128" height="128"></div>
     <div class="muted">Masuk untuk mulai bekerja</div>
-    <label class="f">Nama<input type="text" id="lNama" name="username" autocomplete="username" required></label>
+    <label class="f">Nama<input type="text" id="lNama" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required></label>
     <label class="f">Password / PIN<input type="password" id="lPw" name="password" autocomplete="current-password" required></label>
     <div class="err" id="lErr">${esc(pesan)}</div>
     <button class="btn pri big" type="submit">Masuk</button>

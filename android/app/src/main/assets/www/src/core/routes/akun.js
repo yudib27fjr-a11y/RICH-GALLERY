@@ -29,7 +29,9 @@ route("POST", "/api/login", false, ({ body, ctx }) => {
   const nama = teks(body.nama, { wajib: true, max: 40, nama: "Nama" });
   const kunci = (ctx.ip || "") + "|" + nama.toLowerCase();
   cekBatasLogin(kunci);
-  const u = one("SELECT id, pass_hash, aktif FROM users WHERE nama_key = ?", [nama.toLowerCase()]);
+  // Keyboard HP kadang menambah aksen/spasi (mis. "wulán"): coba juga nama tanpa aksen & spasi ganda.
+  const polos = nama.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+  const u = one("SELECT id, pass_hash, aktif FROM users WHERE nama_key = ?", [nama.toLowerCase()]) || one("SELECT id, pass_hash, aktif FROM users WHERE nama_key = ?", [polos]);
   if (!u || !u.aktif || !cekPassword(String(body.password ?? ""), u.pass_hash)) { catatGagal(kunci); throw new HttpError(401, "Nama atau password salah"); }
   resetGagal(kunci);
   buatSesi(ctx, u.id);

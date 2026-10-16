@@ -53,6 +53,7 @@ test("karyawan: beri PIN, login, akses dibatasi", async () => {
   assert.equal((await admin("PUT", `/api/users/${iza.id}`, { password: "1234" })).status, 200);
   assert.equal((await kasir("POST", "/api/login", { nama: "iza", password: "salah" })).status, 401);
   assert.equal((await kasir("POST", "/api/login", { nama: "iza", password: "1234" })).status, 200);
+  assert.equal((await kasir("POST", "/api/login", { nama: "  ízá ", password: "1234" })).status, 200, "aksen & spasi dari keyboard HP diabaikan");
   const kb = (await kasir("GET", "/api/bootstrap")).data;
   assert.equal(kb.me.peran, "karyawan");
   assert.equal(kb.produk[0].hpp, undefined, "karyawan tidak boleh melihat HPP");
