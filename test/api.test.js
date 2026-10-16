@@ -20,10 +20,14 @@ before(async () => {
 });
 after(() => { proc.kill(); rmSync(dir, { recursive: true, force: true }); });
 
+/* Nama & HP pelanggan wajib saat checkout; tes yang tidak menyebutkannya memakai pelanggan contoh. */
+function isiPelanggan(method, url, body){
+  return method === "POST" && url === "/api/penjualan" && body ? { pelanggan: "Uji", hp: "081200000000", ...body } : body;
+}
 function klien(){
   let cookie = "";
   return async (method, url, body, { header = true } = {}) => {
-    const r = await fetch(BASE + url, { method, headers: { "Content-Type": "application/json", ...(header ? { "X-RG": "1" } : {}), ...(cookie ? { Cookie: cookie } : {}) }, body: body ? JSON.stringify(body) : undefined });
+    const r = await fetch(BASE + url, { method, headers: { "Content-Type": "application/json", ...(header ? { "X-RG": "1" } : {}), ...(cookie ? { Cookie: cookie } : {}) }, body: body ? JSON.stringify(isiPelanggan(method, url, body)) : undefined });
     const sc = r.headers.get("set-cookie"); if (sc) cookie = sc.split(";")[0];
     const tipe = r.headers.get("content-type") || "";
     return { status: r.status, data: tipe.includes("json") ? await r.json() : Buffer.from(await r.arrayBuffer()) };
@@ -78,7 +82,7 @@ let saleId, noPertama;
 test("penjualan: total dihitung server, stok ready berkurang, nomor invoice berurutan", async () => {
   const p = B.produk.find(x => x.kode === "RG003");
   const r = await kasir("POST", "/api/penjualan", {
-    tgl: "2020-01-01", pelanggan: "bu rina", metode: "Tunai", bayar: 400000, diskon: 5000, ongkir: 10000,
+    tgl: "2020-01-01", pelanggan: "bu rina", hp: "081230000000", metode: "Tunai", bayar: 400000, diskon: 5000, ongkir: 10000,
     items: [{ product_id: p.id, harga: 100000, qty: 2, ready: true }, { nama: "buket custom pink", harga: 125000, qty: 1 }],
   });
   assert.equal(r.status, 200, JSON.stringify(r.data));
@@ -193,14 +197,18 @@ test("impor cadangan aplikasi versi lama", async () => {
 test("data pelanggan dari riwayat transaksi & pesan WhatsApp", async () => {
   B = (await admin("GET", "/api/bootstrap")).data;
   const p = B.produk[0];
-  for (const [pelanggan, hp] of [["bu sinta", "0812-3456-7890"], ["Bu Sinta", "+62 812 3456 7890"], ["pak budi", ""], ["", ""]]) {
+  for (const [pelanggan, hp] of [["bu sinta", "0812-3456-7890"], ["Bu Sinta", "+62 812 3456 7890"], ["pak budi", "0857 1111 2222"]]) {
     assert.equal((await admin("POST", "/api/penjualan", { items: [{ product_id: p.id, harga: 10000, qty: 1 }], pelanggan, hp })).status, 200);
+  }
+  // Nama & nomor HP pelanggan wajib diisi saat checkout
+  for (const [pelanggan, hp] of [["", "081234567890"], ["pak joko", ""], ["pak joko", "12345"], ["customer", "081234567890"]]) {
+    assert.equal((await admin("POST", "/api/penjualan", { items: [{ product_id: p.id, harga: 10000, qty: 1 }], pelanggan, hp })).status, 400, `${pelanggan}/${hp} ditolak`);
   }
   const semua = (await admin("GET", "/api/pelanggan?semua=1")).data;
   const sinta = semua.find(x => x.nama === "BU SINTA");
   assert.equal(sinta.transaksi, 2, "nomor HP sama (0812… dan +62812…) = satu pelanggan");
   assert.equal(sinta.total, 20000);
-  assert.ok(semua.find(x => x.nama === "PAK BUDI"), "tanpa HP dikelompokkan menurut nama");
+  assert.ok(semua.find(x => x.nama === "PAK BUDI"));
   assert.ok(!semua.find(x => x.nama === "CUSTOMER"), "pelanggan umum tidak masuk daftar");
   assert.equal((await admin("GET", "/api/pelanggan?q=3456")).data[0].nama, "BU SINTA", "cari dengan no HP");
   assert.equal((await kasir("GET", "/api/pelanggan?q=sinta")).data[0].total, undefined, "karyawan tidak melihat total belanja");

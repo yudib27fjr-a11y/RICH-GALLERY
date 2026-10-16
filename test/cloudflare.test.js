@@ -66,10 +66,14 @@ before(async () => {
 });
 after(() => { imin?.kill(); server?.close(); rmSync(dir, { recursive: true, force: true }); });
 
+/* Nama & HP pelanggan wajib saat checkout; tes yang tidak menyebutkannya memakai pelanggan contoh. */
+function isiPelanggan(method, url, body){
+  return method === "POST" && url === "/api/penjualan" && body ? { pelanggan: "Uji", hp: "081200000000", ...body } : body;
+}
 function klien(port){
   let cookie = "";
   return async (method, url, body) => {
-    const r = await fetch(`http://127.0.0.1:${port}${url}`, { method, headers: { "Content-Type": "application/json", "X-RG": "1", ...(cookie ? { Cookie: cookie } : {}) }, body: body ? JSON.stringify(body) : undefined });
+    const r = await fetch(`http://127.0.0.1:${port}${url}`, { method, headers: { "Content-Type": "application/json", "X-RG": "1", ...(cookie ? { Cookie: cookie } : {}) }, body: body ? JSON.stringify(isiPelanggan(method, url, body)) : undefined });
     const sc = r.headers.get("set-cookie"); if (sc) cookie = sc.split(";")[0];
     const tipe = r.headers.get("content-type") || "";
     return { status: r.status, data: tipe.includes("json") ? await r.json() : await r.text(), tipe };

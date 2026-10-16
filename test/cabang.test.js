@@ -18,10 +18,14 @@ function nyalakan(port, nama){
   procs.push(p);
   return new Promise((ok, gagal) => { p.stdout.on("data", d => String(d).includes("berjalan") && ok()); p.on("exit", c => gagal(new Error(nama + " keluar " + c))); });
 }
+/* Nama & HP pelanggan wajib saat checkout; tes yang tidak menyebutkannya memakai pelanggan contoh. */
+function isiPelanggan(method, url, body){
+  return method === "POST" && url === "/api/penjualan" && body ? { pelanggan: "Uji", hp: "081200000000", ...body } : body;
+}
 function klien(port){
   let cookie = "";
   return async (method, url, body) => {
-    const r = await fetch(`http://127.0.0.1:${port}${url}`, { method, headers: { "Content-Type": "application/json", "X-RG": "1", ...(cookie ? { Cookie: cookie } : {}) }, body: body ? JSON.stringify(body) : undefined });
+    const r = await fetch(`http://127.0.0.1:${port}${url}`, { method, headers: { "Content-Type": "application/json", "X-RG": "1", ...(cookie ? { Cookie: cookie } : {}) }, body: body ? JSON.stringify(isiPelanggan(method, url, body)) : undefined });
     const sc = r.headers.get("set-cookie"); if (sc) cookie = sc.split(";")[0];
     return { status: r.status, data: await r.json().catch(() => ({})) };
   };
@@ -412,7 +416,7 @@ test("pesanan: DP di cabang, pelunasan di pusat, diambil di cabang — status sa
   await segarkan();
   const p = BC.produk.find(x => x.kode === "RG009");
   const besok = new Date(Date.now() + 7 * 3600e3 + 86400e3).toISOString().slice(0, 10);
-  const j = await cabang("POST", "/api/penjualan", { items: [{ product_id: p.id, harga: 100000, qty: 1 }], pelanggan: "bu rina", hp: "08123", bayar: 40000,
+  const j = await cabang("POST", "/api/penjualan", { items: [{ product_id: p.id, harga: 100000, qty: 1 }], pelanggan: "bu rina", hp: "081230000000", bayar: 40000,
     kartu: "Selamat ulang tahun!", pesanan: { tgl: besok, jam: "15:00", cara: "antar", request: "Pita merah, kartu: Selamat ulang tahun" } });
   assert.equal(j.status, 200, JSON.stringify(j.data));
   assert.equal(j.data.ambil_tgl, besok); assert.equal(j.data.ambil_cara, "antar"); assert.match(j.data.request, /Pita merah/);

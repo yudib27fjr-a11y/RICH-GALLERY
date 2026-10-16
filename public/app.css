@@ -260,3 +260,11 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 .b-koreksi{background:#b45309}.b-hapus{background:#b91c1c}
 .btn.b-batal{background:transparent;color:#b91c1c;border:1.5px solid #b91c1c}
 .btn.bk:hover{filter:brightness(1.1)}
+
+/* isian wajib yang belum diisi saat checkout */
+input.salah{border-color:var(--bad)!important;box-shadow:0 0 0 3px color-mix(in srgb, var(--bad) 25%, transparent)}
+/* tombol absen masuk / pulang */
+.btn.absen-masuk{background:#1f7a4d;border-color:#1f7a4d;color:#fff}
+.btn.absen-pulang{background:#b85c00;border-color:#b85c00;color:#fff}
+#akJ button[data-j=masuk].on{background:#1f7a4d;border-color:#1f7a4d;color:#fff}
+#akJ button[data-j=pulang].on{background:#b85c00;border-color:#b85c00;color:#fff}

@@ -592,8 +592,9 @@ function tampilLogin(pesan = ""){
     <div id="lAbsen"></div></form></div>`;
   // Perangkat kasir: karyawan bisa absen tanpa masuk
   if (LOKAL) cekKiosk().then(K => { const d = $("#lAbsen"); if (!d || !K || !K.aktif) return;
-    d.innerHTML = K.boleh ? `<button class="btn big" id="lAbsenBtn" type="button" style="width:100%">📷 Absen karyawan</button>` : `<p class="small muted" style="margin:0">Absen: ${esc(K.alasan)}</p>`;
-    const b = $("#lAbsenBtn"); if (b) b.onclick = bukaAbsen; });
+    d.innerHTML = K.boleh ? `<div class="small muted" style="text-align:center;margin-bottom:6px">Absen karyawan (PIN + foto selfie)</div><div class="row" style="flex-wrap:nowrap"><button class="btn big absen-masuk" id="lAbsenMasuk" type="button" style="flex:1">➡️ Absen masuk</button><button class="btn big absen-pulang" id="lAbsenPulang" type="button" style="flex:1">🏠 Absen pulang</button></div>` : `<p class="small muted" style="margin:0">Absen: ${esc(K.alasan)}</p>`;
+    const bm = $("#lAbsenMasuk"); if (bm) bm.onclick = () => bukaAbsen("masuk");
+    const bp = $("#lAbsenPulang"); if (bp) bp.onclick = () => bukaAbsen("pulang"); });
   $("#fLogin").onsubmit = async e => {
     e.preventDefault(); const btn = tombolKirim(e); btn.disabled = true; $("#lErr").textContent = ""; const label = btn.textContent; btn.textContent = "Memeriksa…";
     try { await api("POST", "/api/login", { nama: $("#lNama").value, password: $("#lPw").value }); await mulai(); }
@@ -642,12 +643,13 @@ function shell(){
       <div class="brand"><img src="/monogram.png" alt="" width="30" height="30"><h1>${esc(toTitle(B.toko.nama_toko))}</h1><small>POS</small></div>
       <span class="sp"></span>
       ${isAdmin() ? `<span class="sync-dot" id="syncDot" title="Status sinkron Google Sheet"></span>` : ""}
-      ${LOKAL && kioskInfo && kioskInfo.boleh ? `<button class="btn sm" id="tbAbsen" type="button">📷 Absen</button>` : ""}
+      ${LOKAL && kioskInfo && kioskInfo.boleh ? `<button class="btn sm absen-masuk" id="tbMasuk" type="button">Masuk</button><button class="btn sm absen-pulang" id="tbPulang" type="button">Pulang</button>` : ""}
       <span class="userchip"><b>${esc(B.me.nama)}</b><span class="pill mut">${isAdmin() ? "ADMIN" : "KARYAWAN"}</span><button class="btn ghost sm" id="keluar" type="button">Keluar</button></span>
     </header>
     <nav class="tabs" id="tabs"></nav>
     <main id="main"></main></div>`;
-  const ab = $("#tbAbsen"); if (ab) ab.onclick = bukaAbsen;
+  const am = $("#tbMasuk"); if (am) am.onclick = () => bukaAbsen("masuk");
+  const ap = $("#tbPulang"); if (ap) ap.onclick = () => bukaAbsen("pulang");
   $("#keluar").onclick = async () => { await api("POST", "/api/logout").catch(() => {}); resetCart(); tampilLogin(); };
   if (isAdmin()) { cekSync(); clearInterval(window.__rgCekSync); window.__rgCekSync = setInterval(cekSync, 30_000); }
 }
@@ -760,7 +762,7 @@ function drawCart(){
     <div class="cart-body">
     <div class="seg" id="cJenis" role="group" aria-label="Jenis pelanggan"><button type="button" data-j="baru" class="${cart.lama ? "" : "on"}">Pelanggan baru</button><button type="button" data-j="lama" class="${cart.lama ? "on" : ""}">Pelanggan lama</button></div>
     ${cart.lama ? `<div class="cari-pel"><input type="search" id="cCariPel" placeholder="Cari nama / no HP pelanggan…" autocomplete="off" aria-label="Cari pelanggan"><div class="list" id="cPelList"><div class="empty small">Memuat daftar pelanggan…</div></div></div>` : ""}
-    <div class="row"><label class="f grow">Pelanggan<input type="text" id="cCust" value="${esc(cart.pelanggan)}" placeholder="CUSTOMER" autocomplete="off"></label><label class="f grow">No HP / WA<input type="tel" id="cHp" value="${esc(cart.hp)}" placeholder="08…" autocomplete="off"></label></div>
+    <div class="row"><label class="f grow">Nama pelanggan *<input type="text" id="cCust" value="${esc(cart.pelanggan)}" placeholder="Wajib diisi" autocomplete="off" required></label><label class="f grow">No HP / WA *<input type="tel" id="cHp" value="${esc(cart.hp)}" placeholder="08… (wajib)" autocomplete="off" required></label></div>
     <div class="list saran-pel" id="cSaran" hidden></div>
     <div class="cart-lines">${cart.items.length ? cart.items.map((it, i) => `
       <div class="line" data-i="${i}">
@@ -1167,6 +1169,10 @@ function pilihCetak(s){
 }
 async function simpanTransaksi(print, tombol){
   if (!cart.items.length) return;
+  const wajib = (id, pesan) => { toast(pesan); const el = $("#" + id); if (el) { el.focus(); el.classList.add("salah"); setTimeout(() => el.classList.remove("salah"), 2500); } };
+  if (!String(cart.pelanggan || "").trim() || String(cart.pelanggan).trim().toUpperCase() === "CUSTOMER") return wajib("cCust", "Isi nama pelanggan dulu");
+  const digitHp = String(cart.hp || "").replace(/\D/g, "").length;
+  if (digitHp < 9 || digitHp > 15 || !/^\+?[\d\s-]+$/.test(String(cart.hp).trim())) return wajib("cHp", "Isi nomor HP pelanggan yang benar (contoh 0812xxxxxxx)");
   if (cart.bayarMode === "dp" && !(cart.bayar > 0)) return toast("Isi nominal DP dulu");
   if (cart.bayarMode === "dp" && cart.bayar >= cartTotal()) return toast("Nominal DP sama atau lebih dari total. Pilih Lunas bila dibayar penuh.");
   await coba(async () => {
@@ -1412,7 +1418,7 @@ async function aturAbsen(){
     // Perangkat kasir: status absen di perangkat ini & tombol ambil lokasi toko
     const K = await api("GET", "/api/absen/kiosk").catch(() => null); if (!$("#aAbsen")) return;
     el.innerHTML = `<h3 style="font-size:17px">Absensi</h3>
-      <p class="small" style="margin:0">Absen PIN + selfie di perangkat ini: ${K && K.boleh ? `<b style="color:var(--ok)">siap dipakai</b> (tombol <b>📷 Absen</b> di atas & di layar masuk)` : `<b>belum bisa</b> — ${esc(K ? K.alasan : "status tidak terbaca")}`}.</p>
+      <p class="small" style="margin:0">Absen PIN + selfie di perangkat ini: ${K && K.boleh ? `<b style="color:var(--ok)">siap dipakai</b> (tombol <b>Masuk</b> / <b>Pulang</b> di atas & di layar masuk)` : `<b>belum bisa</b> — ${esc(K ? K.alasan : "status tidak terbaca")}`}.</p>
       <p class="small muted" style="margin:0">Aktifkan absen, atur shift & lembur, dan izinkan perangkat ini dari server (browser) → Pengaturan. Lokasi toko bisa diambil dari perangkat ini saat berada di toko:</p>
       <button class="btn" id="abLokasiIni" type="button">📍 Pakai lokasi perangkat ini sebagai lokasi toko</button>`;
     $("#abLokasiIni").onclick = e => coba(async () => {
@@ -1492,15 +1498,16 @@ function ambilLokasi(){
 let kioskInfo = null;
 async function cekKiosk(){ kioskInfo = LOKAL ? await api("GET", "/api/absen/kiosk").catch(() => null) : null; return kioskInfo; }
 /** Layar absen: pilih nama + PIN + foto selfie, lokasi dicek otomatis. */
-async function bukaAbsen(){
+async function bukaAbsen(jenisAwal){
   const K = await cekKiosk();
   if (!K || !K.boleh) return toast(K ? K.alasan : "Absen tidak tersedia");
-  const jamSkr = new Date().getHours();
-  let jenis = jamSkr < 12 ? "masuk" : "pulang", foto = "", lokasi = null, stream = null;
+  let jenis = jenisAwal === "pulang" || jenisAwal === "masuk" ? jenisAwal : new Date().getHours() < 13 ? "masuk" : "pulang", foto = "", lokasi = null, stream = null;
+  const saya = B && B.me && K.staf.some(s => s.id === B.me.id) ? B.me.id : null;
   modal(`<h3>📷 Absen karyawan</h3>
+    <p class="small muted" style="margin:0">Diisi sendiri oleh karyawan yang absen. Jam tercatat otomatis saat disimpan.</p>
     <div class="stack">
       <div class="seg" id="akJ" style="display:flex"><button type="button" data-j="masuk" style="flex:1" class="${jenis === "masuk" ? "on" : ""}">Masuk</button><button type="button" data-j="pulang" style="flex:1" class="${jenis === "pulang" ? "on" : ""}">Pulang</button></div>
-      <label class="f">Nama<select id="akU"><option value="">— pilih nama —</option>${K.staf.map(s => `<option value="${s.id}">${esc(s.nama)}</option>`).join("")}</select></label>
+      <label class="f">Nama<select id="akU"><option value="">— pilih nama —</option>${K.staf.map(s => `<option value="${s.id}" ${s.id === saya ? "selected" : ""}>${esc(s.nama)}</option>`).join("")}</select></label>
       <label class="f">PIN<input type="password" id="akP" inputmode="numeric" autocomplete="off"></label>
       <div class="absen-kamera"><video id="akV" autoplay playsinline muted></video><img id="akF" alt="Foto selfie" hidden><div id="akKet" class="small muted">Menyalakan kamera…</div></div>
       <div class="row"><button class="btn" id="akAmbil" type="button" disabled>📸 Ambil foto</button><button class="btn ghost" id="akUlang" type="button" hidden>Ulangi foto</button></div>
@@ -1511,7 +1518,8 @@ async function bukaAbsen(){
     const matikan = () => { try { stream && stream.getTracks().forEach(t => t.stop()); } catch {} stream = null; };
     const siap = () => { $("#akKirim", m).disabled = !(foto && lokasi && lokasi.ok && $("#akU", m).value && $("#akP", m).value); };
     const pantau = setInterval(() => { if (!document.body.contains(v)) { matikan(); clearInterval(pantau); } }, 800);
-    $$("#akJ button", m).forEach(b => b.onclick = () => { jenis = b.dataset.j; $$("#akJ button", m).forEach(x => x.classList.toggle("on", x === b)); });
+    $$("#akJ button", m).forEach(b => b.onclick = () => { jenis = b.dataset.j; $$("#akJ button", m).forEach(x => x.classList.toggle("on", x === b)); $("#akKirim", m).textContent = "Simpan absen " + jenis; });
+    $("#akKirim", m).textContent = "Simpan absen " + jenis;
     $("#akU", m).onchange = siap; $("#akP", m).oninput = siap;
     $("#akBatal", m).onclick = () => { matikan(); closeModal(); };
     // Kamera depan

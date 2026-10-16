@@ -40,6 +40,9 @@ function nomorKiriman(no){
   for (let i = 2; ; i++) if (!one("SELECT 1 x FROM sales WHERE no = ?", [`${no}-${i}`])) return `${no}-${i}`;
 }
 
+/** Nomor HP Indonesia: 9–15 digit, boleh diawali +62 / 62 / 0, boleh pakai spasi atau strip. */
+export const hpValid = hp => /^\+?[\d\s-]+$/.test(String(hp || "").trim()) && (n => n >= 9 && n <= 15)(String(hp).replace(/\D/g, "").length);
+
 route("POST", "/api/penjualan", "semua", ({ body, user, ctx }) => tx(() => {
   const s = getSettings(), now = sekarang(), kiriman = ctx && ctx.replay;
   const tgl = kiriman ? tanggal(kiriman.tgl) : user.peran === "admin" && body.tgl ? tanggal(body.tgl) : now.tgl;
@@ -62,6 +65,11 @@ route("POST", "/api/penjualan", "semua", ({ body, user, ctx }) => tx(() => {
   const bayar = angka(body.bayar, { min: 0, max: 1e11, bulat: true, nama: "Dibayar" }) ?? total;
   const pelanggan = teks(body.pelanggan, { max: 80, upper: true, nama: "Pelanggan" }) || "CUSTOMER";
   const hp = teks(body.hp, { max: 30, nama: "No HP" });
+  // Nama pelanggan & no HP wajib (kecuali transaksi lama yang dikirim ulang dari perangkat cabang).
+  if (!ctx?.replay) {
+    if (!String(body.pelanggan || "").trim() || pelanggan === "CUSTOMER") throw bad("Isi nama pelanggan dulu");
+    if (!hpValid(hp)) throw bad("Isi nomor HP pelanggan yang benar (contoh 0812xxxxxxx)");
+  }
   const catatan = teks(body.catatan, { max: 500, nama: "Catatan" });
   const kartu = teks(body.kartu, { max: 1000, nama: "Kartu ucapan" }) || null;
   // Pesanan: diambil / diantar nanti, dengan catatan khusus (request)
