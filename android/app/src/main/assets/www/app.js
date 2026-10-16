@@ -156,9 +156,9 @@ function strukLines(s){
   L.push({ t: garis }, { t: lr("Subtotal", angka(s.subtotal), w) });
   if (s.diskon) L.push({ t: lr("Diskon", "-" + angka(s.diskon), w) });
   if (s.ongkir) L.push({ t: lr("Ongkir", angka(s.ongkir), w) });
-  L.push({ t: lr("TOTAL", "Rp" + angka(s.total), w), b: 1 }, { t: lr("Bayar (" + s.metode + ")", angka(s.bayar), w) });
+  L.push({ t: lr("TOTAL", "Rp" + angka(s.total), w), b: 1 }, { t: lr((s.bayar < s.total ? "DP (" : "Bayar (") + s.metode + ")", angka(s.bayar), w) });
   if (s.metode === "Tunai" && s.bayar > s.total) L.push({ t: lr("Kembali", angka(s.bayar - s.total), w) });
-  if (s.bayar < s.total) L.push({ t: lr("SISA / DP", angka(s.total - s.bayar), w), b: 1 });
+  if (s.bayar < s.total) L.push({ t: lr("SISA", angka(s.total - s.bayar), w), b: 1 });
   if (s.ambil_tgl) {
     L.push({ t: garis }, { t: center("*** PESANAN ***", w), b: 1 });
     L.push({ t: lr(s.ambil_cara === "antar" ? "Diantar" : "Diambil", tglPendek(s.ambil_tgl) + (s.ambil_jam ? " " + s.ambil_jam : ""), w), b: 1 });
