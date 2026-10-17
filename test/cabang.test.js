@@ -560,6 +560,29 @@ test("hard reset di server → transaksi di perangkat cabang ikut kosong, stok 0
   assert.equal((await pusat("GET", `/api/penjualan?dari=2000-01-01&sampai=${hari}`)).data.length, 1);
 });
 
+test("penjualan yang pernah ditolak server tidak hilang: dikirim ulang otomatis & diterima (versi aman)", async () => {
+  await sinkron(); await segarkan();
+  const { DatabaseSync } = await import("node:sqlite");
+  const hari = BC.hariIni, p = BC.produk.find(x => x.stok > 0) || BC.produk[0];
+  const stokP0 = prodP(p.kode).stok;
+  const data = no => JSON.stringify({ no, tgl: hari, jam: "10:00", pelanggan: "BU X", hp: "081234567890", metode: "Tunai", bayar: 350000, diskon: 0, ongkir: 0, catatan: "",
+    items: [{ kode: p.kode, nama: p.nama, kategori: p.kategori, harga: 100000, qty: 1, ready: 1 }, { kode: "", nama: "CUSTOM BLOOM BOX", kategori: "BUKET COSTUME", harga: 250000, qty: 1, ready: 0 }],
+    pesanan: { tgl: "bukan-tanggal", jam: "", cara: "ambil", request: "" } });
+  const db = new DatabaseSync(path.join(dir, "cabang.db"));
+  // 1) kiriman lama yang dulu ditolak; 2) kiriman baru yang data pesanannya rusak
+  db.prepare("INSERT INTO cabang_kirim(uid, aksi, data, waktu, oleh, terkirim, hasil, galat) VALUES (?, 'jual', ?, ?, 'yudi', datetime('now'), 'ditolak', 'uji')").run("uji-tolak-1", data("RG/SC/A-900001"), JSON.stringify({ tgl: hari, jam: "10:00" }));
+  db.prepare("INSERT INTO cabang_kirim(uid, aksi, data, waktu, oleh) VALUES (?, 'jual', ?, ?, 'yudi')").run("uji-tolak-2", data("RG/SC/A-900002"), JSON.stringify({ tgl: hari, jam: "10:05" }));
+  db.close();
+  const st = await sinkron();
+  assert.equal(st.ditolak, 0, JSON.stringify(st.ditolakDaftar));
+  const jual = (await pusat("GET", `/api/penjualan?dari=${hari}&sampai=${hari}`)).data.filter(s => /A-90000[12]/.test(s.no));
+  assert.equal(jual.length, 2, "kedua penjualan sampai di server");
+  assert.ok(jual.every(s => s.total === 350000));
+  await segarkan();
+  assert.equal(prodP(p.kode).stok, stokP0 - 2, "stok server berkurang");
+  assert.equal((await cabang("GET", "/api/cabang/ringkas")).data.ditolak, 0);
+});
+
 test("putuskan: ditolak bila masih ada antrean, lalu berhasil", async () => {
   assert.equal((await cabang("POST", "/api/cabang/putus", {})).status, 200);
   const st = (await cabang("GET", "/api/cabang")).data;

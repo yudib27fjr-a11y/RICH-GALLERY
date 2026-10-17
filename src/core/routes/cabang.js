@@ -10,7 +10,7 @@ import { cekPassword, cekBatasLogin, catatGagal, resetGagal } from "../auth.js";
 import { muatPenjualan, hapusPenjualan } from "./penjualan.js";
 import { rekapAbsen, terimaAbsen, fotoAbsen, cekLokasi, lemburPeriode } from "./absen.js";
 import { rekapGaji, daftarKasbon } from "./gaji.js";
-import { statusCabang, sinkronCabang, sambungCabang, putusCabang, gantiNamaPerangkat } from "../cabang-perangkat.js";
+import { statusCabang, sinkronCabang, sambungCabang, putusCabang, gantiNamaPerangkat, kirimUlangDitolak } from "../cabang-perangkat.js";
 
 /* ================= di perangkat ================= */
 route("GET", "/api/cabang", "admin", () => statusCabang());
@@ -23,7 +23,9 @@ route("POST", "/api/cabang/sambung", "admin", async ({ body }) => sambungCabang(
   unggahAwal: !!body.unggahAwal,
 }), { batas: 100_000 });
 route("POST", "/api/cabang/putus", "admin", ({ body }) => putusCabang({ paksa: !!body.paksa }));
+route("GET", "/api/cabang/ringkas", "semua", () => { const s = statusCabang(); return { aktif: s.aktif, menunggu: s.menunggu, ditolak: s.ditolak, galat: s.galatTerakhir, terakhir: s.terakhir }; });
 route("POST", "/api/cabang/sinkron", "semua", () => sinkronCabang({ paksa: true }));
+route("POST", "/api/cabang/kirim-ulang", "admin", () => { const n = kirimUlangDitolak({ semua: true }); return sinkronCabang({ paksa: true }).then(st => ({ ...st, dikirimUlang: n })); });
 route("POST", "/api/cabang/nama", "admin", ({ body }) => gantiNamaPerangkat(teks(body.nama, { wajib: true, max: 40, nama: "Nama perangkat" })));
 /* Penanda versi data (server maupun perangkat): layar memakainya untuk tahu kapan perlu memuat ulang. */
 route("GET", "/api/versi", "semua", () => ({ versi: versiData() }));
@@ -120,7 +122,7 @@ function panggil(method, path, body, user, waktu, replay = {}){
 }
 
 /** Satu perintah dari perangkat → perubahan yang sama di server. Galat HttpError = ditolak permanen. */
-function terapkan(p, d, alat){
+function terapkan(p, d, alat, aman = false){
   const user = userNama(p.oleh) || one("SELECT id, nama, peran FROM users WHERE id = ?", [alat.admin_id]);
   if (!user) throw bad("Pembuat transaksi tidak dikenal di server");
   const w = p.waktu && p.waktu.tgl ? { tgl: p.waktu.tgl, jam: p.waktu.jam || "00:00" } : null;
@@ -137,8 +139,21 @@ function terapkan(p, d, alat){
         const b = idBarang("produk", i.kode);
         return b ? { product_id: b.id, harga: i.harga, qty: i.qty, ready: i.ready, pembuat: i.pembuat } : { nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty, pembuat: i.pembuat };
       });
-      return panggil("POST", "/api/penjualan", { items, diskon: x.diskon, ongkir: x.ongkir, metode: x.metode, bayar: x.bayar, pelanggan: x.pelanggan, hp: x.hp, catatan: x.catatan, kartu: x.kartu, pesanan: x.pesanan || null },
-        user, { tgl: x.tgl || w?.tgl, jam: x.jam || w?.jam }, { no: x.no, tgl: x.tgl, jam: x.jam });
+      const waktuJual = { tgl: x.tgl || w?.tgl, jam: x.jam || w?.jam }, replay = { no: x.no, tgl: x.tgl, jam: x.jam };
+      const body = { items, diskon: x.diskon, ongkir: x.ongkir, metode: x.metode, bayar: x.bayar, pelanggan: x.pelanggan, hp: x.hp, catatan: x.catatan, kartu: x.kartu, pesanan: x.pesanan || null };
+      if (!aman) return panggil("POST", "/api/penjualan", body, user, waktuJual, replay);
+      {
+        // Versi aman (dipakai bila versi biasa ditolak): penjualan yang sudah terjadi di toko jangan sampai hilang,
+        // jadi data tambahan yang bermasalah (pesanan, kartu, pembuat) disederhanakan.
+        const amanBody = { ...body, metode: ["Tunai", "Transfer", "QRIS"].includes(x.metode) ? x.metode : "Tunai", kartu: null, pesanan: null,
+          catatan: [String(x.catatan || ""), x.pesanan ? `Pesanan ${x.pesanan.tgl || ""} ${x.pesanan.jam || ""} ${x.pesanan.request || ""}`.trim() : ""].filter(Boolean).join(" · ").slice(0, 500),
+          items: items.map(i => ({ ...i, pembuat: undefined, nama: String(i.nama || "BARANG").slice(0, 120) || "BARANG", qty: Math.max(0.01, Math.min(100000, Number(i.qty) || 1)), harga: Math.max(0, Math.round(Number(i.harga) || 0)) })) };
+        const sub = amanBody.items.reduce((a, i) => a + i.harga * i.qty, 0);
+        amanBody.diskon = Math.min(Math.max(0, Math.round(Number(x.diskon) || 0)), Math.round(sub));
+        amanBody.ongkir = Math.max(0, Math.round(Number(x.ongkir) || 0));
+        amanBody.bayar = x.bayar == null ? undefined : Math.max(0, Math.round(Number(x.bayar) || 0));
+        return panggil("POST", "/api/penjualan", amanBody, user, waktuJual, replay);
+      }
     }
     case "batal": {
       const s = one("SELECT id, batal_at FROM sales WHERE no = ?", [String(x.no || "")]);
@@ -222,10 +237,17 @@ route("POST", "/api/cabang/kirim", false, ({ body }) => {
     const sudah = one("SELECT status, pesan FROM cabang_terima WHERE uid = ?", [uid]);
     if (sudah) { hasil.push({ uid, status: sudah.status, pesan: sudah.pesan }); continue; } // kiriman ulang: tidak dicatat dua kali
     try {
-      tx(() => {
-        terapkan(p, null, alat);
+      const jalankan = aman => tx(() => {
+        terapkan(p, null, alat, aman);
         run("INSERT INTO cabang_terima(uid, perangkat_id, aksi, status) VALUES (?,?,?, 'ok')", [uid, alat.id, String(p.aksi || "")]);
       });
+      try { jalankan(false); }
+      catch (e) {
+        const permanen = e instanceof HttpError || String(e.message).includes("UNIQUE constraint failed");
+        if (!(permanen && p.aksi === "jual")) throw e;
+        console.error(new Date().toISOString(), "jual dari perangkat ditolak, dicoba versi aman:", p.data && p.data.no, e.message);
+        jalankan(true);
+      }
       hasil.push({ uid, status: "ok" });
     } catch (e) {
       const permanen = e instanceof HttpError || String(e.message).includes("UNIQUE constraint failed");

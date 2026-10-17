@@ -271,3 +271,7 @@ input.salah{border-color:var(--bad)!important;box-shadow:0 0 0 3px color-mix(in 
 /* ubah stok manual */
 .stok-ubah-bar{position:sticky;top:0;z-index:5;margin-bottom:12px;padding:10px 12px}
 input.sIn.berubah{background:#fff4c2;border-color:#d9a400;color:#1c2420}
+/* status kiriman ke server pusat di perangkat kasir */
+.sync-chip{border:0;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer}
+.sync-chip.warn{background:#fff1cc;color:#7a5200}
+.sync-chip.bad{background:#fde2e2;color:#9b1c1c}

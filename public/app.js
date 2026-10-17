@@ -642,7 +642,7 @@ function shell(){
     <header class="topbar">
       <div class="brand"><img src="/monogram.png" alt="" width="30" height="30"><h1>${esc(toTitle(B.toko.nama_toko))}</h1><small>POS</small></div>
       <span class="sp"></span>
-      ${isAdmin() ? `<span class="sync-dot" id="syncDot" title="Status sinkron Google Sheet"></span>` : ""}
+      ${isAdmin() ? `<span class="sync-dot" id="syncDot" title="Status sinkron Google Sheet"></span>` : ""}${LOKAL ? `<button class="sync-chip" id="syncChip" type="button" hidden></button>` : ""}
       ${LOKAL && kioskInfo && kioskInfo.boleh ? `<button class="btn sm absen-masuk" id="tbMasuk" type="button">Masuk</button><button class="btn sm absen-pulang" id="tbPulang" type="button">Pulang</button>` : ""}
       <span class="userchip"><b>${esc(B.me.nama)}</b><span class="pill mut">${isAdmin() ? "ADMIN" : "KARYAWAN"}</span><button class="btn ghost sm" id="keluar" type="button">Keluar</button></span>
     </header>
@@ -651,9 +651,29 @@ function shell(){
   const am = $("#tbMasuk"); if (am) am.onclick = () => bukaAbsen("masuk");
   const ap = $("#tbPulang"); if (ap) ap.onclick = () => bukaAbsen("pulang");
   $("#keluar").onclick = async () => { await api("POST", "/api/logout").catch(() => {}); resetCart(); tampilLogin(); };
-  if (isAdmin()) { cekSync(); clearInterval(window.__rgCekSync); window.__rgCekSync = setInterval(cekSync, 30_000); }
+  if (isAdmin() || LOKAL) { cekSync(); clearInterval(window.__rgCekSync); window.__rgCekSync = setInterval(cekSync, 30_000); }
+}
+/** Perangkat kasir: tanda jelas bila ada transaksi yang belum terkirim / ditolak server pusat (untuk semua pengguna). */
+async function cekKirimCabang(){
+  const chip = $("#syncChip"); if (!chip) return;
+  const c = await api("GET", "/api/cabang/ringkas").catch(() => null);
+  if (!c || !c.aktif) { chip.hidden = true; return; }
+  const lama = c.menunggu && c.terakhir && Date.now() - Date.parse(c.terakhir) > 10 * 60_000;
+  chip.hidden = !(c.ditolak || c.menunggu);
+  chip.className = "sync-chip " + (c.ditolak || lama || c.galat ? "bad" : "warn");
+  chip.textContent = c.ditolak ? `⚠️ ${c.ditolak} transaksi ditolak server` : `⏳ ${c.menunggu} belum terkirim${c.galat ? " (offline)" : ""}`;
+  chip.onclick = () => modal(`<h3>Sinkron ke server pusat</h3>
+    <p style="margin:0">${c.menunggu ? `<b>${c.menunggu} transaksi</b> masih tersimpan di perangkat ini dan belum masuk ke server, jadi belum terlihat di laporan server dan stok server belum berkurang.` : "Semua transaksi baru sudah terkirim."}</p>
+    ${c.galat ? `<p class="small" style="color:var(--bad);margin:0">Kendala: ${esc(c.galat)}</p><p class="small muted" style="margin:0">Periksa internet / WiFi perangkat ini. Transaksi aman tersimpan di perangkat dan akan terkirim otomatis begitu tersambung.</p>` : ""}
+    ${c.ditolak ? `<p class="small" style="color:var(--bad);margin:0"><b>${c.ditolak} transaksi ditolak server</b>. Data tetap tersimpan di perangkat ini. ${isAdmin() ? "Tekan <b>Kirim ulang</b>, atau lihat rinciannya di Pengaturan → Server pusat." : "Minta admin menekan Kirim ulang."}</p>` : ""}
+    <div class="actions"><button class="btn" data-close>Tutup</button>${c.ditolak && isAdmin() ? `<button class="btn" id="scUlang" type="button">Kirim ulang yang ditolak</button>` : ""}<button class="btn pri" id="scGo" type="button">Sinkron sekarang</button></div>`, m => {
+    $("#scGo", m).onclick = e => coba(async () => { const r = await api("POST", "/api/cabang/sinkron"); closeModal(); await muatUlang(); render(); toast(r.galatTerakhir ? "Belum terkirim: " + r.galatTerakhir : r.menunggu ? `${r.menunggu} masih menunggu` : r.ditolak ? `${r.ditolak} masih ditolak` : "Semua sudah terkirim"); }, e.target);
+    const u = $("#scUlang", m); if (u) u.onclick = e => coba(async () => { const r = await api("POST", "/api/cabang/kirim-ulang"); closeModal(); await muatUlang(); render(); toast(r.ditolak ? `${r.ditolak} masih ditolak: ${(r.ditolakDaftar[0] || {}).galat || ""}` : `${r.dikirimUlang} transaksi berhasil dikirim ulang`); }, e.target);
+  });
 }
 async function cekSync(){
+  cekKirimCabang().catch(() => {});
+  if (!isAdmin()) return;
   try {
     if (LOKAL) { // perangkat cabang: lampu menunjukkan kiriman ke server pusat
       const c = await api("GET", "/api/cabang"); const d = $("#syncDot");
@@ -727,7 +747,7 @@ function drawGrid(){
 function tambahKeKeranjang(id){
   const p = prodBy(id); if (!p) return;
   const ex = cart.items.find(i => i.product_id === id);
-  if (ex) ex.qty = +(ex.qty + 1).toFixed(2); else cart.items.push({ product_id: p.id, kode: p.kode, nama: p.nama, kategori: p.kategori, harga: p.harga, qty: 1, ready: p.stok > 0 });
+  if (ex) ex.qty = +(ex.qty + 1).toFixed(2); else cart.items.push({ product_id: p.id, kode: p.kode, nama: p.nama, kategori: p.kategori, harga: p.harga, qty: 1, ready: p.stok > 0, readyAuto: true });
   saveCart(); drawCart(); toast(`${p.nama} ditambahkan`);
 }
 function itemManual(){
@@ -753,8 +773,17 @@ function itemManual(){
       }, e.target);
     });
 }
+/** READY / PRODUKSI otomatis mengikuti stok terbaru (mis. stok baru diisi setelah barang masuk keranjang),
+ *  kecuali kasir sudah memilihnya sendiri. Produk yang stoknya ada → READY, jadi stok berkurang saat terjual. */
+function segarkanReady(){
+  for (const it of cart.items) {
+    if (!it.product_id || it.readyAuto === false) continue;
+    const p = prodBy(it.product_id); if (p) it.ready = p.stok > 0;
+  }
+}
 function drawCart(){
   const el = $("#cart"); if (!el) return;
+  segarkanReady();
   const sub = cartSub(), tot = cartTotal(), qty = cart.items.reduce((a, i) => a + i.qty, 0);
   $("#cbCount").textContent = `${fq(qty)} item`; $("#cbTotal").textContent = rp(tot);
   el.innerHTML = `
@@ -771,7 +800,7 @@ function drawCart(){
         <div class="ctl">
           <span class="qty"><button type="button" data-a="-" aria-label="Kurangi">−</button><input type="number" class="qIn num" value="${it.qty}" min="0" step="0.5" inputmode="decimal" aria-label="Jumlah"><button type="button" data-a="+" aria-label="Tambah">+</button></span>
           <input type="number" class="price-in pIn num" value="${it.harga}" min="0" step="500" inputmode="numeric" aria-label="Harga satuan">
-          ${it.product_id ? `<button type="button" class="pill ${it.ready ? "ok" : "mut"}" data-a="r" style="border:0;cursor:pointer" title="Ketuk untuk mengganti: ambil dari stok ready atau dibuat (produksi)">${it.ready ? "READY STOK" : "PRODUKSI"}</button>` : `<span class="pill mut">PRODUKSI</span>`}
+          ${it.product_id ? `<button type="button" class="pill ${it.ready ? "ok" : "mut"}" data-a="r" style="border:0;cursor:pointer" title="Ketuk untuk mengganti: ambil dari stok ready atau dibuat (produksi)">${it.ready ? "READY STOK" : "PRODUKSI · stok tetap"}</button>` : `<span class="pill mut">PRODUKSI</span>`}
           <button type="button" class="btn ghost sm" data-a="x" style="margin-left:auto">Hapus</button>
           ${!it.ready ? `<label class="pembuat-baris"><span class="small muted">Dibuat oleh</span><select class="pbIn" aria-label="Pembuat"><option value="">— pilih pembuat (insentif) —</option>${B.staf.map(u => `<option value="${u.id}" ${+it.pembuat_id === u.id ? "selected" : ""}>${esc(u.nama)}</option>`).join("")}</select></label>` : ""}
         </div>
@@ -838,7 +867,7 @@ function drawCart(){
       const a = b.dataset.a;
       if (a === "+") it.qty = +(it.qty + 1).toFixed(2);
       if (a === "-") it.qty = Math.max(0, +(it.qty - 1).toFixed(2));
-      if (a === "r") it.ready = !it.ready;
+      if (a === "r") { it.ready = !it.ready; it.readyAuto = false; }
       if (a === "x" || it.qty === 0) cart.items.splice(i, 1);
       saveCart(); drawCart();
     });
@@ -1169,6 +1198,7 @@ function pilihCetak(s){
 }
 async function simpanTransaksi(print, tombol){
   if (!cart.items.length) return;
+  segarkanReady();
   const wajib = (id, pesan) => { toast(pesan); const el = $("#" + id); if (el) { el.focus(); el.classList.add("salah"); setTimeout(() => el.classList.remove("salah"), 2500); } };
   if (!String(cart.pelanggan || "").trim() || String(cart.pelanggan).trim().toUpperCase() === "CUSTOMER") return wajib("cCust", "Isi nama pelanggan dulu");
   const digitHp = String(cart.hp || "").replace(/\D/g, "").length;
@@ -1191,7 +1221,7 @@ async function simpanTransaksi(print, tombol){
     // Ucapan terima kasih otomatis lewat WhatsApp (bila diaktifkan & ada no HP)
     // Bayar & Cetak: WhatsApp hanya jadi salah satu pilihan (tidak dibuka otomatis).
     if (!print && B.toko.wa_otomatis && nomorWA(s.hp)) setTimeout(() => kirimWA(s), 300);
-    if (isAdmin()) setTimeout(cekSync, 3000);
+    setTimeout(cekSync, 3000);
   }, tombol);
 }
 
@@ -2643,7 +2673,8 @@ async function aturCabang(){
   el.innerHTML = `<h3 style="font-size:17px">Server pusat (sinkron otomatis)</h3>
     <p class="small" style="margin:0">Tersambung ke <b>${esc(st.url)}</b> sebagai perangkat <b>${esc(st.kode)} · ${esc(st.nama)}</b>. Nomor nota perangkat ini: <b>${esc(B.toko.prefix)}${esc(st.kode)}-…</b></p>
     <p class="small" style="margin:0;${masalah ? "color:var(--bad)" : ""}">${st.menunggu ? `<b>${st.menunggu} transaksi menunggu dikirim.</b>` : "Semua transaksi sudah terkirim."} Terakhir sinkron: ${waktuLokal(st.terakhir)}${st.galatTerakhir ? `<br>${esc(st.galatTerakhir)}` : ""}</p>
-    ${st.ditolak ? `<p class="small" style="margin:0;color:var(--bad)">${st.ditolak} transaksi ditolak server (7 hari terakhir):<br>${st.ditolakDaftar.map(x => `${esc(x.aksi)}: ${esc(x.galat || "")}`).join("<br>")}</p>` : ""}
+    ${st.ditolak ? `<p class="small" style="margin:0;color:var(--bad)">${st.ditolak} transaksi ditolak server (tetap tersimpan di perangkat ini):<br>${st.ditolakDaftar.map(x => `${esc(x.aksi)}${x.no ? " " + esc(x.no) : ""}: ${esc(x.galat || "")}`).join("<br>")}</p>
+      <button class="btn" id="cbUlang" type="button">Kirim ulang yang ditolak</button>` : ""}
     <p class="small muted" style="margin:0">Sinkron berjalan otomatis setiap ada transaksi, dan memeriksa data baru tiap 10 detik selama aplikasi terbuka dan ada internet. Tarik layar ke bawah untuk sinkron seketika. Produk, akun dan pengaturan toko diubah di server pusat.</p>
     ${st.url.replace(/\/+$/, "") !== SERVER_TOKO ? `<p class="note" style="margin:0">Server toko sekarang ada di Cloudflare: <b>${esc(SERVER_TOKO)}</b>. Untuk pindah: tekan <b>Putuskan</b> (setelah semua transaksi terkirim), lalu sambungkan lagi. Alamat Cloudflare sudah terisi otomatis.</p>` : ""}
     <div class="row"><button class="btn pri" id="cbSync" type="button">Sinkron sekarang</button><button class="btn" id="cbNama" type="button">Ganti nama perangkat</button><button class="btn" id="cbPutus" type="button">Putuskan</button></div>`;
@@ -2653,6 +2684,7 @@ async function aturCabang(){
     <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="pok" type="button">Simpan</button></div>`, m => {
     $("#pok", m).onclick = e => coba(async () => { await api("POST", "/api/cabang/nama", { nama: $("#pn", m).value }); closeModal(); toast("Nama perangkat diganti"); aturCabang(); }, e.target);
   });
+  const cu = $("#cbUlang"); if (cu) cu.onclick = e => coba(async () => { const r = await api("POST", "/api/cabang/kirim-ulang"); await muatUlang(); toast(r.ditolak ? `${r.ditolak} masih ditolak` : `${r.dikirimUlang} transaksi berhasil dikirim ulang`); aturCabang(); cekSync(); }, e.target);
   $("#cbSync").onclick = e => coba(async () => { const r = await api("POST", "/api/cabang/sinkron"); await muatUlang(); toast(r.galatTerakhir ? "Belum terkirim: " + r.galatTerakhir : r.menunggu ? `${r.menunggu} masih menunggu` : "Sinkron selesai"); aturCabang(); cekSync(); }, e.target);
   $("#cbPutus").onclick = () => konfirmasi("Putuskan dari server pusat?", st.menunggu ? `Masih ada ${st.menunggu} transaksi yang belum terkirim. Bila diputuskan sekarang, transaksi itu TIDAK akan dikirim.` : "Perangkat kembali bekerja sendiri. Data yang sudah terkirim tetap ada di server.", "Putuskan", async () => {
     await api("POST", "/api/cabang/putus", { paksa: !!st.menunggu }); toast("Diputuskan dari server pusat"); aturCabang(); cekSync();

@@ -57,9 +57,10 @@ export function statusCabang(){
   return {
     aktif: cabangAktif(), url: s.cabang_url || "", kode: s.cabang_kode || "", nama: s.cabang_nama || "",
     menunggu: n("SELECT COUNT(*) n FROM cabang_kirim WHERE terkirim IS NULL"),
-    ditolak: n("SELECT COUNT(*) n FROM cabang_kirim WHERE hasil = 'ditolak' AND terkirim > datetime('now', '-7 days')"),
+    ditolak: n("SELECT COUNT(*) n FROM cabang_kirim WHERE hasil = 'ditolak'"),
     galatTerakhir: s.cabang_galat || "", terakhir: s.cabang_terakhir || null,
-    ditolakDaftar: all("SELECT aksi, galat, dibuat FROM cabang_kirim WHERE hasil = 'ditolak' ORDER BY id DESC LIMIT 5"),
+    ditolakDaftar: all("SELECT aksi, galat, dibuat, data FROM cabang_kirim WHERE hasil = 'ditolak' ORDER BY id DESC LIMIT 10")
+      .map(r => { let no = ""; try { no = JSON.parse(r.data).no || ""; } catch { /* abaikan */ } return { aksi: r.aksi, galat: r.galat, dibuat: r.dibuat, no }; }),
   };
 }
 
@@ -75,6 +76,7 @@ export async function sinkronCabang({ paksa = false } = {}){
   const s = getSettings();
   let berubah = false;
   try {
+    kirimUlangDitolak();
     for (let putaran = 0; putaran < 40; putaran++) {
       const batch = all("SELECT uid, aksi, data, waktu, oleh FROM cabang_kirim WHERE terkirim IS NULL ORDER BY id LIMIT 40");
       if (!batch.length) break;
@@ -113,6 +115,22 @@ export async function sinkronCabang({ paksa = false } = {}){
     if (lagi) { lagi = false; jadwalkanSinkron(200); }
   }
   return { ...statusCabang(), berubah };
+}
+/** Perintah yang pernah ditolak server dikirim ulang sekali dengan uid baru (server versi baru lebih toleran,
+ *  mis. penjualan tetap diterima walau data pesanan/pembuatnya bermasalah). Supaya transaksi tidak hilang. */
+export function kirimUlangDitolak({ semua = false } = {}){
+  const rows = all(`SELECT id, uid FROM cabang_kirim WHERE hasil = 'ditolak' ${semua ? "" : "AND uid NOT LIKE '%~u%'"} ORDER BY id`);
+  for (const r of rows) {
+    const dasar = r.uid.replace(/~u\d+$/, ""), n = (Number((r.uid.match(/~u(\d+)$/) || [])[1]) || 0) + 1;
+    run("UPDATE cabang_kirim SET uid = ?, terkirim = NULL, hasil = NULL, galat = NULL, percobaan = 0 WHERE id = ?", [`${dasar}~u${n}`, r.id]);
+  }
+  return rows.length;
+}
+/** No nota penjualan yang ditolak server (tetap disimpan di perangkat, tidak ikut dihapus saat menyamakan data). */
+export function notaDitolak(){
+  const s = new Set();
+  for (const r of all("SELECT data FROM cabang_kirim WHERE aksi = 'jual' AND hasil = 'ditolak'")) { try { const d = JSON.parse(r.data); if (d && d.no) s.add(d.no); } catch { /* abaikan */ } }
+  return s;
 }
 /** Dipasang mesin lokal: dipanggil setelah data dari server masuk, supaya layar dimuat ulang. */
 export const pendengar = { dataBaru: null };
@@ -188,6 +206,7 @@ export function terapkanSnapshot(snap){
     const sejak = /^\d{4}-\d{2}-\d{2}$/.test(String(snap.sejak || "")) ? snap.sejak : null;
     if (sejak && Array.isArray(snap.penjualan) && snap.penjualan.length < 5000) {
       const ada = new Set(snap.penjualan.map(x => x && x.no));
+      for (const no of notaDitolak()) ada.add(no); // transaksi yang ditolak server jangan dihapus dari perangkat
       for (const r of all("SELECT id, no FROM sales WHERE tgl >= ?", [sejak])) {
         if (!ada.has(r.no)) { run("DELETE FROM sale_items WHERE sale_id = ?", [r.id]); run("DELETE FROM sales WHERE id = ?", [r.id]); }
       }
