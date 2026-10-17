@@ -589,7 +589,8 @@ function tampilLogin(pesan = ""){
     <div class="err" id="lErr">${esc(pesan)}</div>
     <button class="btn pri big" type="submit">Masuk</button>
     <p class="small muted" style="margin:0">Lupa PIN? Minta admin menggantinya di Pengaturan → Pengguna.</p>
-    <div id="lAbsen"></div></form></div>`;
+    <div id="lAbsen"></div>
+    <p class="small muted" style="margin:0;text-align:center;opacity:.7">${(() => { try { const i = JSON.parse(NATIVE.info()); return `Aplikasi ${esc(i.versi || "?")} · tampilan #${esc(String(i.web || "?"))}`; } catch { return ""; } })()}</p></form></div>`;
   // Perangkat kasir: karyawan bisa absen tanpa masuk
   if (LOKAL) cekKiosk().then(K => { const d = $("#lAbsen"); if (!d || !K || !K.aktif) return;
     d.innerHTML = `<hr class="sep">` + panelAbsen(K, true);
