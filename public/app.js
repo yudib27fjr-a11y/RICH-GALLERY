@@ -602,7 +602,42 @@ function tampilLogin(pesan = ""){
     catch (err) { $("#lErr").textContent = err.message; btn.disabled = false; btn.textContent = label; }
   };
 }
-function tampilSetup(){
+/** Perangkat kasir baru / habis dipasang ulang: langsung sambungkan ke server toko, semua data (barang, akun, stok) diambil dari server. */
+function tampilSetupKasir(){
+  $("#root").innerHTML = `<div class="auth"><form class="card" id="fKasir">
+    <div class="merek"><img src="/logo.png" alt="Rich Gallery POS" width="128" height="128"></div>
+    <div><b>Sambungkan perangkat kasir ini ke server toko.</b> <span class="muted">Barang, stok, akun karyawan, dan pengaturan otomatis diambil dari server. Masukkan akun <b>admin</b> yang dipakai di ${esc(SERVER_TOKO.replace("https://", ""))}.</span></div>
+    <label class="f">Nama admin<input type="text" id="kNama" autocomplete="username" required maxlength="40"></label>
+    <label class="f">Password admin<input type="password" id="kPw" autocomplete="current-password" required></label>
+    <label class="f">Nama perangkat ini<input type="text" id="kAlat" value="iMin kasir" maxlength="40"></label>
+    <div class="err" id="kErr"></div>
+    <button class="btn pri big" type="submit">Sambungkan</button>
+    <button class="btn ghost sm" id="kSendiri" type="button">Pakai tanpa server (buat admin baru)</button></form></div>`;
+  $("#kSendiri").onclick = () => tampilSetup(true);
+  $("#fKasir").onsubmit = async e => {
+    e.preventDefault();
+    const btn = tombolKirim(e); btn.disabled = true; $("#kErr").textContent = ""; const label = btn.textContent; btn.textContent = "Menghubungi server…";
+    const nama = $("#kNama").value.trim(), password = $("#kPw").value;
+    try {
+      const st = await api("GET", "/api/status");
+      // Akun admin sementara di perangkat (nama sama); password & akun lain langsung diganti dengan data server setelah tersambung.
+      if (st.perluSetup) {
+        const sem = { nama, password: "sementara-" + Math.random().toString(36).slice(2) + "A1" };
+        try { localStorage.setItem("rg_setup_sementara", JSON.stringify(sem)); } catch {}
+        await api("POST", "/api/setup", sem);
+      }
+      await api("POST", "/api/cabang/sambung", { url: SERVER_TOKO, nama, password, perangkat: $("#kAlat").value.trim() || "iMin kasir" });
+      await api("POST", "/api/cabang/sinkron").catch(() => {});
+      try { localStorage.removeItem("rg_setup_sementara"); } catch {}
+      toast("Tersambung ke server toko"); await mulai();
+    } catch (err) {
+      $("#kErr").textContent = err.message + (err.status === 401 ? "" : " — periksa internet / DNS Pribadi (dns.google), lalu coba lagi.");
+      btn.disabled = false; btn.textContent = label;
+    }
+  };
+}
+function tampilSetup(sendiri = false){
+  if (LOKAL && !sendiri) return tampilSetupKasir();
   $("#root").innerHTML = `<div class="auth"><form class="card" id="fSetup">
     <div class="merek"><img src="/logo.png" alt="Rich Gallery POS" width="128" height="128"></div>
     <div><b>Selamat datang.</b> <span class="muted">Buat akun admin pertama. Akun ini memegang laporan, pengaturan, dan akun karyawan.</span></div>
@@ -2769,7 +2804,12 @@ async function mulai(){
     const st = await api("GET", "/api/status");
     // Layar setup/masuk juga berarti halaman berhasil tampil, supaya pembaruan tidak dibatalkan otomatis.
     if (st.perluSetup) { tampilSetup(); return halamanTampil(); }
-    if (!st.masuk) { tampilLogin(); return halamanTampil(); }
+    if (!st.masuk) {
+      // Penyambungan perangkat baru sempat gagal (mis. internet putus): lanjutkan dari layar sambungkan, bukan layar masuk.
+      let sem = null; try { sem = JSON.parse(localStorage.getItem("rg_setup_sementara") || "null"); } catch {}
+      if (LOKAL && sem && !st.cabang) { try { await api("POST", "/api/login", sem); tampilSetupKasir(); return halamanTampil(); } catch { try { localStorage.removeItem("rg_setup_sementara"); } catch {} } }
+      tampilLogin(); return halamanTampil();
+    }
     await muatUlang();
   } catch (e) {
     if (e.status === 401) return;

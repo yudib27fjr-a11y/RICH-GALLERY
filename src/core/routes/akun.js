@@ -9,7 +9,7 @@ const adaAdmin = () => !!one("SELECT 1 x FROM users WHERE peran = 'admin' AND pa
 
 route("GET", "/api/health", false, () => ({ ok: true }));
 
-route("GET", "/api/status", false, ({ user }) => ({ perluSetup: !adaAdmin(), masuk: !!user }));
+route("GET", "/api/status", false, ({ user }) => ({ perluSetup: !adaAdmin(), masuk: !!user, cabang: cabangAktif() }));
 
 /* Akun admin pertama dibuat lewat layar setup, bukan password bawaan. Hanya bisa sekali. */
 route("POST", "/api/setup", false, ({ body, ctx }) => {

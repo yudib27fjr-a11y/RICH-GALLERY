@@ -591,6 +591,24 @@ test("karyawan baru dibuat di server bisa langsung masuk di perangkat (perangkat
   assert.equal(m.status, 200, JSON.stringify(m.data));
 });
 
+test("perangkat kasir baru (dipasang ulang): admin sementara lalu tersambung, akun & barang dari server", async () => {
+  const PORT_B = PORT_C + 7;
+  await nyalakan(PORT_B, "cabang2");
+  const baru = klien(PORT_B);
+  assert.equal((await baru("GET", "/api/status")).data.perluSetup, true);
+  assert.equal((await baru("POST", "/api/setup", { nama: "Yudi", password: "sementara-abc123A1" })).status, 200);
+  const r = await baru("POST", "/api/cabang/sambung", { url: `http://127.0.0.1:${PORT_P}`, nama: "Yudi", password: "rahasia-123", perangkat: "iMin baru" });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal((await baru("GET", "/api/status")).data.cabang, true);
+  const b = (await baru("GET", "/api/bootstrap")).data;
+  await segarkan();
+  assert.deepEqual(b.produk.map(x => x.kode).sort(), BP.produk.map(x => x.kode).sort(), "katalog sama dengan server");
+  // Password admin di perangkat ikut server
+  const k = klien(PORT_B);
+  assert.equal((await k("POST", "/api/login", { nama: "Yudi", password: "rahasia-123" })).status, 200);
+  assert.equal((await k("POST", "/api/login", { nama: "Wulan", password: "2468" })).status, 200);
+});
+
 test("putuskan: ditolak bila masih ada antrean, lalu berhasil", async () => {
   assert.equal((await cabang("POST", "/api/cabang/putus", {})).status, 200);
   const st = (await cabang("GET", "/api/cabang")).data;
