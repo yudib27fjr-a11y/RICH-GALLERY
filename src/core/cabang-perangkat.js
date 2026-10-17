@@ -140,6 +140,19 @@ export async function sinkronCabang({ paksa = false } = {}){
   }
   return { ...statusCabang(), berubah };
 }
+/** Antrekan semua penjualan (tidak batal) di perangkat ini sebagai perintah "jual" untuk server. */
+function antreTransaksiLama(){
+  const sales = all("SELECT * FROM sales WHERE batal_at IS NULL ORDER BY id");
+  for (const x of sales) {
+    const items = all("SELECT kode, nama, kategori, harga, qty, ready, pembuat FROM sale_items WHERE sale_id = ? ORDER BY id", [x.id]);
+    const data = { no: x.no, tgl: x.tgl, jam: x.jam, pelanggan: x.pelanggan, hp: x.hp, diskon: x.diskon, ongkir: x.ongkir, metode: x.metode, bayar: x.bayar, catatan: x.catatan, kartu: x.kartu,
+      pesanan: x.ambil_tgl ? { tgl: x.ambil_tgl, jam: x.ambil_jam, cara: x.ambil_cara, request: x.request } : null,
+      items: items.map(i => ({ kode: i.kode, nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty, ready: i.ready, pembuat: i.pembuat || "" })), lama: true, total: x.total };
+    run("INSERT INTO cabang_kirim(uid, aksi, data, waktu, oleh) VALUES (?, 'jual', ?, ?, ?)",
+      [platform.token(), JSON.stringify(data), JSON.stringify({ tgl: x.tgl, jam: (x.jam || "00:00").slice(0, 5) }), x.kasir || ""]);
+  }
+  return sales.length;
+}
 /** Perintah yang pernah ditolak server dikirim ulang sekali dengan uid baru (server versi baru lebih toleran,
  *  mis. penjualan tetap diterima walau data pesanan/pembuatnya bermasalah). Supaya transaksi tidak hilang. */
 export function kirimUlangDitolak({ semua = false } = {}){
@@ -321,7 +334,7 @@ async function unggahAwal(url, token){
 
 /** Sambungkan perangkat ini ke server pusat dengan akun admin server.
  *  unggahAwal: server masih baru/kosong → kirim seluruh data perangkat ini ke sana dulu. */
-export async function sambungCabang({ url, nama, password, perangkat, paksa, unggahAwal: kirimSemua }){
+export async function sambungCabang({ url, nama, password, perangkat, paksa, unggahAwal: kirimSemua, kirimLama }){
   url = String(url || "").trim().replace(/\/+$/, "");
   if (!/^https:\/\/[^/\s]+$/.test(url) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(url)) {
     throw new HttpError(400, "Alamat server harus diawali https:// (contoh: https://macbook-pro-yudi.tailae4382.ts.net)");
@@ -331,7 +344,7 @@ export async function sambungCabang({ url, nama, password, perangkat, paksa, ung
   const terakhir = one("SELECT no FROM sales ORDER BY id DESC LIMIT 1");
   let j;
   try {
-    j = await panggil(url, "/api/cabang/daftar", { nama, password, perangkat: perangkat || "Perangkat kasir", noTerakhir: terakhir ? terakhir.no : "", paksa: !!(paksa || kirimSemua), unggahAwal: !!kirimSemua });
+    j = await panggil(url, "/api/cabang/daftar", { nama, password, perangkat: perangkat || "Perangkat kasir", noTerakhir: terakhir ? terakhir.no : "", paksa: !!(paksa || kirimSemua || kirimLama), unggahAwal: !!kirimSemua });
     if (kirimSemua) await unggahAwal(url, j.token);
     versiServer = "";
   } catch (e) { throw new HttpError(e.status && e.status < 500 ? e.status : 502, e.message); }
@@ -343,6 +356,8 @@ export async function sambungCabang({ url, nama, password, perangkat, paksa, ung
     setSetting("cabang_galat", "");
     // Antrean Google Sheet perangkat ini tidak dikirim lagi: server pusat yang mengirim ke sheet.
     run("UPDATE outbox SET terkirim = datetime('now') WHERE terkirim IS NULL");
+    // Transaksi yang dibuat di perangkat ini sebelum tersambung ikut dikirim ke server (server melewati yang sudah ada).
+    if (kirimLama) antreTransaksiLama();
   });
   return sinkronCabang({ paksa: true });
 }

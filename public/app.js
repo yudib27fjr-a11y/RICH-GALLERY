@@ -627,10 +627,26 @@ function tampilSetupKasir(){
         try { localStorage.setItem("rg_setup_sementara", JSON.stringify(sem)); } catch {}
         await api("POST", "/api/setup", sem);
       }
-      await api("POST", "/api/cabang/sambung", { url: SERVER_TOKO, nama, password, perangkat: $("#kAlat").value.trim() || "iMin kasir" });
-      await api("POST", "/api/cabang/sinkron").catch(() => {});
-      try { localStorage.removeItem("rg_setup_sementara"); } catch {}
-      toast("Tersambung ke server toko"); await mulai();
+      const isian = { url: SERVER_TOKO, nama, password, perangkat: $("#kAlat").value.trim() || "iMin kasir" };
+      const selesai = async () => { await api("POST", "/api/cabang/sinkron").catch(() => {}); try { localStorage.removeItem("rg_setup_sementara"); } catch {} toast("Tersambung ke server toko"); await mulai(); };
+      try { await api("POST", "/api/cabang/sambung", isian); }
+      catch (err) {
+        if (err.status !== 409 || !/belum ada di server/.test(err.message)) throw err;
+        // Perangkat ini sudah punya transaksi sendiri (dibuat sebelum tersambung): tanyakan mau dikirim atau tidak.
+        btn.disabled = false; btn.textContent = label;
+        return modal(`<h3>Ada transaksi di perangkat ini</h3>
+          <p style="margin:0">Perangkat ini punya transaksi yang belum ada di server (misalnya penjualan yang dicatat sebelum tersambung).</p>
+          <div class="stack">
+            <button class="btn pri big" id="kKirim" type="button">Kirim transaksi itu ke server, lalu sambungkan</button>
+            <p class="small muted" style="margin:0">Disarankan. Penjualan ikut masuk laporan & stok server. Yang sudah ada di server tidak dikirim dua kali.</p>
+            <button class="btn" id="kBuang" type="button">Sambungkan tanpa mengirim (transaksi di perangkat ini diabaikan)</button>
+          </div>
+          <div class="actions"><button class="btn" data-close>Batal</button></div>`, m => {
+          $("#kKirim", m).onclick = e => coba(async () => { await api("POST", "/api/cabang/sambung", { ...isian, kirimLama: true }); closeModal(); await selesai(); }, e.target);
+          $("#kBuang", m).onclick = e => konfirmasi("Abaikan transaksi di perangkat ini?", "Transaksi yang belum ada di server tidak akan masuk ke laporan server.", "Sambungkan", () => coba(async () => { await api("POST", "/api/cabang/sambung", { ...isian, paksa: true }); closeModal(); await selesai(); }));
+        });
+      }
+      await selesai();
     } catch (err) {
       $("#kErr").textContent = err.message + (err.status === 401 ? "" : " — periksa internet / DNS Pribadi (dns.google), lalu coba lagi.");
       btn.disabled = false; btn.textContent = label;

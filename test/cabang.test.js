@@ -620,6 +620,29 @@ test("admin di aplikasi perangkat bisa melihat & mengizinkan absen perangkat (di
   assert.equal((await cabang("GET", "/api/absen/kiosk")).status, 200);
 });
 
+test("perangkat baru yang sudah punya penjualan: sambung dengan kirim transaksi lama → masuk server, stok berkurang", async () => {
+  const PORT_D = PORT_C + 9;
+  await nyalakan(PORT_D, "cabang3");
+  const d = klien(PORT_D);
+  assert.equal((await d("POST", "/api/setup", { nama: "Yudi", password: "sementara-xyz123A1" })).status, 200);
+  const bd = (await d("GET", "/api/bootstrap")).data;
+  const pr = bd.produk.find(x => x.kode === "RG002");
+  const j = await d("POST", "/api/penjualan", { items: [{ product_id: pr.id, harga: 75000, qty: 1, ready: true }, { nama: "custom bloom box", harga: 250000, qty: 1 }] });
+  assert.equal(j.status, 200, JSON.stringify(j.data));
+  await segarkan();
+  const stok0 = prodP("RG002").stok;
+  const isian = { url: `http://127.0.0.1:${PORT_P}`, nama: "Yudi", password: "rahasia-123", perangkat: "iMin lama" };
+  assert.equal((await d("POST", "/api/cabang/sambung", isian)).status, 409);
+  const r = await d("POST", "/api/cabang/sambung", { ...isian, kirimLama: true });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.ditolak, 0, JSON.stringify(r.data.ditolakDaftar));
+  const hari = BP.hariIni;
+  const jp = (await pusat("GET", `/api/penjualan?dari=${hari}&sampai=${hari}`)).data.filter(x => x.total === 325000 && x.no === j.data.no);
+  assert.equal(jp.length, 1, "penjualan masuk server sekali");
+  await segarkan();
+  assert.equal(prodP("RG002").stok, stok0 - 1, "stok server berkurang");
+});
+
 test("putuskan: ditolak bila masih ada antrean, lalu berhasil", async () => {
   assert.equal((await cabang("POST", "/api/cabang/putus", {})).status, 200);
   const st = (await cabang("GET", "/api/cabang")).data;

@@ -21,6 +21,7 @@ route("POST", "/api/cabang/sambung", "admin", async ({ body }) => sambungCabang(
   perangkat: teks(body.perangkat, { max: 40, nama: "Nama perangkat" }),
   paksa: !!body.paksa,
   unggahAwal: !!body.unggahAwal,
+  kirimLama: !!body.kirimLama,
 }), { batas: 100_000 });
 route("POST", "/api/cabang/putus", "admin", ({ body }) => putusCabang({ paksa: !!body.paksa }));
 route("GET", "/api/cabang/ringkas", "semua", () => { const s = statusCabang(); return { aktif: s.aktif, menunggu: s.menunggu, ditolak: s.ditolak, galat: s.galatTerakhir, terakhir: s.terakhir }; });
@@ -135,6 +136,9 @@ function terapkan(p, d, alat, aman = false){
   };
   switch (p.aksi) {
     case "jual": {
+      // Transaksi lama dari perangkat yang baru disambungkan: lewati bila sudah ada di server (no & total sama).
+      if (x.lama && one("SELECT 1 x FROM sales WHERE no = ? AND total = ?", [String(x.no || ""), Math.round(Number(x.total ?? NaN))])) return { ok: true, lewat: true };
+      if (x.lama && one("SELECT 1 x FROM sales WHERE no = ? AND tgl = ?", [String(x.no || ""), String(x.tgl || "")])) return { ok: true, lewat: true };
       const items = (Array.isArray(x.items) ? x.items : []).map(i => {
         const b = idBarang("produk", i.kode);
         return b ? { product_id: b.id, harga: i.harga, qty: i.qty, ready: i.ready, pembuat: i.pembuat } : { nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty, pembuat: i.pembuat };
