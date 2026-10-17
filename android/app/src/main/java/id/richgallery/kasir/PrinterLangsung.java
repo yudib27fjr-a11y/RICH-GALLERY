@@ -7,6 +7,10 @@ import android.bluetooth.BluetoothSocket;
 import android.content.pm.PackageManager;
 import android.os.Build;
 
+import com.imin.printer.INeoPrinterCallback;
+import com.imin.printer.InitPrinterCallback;
+import com.imin.printer.PrinterHelper;
+
 import java.io.OutputStream;
 import java.util.Locale;
 import java.util.Set;
@@ -18,6 +22,10 @@ import java.util.UUID;
  * Perangkat iMin (dan Sunmi) menyediakan printer bawaan sebagai perangkat Bluetooth virtual yang sudah terpasang:
  * iMin = "BluetoothPrinter", Sunmi = "InnerPrinter". Data ESC/POS dikirim lewat profil serial (SPP).
  * Bisa juga dipakai untuk printer struk Bluetooth biasa yang sudah dipasangkan (nama mengandung "printer").
+ *
+ * iMin model baru (mis. Swift 2, D4, M2) tidak lagi menyediakan Bluetooth virtual: printernya dilayani aplikasi sistem
+ * "com.imin.printerservice". Bila layanan itu ada, data ESC/POS dikirim lewat SDK iMin (sendRAWData) — cara yang sama
+ * dengan aplikasi kasir lain — dan Bluetooth hanya dipakai sebagai cadangan.
  */
 class PrinterLangsung {
     private static final UUID SPP = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
@@ -29,7 +37,50 @@ class PrinterLangsung {
     /** Data yang menunggu izin Bluetooth (Android 12+). */
     private volatile byte[] menunggu;
 
-    PrinterLangsung(MainActivity a) { act = a; }
+    /** Layanan printer iMin: null = belum dicek / tidak ada, true = tersambung. */
+    private volatile boolean iminSiap = false;
+    private volatile boolean iminAda = false;
+
+    PrinterLangsung(MainActivity a) {
+        act = a;
+        mulaiImin();
+    }
+
+    private void mulaiImin() {
+        try { act.getPackageManager().getPackageInfo("com.imin.printerservice", 0); iminAda = true; }
+        catch (Exception e) { iminAda = false; return; }
+        try {
+            PrinterHelper.getInstance().initPrinterService(act.getApplicationContext(), new InitPrinterCallback() {
+                @Override public void onConnected() {
+                    iminSiap = true;
+                    try { PrinterHelper.getInstance().initPrinter(act.getPackageName(), null); } catch (Throwable ignored) { }
+                }
+                @Override public void onDisconnected() { iminSiap = false; }
+            });
+        } catch (Throwable e) { iminAda = false; }
+    }
+
+    /** Kirim lewat layanan printer iMin. Mengembalikan true bila terkirim. */
+    private boolean kirimImin(byte[] data) {
+        if (!iminAda) return false;
+        for (int i = 0; i < 30 && !iminSiap; i++) { // tunggu layanan tersambung (maks. 3 detik)
+            if (i == 0) mulaiImin();
+            try { Thread.sleep(100); } catch (InterruptedException ignored) { }
+        }
+        if (!iminSiap) return false;
+        try {
+            PrinterHelper h = PrinterHelper.getInstance();
+            // Kirim per potongan supaya buffer layanan tidak meluap.
+            for (int i = 0; i < data.length; i += 4096) {
+                byte[] p = java.util.Arrays.copyOfRange(data, i, Math.min(data.length, i + 4096));
+                h.sendRAWData(p, null);
+            }
+            return true;
+        } catch (Throwable e) {
+            act.toast("Printer iMin: " + e.getMessage());
+            return false;
+        }
+    }
 
     private boolean perluIzin() {
         return Build.VERSION.SDK_INT >= 31 && act.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED;
@@ -56,6 +107,7 @@ class PrinterLangsung {
 
     /** Nama printer yang ditemukan, "" bila tidak ada, "izin" bila izin Bluetooth belum diberikan. */
     String status() {
+        if (iminSiap || iminAda) return "Printer bawaan iMin";
         if (BluetoothAdapter.getDefaultAdapter() == null) return "";
         if (perluIzin()) return "izin";
         BluetoothDevice d = cari();
@@ -64,6 +116,14 @@ class PrinterLangsung {
     }
 
     void cetak(byte[] data) {
+        if (iminAda) { // printer bawaan iMin lewat layanan sistem (tanpa Bluetooth)
+            new Thread(() -> { if (!kirimImin(data)) kirimBluetoothAtauIzin(data); }).start();
+            return;
+        }
+        kirimBluetoothAtauIzin(data);
+    }
+
+    private void kirimBluetoothAtauIzin(byte[] data) {
         if (perluIzin()) {
             menunggu = data;
             act.runOnUiThread(() -> act.requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, KODE_IZIN));
@@ -85,7 +145,7 @@ class PrinterLangsung {
             if (bt == null) { act.toast("Perangkat ini tidak punya Bluetooth untuk printer bawaan. Pilih cara cetak lain di Pengaturan."); return; }
             if (!bt.isEnabled()) { act.toast("Nyalakan Bluetooth dulu: printer bawaan iMin tersambung lewat Bluetooth internal."); return; }
             BluetoothDevice d = cari();
-            if (d == null) { act.toast("Printer bawaan (BluetoothPrinter) tidak ditemukan. Cek Pengaturan Android → Bluetooth, atau pilih cara cetak lain."); return; }
+            if (d == null) { act.toast(iminAda ? "Layanan printer iMin belum siap. Tutup lalu buka lagi aplikasi, atau pilih cara cetak lain." : "Printer bawaan tidak ditemukan. Cek Pengaturan Android → Bluetooth, atau pilih cara cetak lain."); return; }
             BluetoothSocket s = null;
             Exception galat = null;
             for (int coba = 0; coba < 2; coba++) {
