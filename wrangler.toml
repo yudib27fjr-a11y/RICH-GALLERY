@@ -6,13 +6,6 @@ main = "src/cloudflare/worker.js"
 compatibility_date = "2025-09-01"
 compatibility_flags = ["nodejs_compat"]
 
-# Alamat utama memakai domain toko (workers.dev sering diblokir provider internet di Indonesia).
-# Alamat workers.dev tetap aktif sebagai cadangan.
-workers_dev = true
-routes = [
-  { pattern = "pos.richgallery.my.id", custom_domain = true },
-]
-
 [assets]
 directory = "./public"
 binding = "ASSETS"
