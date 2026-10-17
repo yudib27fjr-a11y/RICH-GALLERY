@@ -1618,7 +1618,7 @@ async function bukaAbsen(jenisAwal){
     <div class="stack">
       <div class="seg" id="akJ" style="display:flex"><button type="button" data-j="masuk" style="flex:1" class="${jenis === "masuk" ? "on" : ""}">Masuk</button><button type="button" data-j="pulang" style="flex:1" class="${jenis === "pulang" ? "on" : ""}">Pulang</button></div>
       <label class="f">1. Nama kamu<select id="akU"><option value="">— pilih nama —</option>${K.staf.map(s => `<option value="${s.id}" ${s.id === saya ? "selected" : ""}>${esc(s.nama)}</option>`).join("")}</select></label>
-      <label class="f">2. PIN<input type="password" id="akP" inputmode="numeric" autocomplete="off" placeholder="PIN yang sama untuk masuk aplikasi"></label>
+      <label class="f">2. PIN<input type="password" id="akP" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="PIN / password yang sama untuk masuk aplikasi"></label>
       <div class="small" style="font-weight:700;margin-bottom:-6px">3. Foto selfie</div>
       <div class="absen-kamera"><video id="akV" autoplay playsinline muted></video><img id="akF" alt="Foto selfie" hidden><div id="akKet" class="small muted">Menyalakan kamera…</div></div>
       <div class="row"><button class="btn" id="akAmbil" type="button" disabled>📸 Ambil foto</button><button class="btn ghost" id="akUlang" type="button" hidden>Ulangi foto</button></div>
