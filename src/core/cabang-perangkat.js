@@ -30,18 +30,42 @@ export function jadwalkanSinkron(ms = 1500){
 
 const alamat = (url, path) => String(url).replace(/\/+$/, "") + path;
 
-async function panggil(url, path, body){
+/** Alamat-alamat server toko yang sama. Bila satu alamat tidak bisa dihubungi (mis. workers.dev diblokir provider),
+ *  perangkat otomatis mencoba alamat lain lalu memakainya seterusnya. */
+export const ALAMAT_TOKO = ["https://pos.richgallery.my.id", "https://rich-gallery-pos.yudi-b27fjr.workers.dev"];
+const bersih = u => String(u || "").replace(/\/+$/, "");
+
+async function panggilSatu(url, path, body){
   let r;
   try {
     r = await platform.http({ method: "POST", url: alamat(url, path), headers: { "Content-Type": "application/json", "X-RG": "1" }, body: JSON.stringify(body) });
-  } catch (e) { throw new Error("Server pusat tidak bisa dihubungi: " + (e.message || "tidak tersambung")); }
+  } catch (e) { const g = new Error("Server pusat tidak bisa dihubungi: " + (e.message || "tidak tersambung")); g.jaringan = true; throw g; }
   let j = null; try { j = JSON.parse(r.text); } catch { /* bukan JSON */ }
   if (r.status < 200 || r.status >= 300) {
     const e = new Error((j && j.error) || `Server pusat menjawab HTTP ${r.status}`);
-    e.status = r.status; throw e;
+    e.status = r.status; if (!j) e.jaringan = true; // halaman galat bukan dari aplikasi (alamat belum siap)
+    throw e;
   }
-  if (!j) throw new Error("Jawaban server pusat tidak dikenali. Periksa alamat server.");
+  if (!j) { const e = new Error("Jawaban server pusat tidak dikenali. Periksa alamat server."); e.jaringan = true; throw e; }
   return j;
+}
+
+async function panggil(url, path, body){
+  try { return await panggilSatu(url, path, body); }
+  catch (e) {
+    const s = getSettings();
+    // Hanya untuk server toko yang sedang tersambung: coba alamat lain dari server yang sama.
+    if (!e.jaringan || !ALAMAT_TOKO.includes(bersih(url)) || bersih(url) !== bersih(s.cabang_url)) throw e;
+    for (const lain of ALAMAT_TOKO) {
+      if (lain === bersih(url)) continue;
+      try {
+        const j = await panggilSatu(lain, path, body);
+        setSetting("cabang_url", lain); // pakai alamat yang bisa dihubungi untuk seterusnya
+        return j;
+      } catch { /* coba alamat berikutnya */ }
+    }
+    throw e;
+  }
 }
 
 /** Ambil data langsung dari server pusat (mis. rekap absensi). Butuh internet. */

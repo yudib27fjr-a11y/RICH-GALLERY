@@ -2608,7 +2608,7 @@ async function aturSync(){
 
 /* ---------- Server pusat: perangkat offline (iMin) mengirim transaksinya ke server saat bisa dihubungi ---------- */
 /** Server toko di Cloudflare (gratis, menyala 24 jam). Dipakai sebagai alamat bawaan di aplikasi. */
-const SERVER_TOKO = "https://rich-gallery-pos.yudi-b27fjr.workers.dev";
+const SERVER_TOKO = "https://pos.richgallery.my.id";
 const waktuLokal = iso => iso ? new Date(iso).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }) : "-";
 async function aturCabang(){
   const el = $("#aCabang"); if (!el) return;
@@ -2676,7 +2676,7 @@ async function aturCabang(){
     ${st.ditolak ? `<p class="small" style="margin:0;color:var(--bad)">${st.ditolak} transaksi ditolak server (tetap tersimpan di perangkat ini):<br>${st.ditolakDaftar.map(x => `${esc(x.aksi)}${x.no ? " " + esc(x.no) : ""}: ${esc(x.galat || "")}`).join("<br>")}</p>
       <button class="btn" id="cbUlang" type="button">Kirim ulang yang ditolak</button>` : ""}
     <p class="small muted" style="margin:0">Sinkron berjalan otomatis setiap ada transaksi, dan memeriksa data baru tiap 10 detik selama aplikasi terbuka dan ada internet. Tarik layar ke bawah untuk sinkron seketika. Produk, akun dan pengaturan toko diubah di server pusat.</p>
-    ${st.url.replace(/\/+$/, "") !== SERVER_TOKO ? `<p class="note" style="margin:0">Server toko sekarang ada di Cloudflare: <b>${esc(SERVER_TOKO)}</b>. Untuk pindah: tekan <b>Putuskan</b> (setelah semua transaksi terkirim), lalu sambungkan lagi. Alamat Cloudflare sudah terisi otomatis.</p>` : ""}
+    ${![SERVER_TOKO, "https://rich-gallery-pos.yudi-b27fjr.workers.dev"].includes(st.url.replace(/\/+$/, "")) ? `<p class="note" style="margin:0">Server toko sekarang ada di Cloudflare: <b>${esc(SERVER_TOKO)}</b>. Untuk pindah: tekan <b>Putuskan</b> (setelah semua transaksi terkirim), lalu sambungkan lagi. Alamat Cloudflare sudah terisi otomatis.</p>` : ""}
     <div class="row"><button class="btn pri" id="cbSync" type="button">Sinkron sekarang</button><button class="btn" id="cbNama" type="button">Ganti nama perangkat</button><button class="btn" id="cbPutus" type="button">Putuskan</button></div>`;
   $("#cbNama").onclick = () => modal(`<h3>Ganti nama perangkat</h3>
     <label class="f">Nama perangkat<input type="text" id="pn" value="${esc(st.nama)}" maxlength="40" placeholder="Contoh: iMin Kasir Depan"></label>
