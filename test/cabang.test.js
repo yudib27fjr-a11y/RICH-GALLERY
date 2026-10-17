@@ -583,6 +583,14 @@ test("penjualan yang pernah ditolak server tidak hilang: dikirim ulang otomatis 
   assert.equal((await cabang("GET", "/api/cabang/ringkas")).data.ditolak, 0);
 });
 
+test("karyawan baru dibuat di server bisa langsung masuk di perangkat (perangkat ambil akun terbaru saat login)", async () => {
+  const r = await pusat("POST", "/api/users", { nama: "Wulan", peran: "karyawan", password: "2468" });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const k = klien(PORT_C);
+  const m = await k("POST", "/api/login", { nama: "WULAN .", password: "2468" });
+  assert.equal(m.status, 200, JSON.stringify(m.data));
+});
+
 test("putuskan: ditolak bila masih ada antrean, lalu berhasil", async () => {
   assert.equal((await cabang("POST", "/api/cabang/putus", {})).status, 200);
   const st = (await cabang("GET", "/api/cabang")).data;

@@ -1,4 +1,4 @@
-import { cabangAktif } from "../cabang-perangkat.js";
+import { cabangAktif, sinkronCabang, statusCabang } from "../cabang-perangkat.js";
 import { route } from "../router.js";
 import { one, all, run, tx, getSettings , versiData } from "../db.js";
 import { HttpError, bad, notFound, teks, pilihan, hariIni } from "../util.js";
@@ -26,14 +26,22 @@ route("POST", "/api/setup", false, ({ body, ctx }) => {
   return { ok: true };
 });
 
-route("POST", "/api/login", false, ({ body, ctx }) => {
+route("POST", "/api/login", false, async ({ body, ctx }) => {
   const nama = teks(body.nama, { wajib: true, max: 40, nama: "Nama" });
   const kunci = (ctx.ip || "") + "|" + nama.toLowerCase();
   cekBatasLogin(kunci);
-  // Keyboard HP kadang menambah aksen/spasi (mis. "wulán"): coba juga nama tanpa aksen & spasi ganda.
-  const polos = nama.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
-  const u = one("SELECT id, pass_hash, aktif FROM users WHERE nama_key = ?", [nama.toLowerCase()]) || one("SELECT id, pass_hash, aktif FROM users WHERE nama_key = ?", [polos]);
-  if (!u || !u.aktif || !cekPassword(String(body.password ?? ""), u.pass_hash)) { catatGagal(kunci); throw new HttpError(401, "Nama atau password salah"); }
+  // Keyboard HP kadang menambah aksen/spasi/titik (mis. "wulán", "wulan ."): coba juga nama yang dibersihkan.
+  const polos = nama.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}\s'-]/gu, " ").replace(/\s+/g, " ").trim().toLowerCase();
+  const cari = () => one("SELECT id, pass_hash, aktif FROM users WHERE nama_key = ?", [nama.toLowerCase()]) || one("SELECT id, pass_hash, aktif FROM users WHERE nama_key = ?", [polos]);
+  const cocok = u => u && u.aktif && cekPassword(String(body.password ?? ""), u.pass_hash);
+  let u = cari();
+  // Perangkat cabang: akun baru / PIN baru dari server mungkin belum sampai. Ambil data terbaru sekali, lalu coba lagi.
+  if (!cocok(u) && cabangAktif()) { try { await sinkronCabang({ paksa: true }); } catch { /* offline */ } u = cari(); }
+  if (!cocok(u)) {
+    catatGagal(kunci);
+    const st = cabangAktif() ? statusCabang() : null;
+    throw new HttpError(401, st && st.galatTerakhir ? "Nama atau password salah. Perangkat ini juga belum bisa mengambil akun terbaru dari server (cek internet), jadi akun/PIN yang baru dibuat atau diganti di server belum dikenal." : "Nama atau password salah");
+  }
   resetGagal(kunci);
   buatSesi(ctx, u.id);
   return { ok: true };
