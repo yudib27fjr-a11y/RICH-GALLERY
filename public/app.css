@@ -275,3 +275,24 @@ input.sIn.berubah{background:#fff4c2;border-color:#d9a400;color:#1c2420}
 .sync-chip{border:0;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer}
 .sync-chip.warn{background:#fff1cc;color:#7a5200}
 .sync-chip.bad{background:#fde2e2;color:#9b1c1c}
+/* halaman absen karyawan */
+.absen-panel{display:flex;flex-direction:column;gap:16px;max-width:560px;margin:0 auto}
+.absen-jam{text-align:center;display:flex;flex-direction:column}
+.absen-jam .jam{font-size:56px;font-weight:800;letter-spacing:.02em;font-variant-numeric:tabular-nums;line-height:1.1}
+.absen-jam .tgl{color:var(--muted)}
+.absen-tombol{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.absen-besar{border:0;border-radius:18px;padding:22px 10px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#fff;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.15)}
+.absen-besar .ik{font-size:36px;line-height:1}
+.absen-besar b{font-size:18px;letter-spacing:.03em}
+.absen-besar small{opacity:.9}
+.absen-besar.masuk{background:#1f7a4d} .absen-besar.pulang{background:#b85c00}
+.absen-besar:active{transform:scale(.98)}
+.absen-langkah{list-style:none;margin:0;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.absen-langkah li{display:flex;gap:10px;align-items:center}
+.absen-langkah li .n{flex:none;width:26px;height:26px;border-radius:50%;background:var(--surface-2);display:grid;place-items:center;font-weight:800}
+.absen-shift{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.absen-shift span{background:var(--surface-2);border-radius:999px;padding:4px 12px;font-size:13px}
+.absen-tutup{background:#fde2e2;color:#7a1414;border-radius:14px;padding:14px;text-align:center}
+.absen-judul{margin:-4px -4px 0;padding:10px 12px;border-radius:12px;color:#fff;text-align:center}
+.absen-judul.masuk{background:#1f7a4d} .absen-judul.pulang{background:#b85c00}
+#lAbsen .absen-jam .jam{font-size:40px}
