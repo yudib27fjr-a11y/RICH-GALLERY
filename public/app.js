@@ -1509,6 +1509,8 @@ async function aturAbsen(){
     <label class="row"><input type="checkbox" id="abPinAktif" ${A.pin_aktif ? "checked" : ""}> <b>Aktifkan absen PIN + selfie</b></label>
     <label class="f">Koordinat lokasi toko (lintang, bujur)<input type="text" id="abKoord" value="${esc(koordinat)}" placeholder="-6.3274, 108.3247" inputmode="decimal"></label>
     <p class="small muted" style="margin:0">Cara termudah: di iMin (saat di toko) buka Pengaturan → Absensi → <b>Pakai lokasi perangkat ini</b>. Atau <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(B.toko.alamat || "")}" target="_blank" rel="noopener">buka alamat toko di Google Maps</a>, tekan lama titik toko, salin angka koordinatnya, lalu tempel di sini.</p>
+    <button class="btn" id="abLokasiSaya" type="button">📍 Pakai lokasi saya sekarang</button>
+    <p class="small muted" style="margin:0" id="abLokasiInfo">Tekan saat sedang berada <b>di dalam toko</b>, lalu tekan <b>Simpan pengaturan absen</b>.</p>
     <label class="f">Radius (meter dari titik toko)<input type="number" id="abRadius" value="${A.radius}" min="20" max="2000" step="10"></label>
     <p class="small muted" style="margin:0">Izinkan perangkat kasir mana yang boleh dipakai absen di bagian <b>Server pusat → Perangkat cabang</b> (tombol "Izinkan absen").</p>
     <button class="btn pri" id="abSimpanUmum" type="button">Simpan pengaturan absen</button>
@@ -1530,6 +1532,12 @@ async function aturAbsen(){
         <li>Daftarkan sidik jari tiap karyawan di mesin. Catat nomor ID (PIN) masing-masing, lalu isi di kolom PIN di atas.</li>
         <li>Masuk ke <b>developer.fingerspot.io</b>, pilih mesin, lalu isi <b>Webhook URL</b> dengan alamat di atas.</li>
         <li>Coba scan satu jari, lalu buka menu <b>Absensi</b>: scan harus muncul dalam beberapa detik.</li></ol></details>` : ""}`;
+  $("#abLokasiSaya").onclick = e => coba(async () => {
+    toast("Membaca lokasi…");
+    const p = await ambilLokasi();
+    $("#abKoord").value = `${p.lat.toFixed(7)}, ${p.lng.toFixed(7)}`;
+    $("#abLokasiInfo").innerHTML = `Lokasi terbaca: <b>${p.lat.toFixed(7)}, ${p.lng.toFixed(7)}</b> (akurasi ±${Math.round(p.akurasi)} m)${p.akurasi > 100 ? " — kurang akurat, coba lagi di dekat pintu/jendela" : ""}. <a href="https://www.google.com/maps?q=${p.lat},${p.lng}" target="_blank" rel="noopener">Cek di peta</a>, lalu tekan <b>Simpan pengaturan absen</b>.`;
+  }, e.target);
   $("#abSimpanUmum").onclick = e => coba(async () => {
     const k = $("#abKoord").value.trim(), m = k.match(/^\s*(-?\d+(?:\.\d+)?)\s*[,; ]\s*(-?\d+(?:\.\d+)?)\s*$/);
     if (k && !m) throw new Error("Format koordinat: lintang, bujur — contoh -6.3274, 108.3247");
