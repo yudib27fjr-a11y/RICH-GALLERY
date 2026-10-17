@@ -7,6 +7,7 @@ import { route } from "../router.js";
 import { one, all, run, tx, getSettings, setSetting } from "../db.js";
 import { platform } from "../platform.js";
 import { HttpError, bad, notFound, teks, tanggal, sekarang } from "../util.js";
+import { periodeDari, tambahHari } from "../../../public/shared.js";
 import { cabangAktif, mintaPusat } from "../cabang-perangkat.js";
 import { cekPassword, cekBatasLogin, catatGagal, resetGagal } from "../auth.js";
 
@@ -307,3 +308,14 @@ route("DELETE", "/api/absen/:id", "admin", ({ params, user }) => {
   run("UPDATE absen SET dihapus = datetime('now'), oleh = ? WHERE id = ?", [user.nama, a.id]);
   return { ok: true };
 });
+
+/** Hemat penyimpanan: foto selfie absen dihapus otomatis sehari setelah gajian (bawaan tanggal 16),
+ *  untuk semua absen sebelum periode gaji yang sedang berjalan. Data jam absennya tetap ada.
+ *  Contoh: periode 15 Okt–14 Nov digaji 15 Nov → mulai 16 Nov foto absen sampai 14 Nov dihapus. */
+export function hapusFotoAbsenLama(){
+  const s = getSettings();
+  const kemarin = tambahHari(sekarang().tgl, -1);
+  const [batas] = periodeDari(kemarin, s.periode_mulai);
+  const r = run("UPDATE absen SET foto = NULL WHERE foto IS NOT NULL AND tgl < ?", [batas]);
+  return Number(r.changes || 0);
+}

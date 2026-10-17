@@ -15,4 +15,5 @@ export { pasangPlatform } from "./platform.js";
 export { seedJikaKosong } from "./seed.js";
 export { kirimOutbox } from "./sync.js";
 export { bersihkanSesiKadaluarsa } from "./auth.js";
+export { hapusFotoAbsenLama } from "./routes/absen.js";
 export { sinkronCabang, cabangAktif, pendengar } from "./cabang-perangkat.js";

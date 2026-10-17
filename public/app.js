@@ -1522,6 +1522,7 @@ async function aturAbsen(){
     <p class="small muted" style="margin:0">Jam shift & lembur diatur di bagian <b>⏱️ Jam kerja, lembur & insentif lain</b>. Jam absen selalu jam saat karyawan absen (tidak bisa diisi manual).</p>
 
     <hr class="sep"><h4 style="margin:4px 0 0">📷 Absen PIN + foto selfie di perangkat kasir</h4>
+    <p class="small muted" style="margin:0">Hemat memori: <b>foto selfie absen dihapus otomatis tanggal ${(+B.toko.periode_mulai || 15) + 1}</b> setiap bulan (sehari setelah gajian) untuk periode yang sudah digaji. Jam absen & rekapnya tetap tersimpan.</p>
     <p class="small muted" style="margin:0">Karyawan absen di iMin kasir: pilih nama, ketik PIN, ambil foto selfie. Hanya bisa dari perangkat yang diizinkan, dan hanya bila perangkat berada di lokasi toko.</p>
     <label class="row"><input type="checkbox" id="abPinAktif" ${A.pin_aktif ? "checked" : ""}> <b>Aktifkan absen PIN + selfie</b></label>
     <label class="f">Koordinat lokasi toko (lintang, bujur)<input type="text" id="abKoord" value="${esc(koordinat)}" placeholder="-6.3274, 108.3247" inputmode="decimal"></label>

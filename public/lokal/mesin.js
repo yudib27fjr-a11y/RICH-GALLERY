@@ -1,6 +1,6 @@
 /* Mesin lokal: menjalankan seluruh API Rich Gallery di dalam aplikasi Android, tanpa server.
    Aturan bisnisnya sama persis dengan server (src/core), hanya database dan platformnya yang berbeda. */
-import { pasangDriver, migrasi, seedJikaKosong, jalankan, kirimOutbox, bersihkanSesiKadaluarsa, sinkronCabang, pendengar } from "/src/core/semua.js";
+import { pasangDriver, migrasi, seedJikaKosong, jalankan, kirimOutbox, bersihkanSesiKadaluarsa, sinkronCabang, pendengar, hapusFotoAbsenLama } from "/src/core/semua.js";
 import { buatDriver } from "./driver.js";
 import { pasangPlatformLokal } from "./platform.js";
 
@@ -13,6 +13,7 @@ pasangDriver(buatDriver(window.RGDB));
 migrasi();
 seedJikaKosong();
 bersihkanSesiKadaluarsa();
+try { hapusFotoAbsenLama(); } catch { /* abaikan */ }
 
 async function request(method, url, body){
   const u = new URL(url, "https://rg.lokal");
