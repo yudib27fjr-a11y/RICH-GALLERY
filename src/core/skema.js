@@ -344,6 +344,9 @@ CREATE TABLE gaji_bayar(
 );
 CREATE UNIQUE INDEX gaji_aktif ON gaji_bayar(user_id, periode_dari) WHERE batal_at IS NULL;
 UPDATE settings SET nilai = '4300' WHERE kunci = 'lembur_per_jam' AND nilai = '0';`,
+
+/* 11: desain kartu ucapan baru (pita merah @RichGallery, 120 × 90 mm), teks di bagian kosong desain. */
+`INSERT OR REPLACE INTO settings(kunci, nilai) VALUES ('kartu_lebar', '120'), ('kartu_tinggi', '90'), ('kartu_latar_kode', '"bawaan:pita"'), ('kartu_latar', '""'), ('kartu_area', '"desain"');`,
 ];
 
 export const DEFAULT_SETTINGS = {
@@ -371,15 +374,15 @@ export const DEFAULT_SETTINGS = {
   // Link template kartu ucapan di Canva
   canva_url: "https://www.canva.com/design/DAGUxNBXd4E/goxmLsKxdhdJwkpg7AbxmA/edit",
   // Kartu ucapan: dicetak seukuran desain Canva, berisi ucapan dari pelanggan
-  kartu_lebar: 100,
-  kartu_tinggi: 70,
+  kartu_lebar: 120,
+  kartu_tinggi: 90,
   kartu_huruf: "grown",
   kartu_font: "",
   kartu_font_kode: "",
   kartu_warna: "#3a2a2a",
-  kartu_area: "tengah",
+  kartu_area: "desain",
   kartu_latar: "",
-  kartu_latar_kode: "",
+  kartu_latar_kode: "bawaan:pita",
   canva_email: "",
   wa_nomor: "",
   // Absensi sidik jari

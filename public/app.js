@@ -1062,6 +1062,9 @@ function pasangTombolKartu(akar, teks){
 
 /* ---------- Kartu ucapan seukuran desain Canva: teks ucapan pelanggan di atas latar desain ---------- */
 const PX_MM = 12; // ± 300 dpi
+/** Desain kartu bawaan toko (ikut di aplikasi, bisa offline). area = bagian kosong untuk teks [x, y, lebar, tinggi] dalam pecahan gambar. */
+const LATAR_BAWAAN = { pita: { src: "/kartu/pita.jpg", nama: "Pita merah @RichGallery (120 × 90 mm)", lebar: 120, tinggi: 90, area: [0.1125, 0.3125, 0.7375, 0.4534] } };
+const latarBawaan = kode => String(kode || "").startsWith("bawaan:") ? LATAR_BAWAAN[String(kode).slice(7)] || null : null;
 let latarKartu = { kode: "", img: null }, fontKustom = "";
 /** Aset kartu dari server (latar desain & font unggahan), disimpan di perangkat supaya cepat & bisa offline. */
 async function asetKartu(jenis){
@@ -1078,7 +1081,8 @@ async function ambilLatarKartu(){
   const kode = B.toko.kartu_latar_kode || "";
   if (!kode) return null;
   if (latarKartu.kode === kode) return latarKartu.img;
-  latarKartu = { kode, img: await muatGambar(await asetKartu("latar")) };
+  const bw = latarBawaan(kode);
+  latarKartu = { kode, img: await muatGambar(bw ? bw.src : await asetKartu("latar")) };
   return latarKartu.img;
 }
 /** Muat font kartu sebelum menggambar: "Grown (mirip)" ikut di aplikasi; font unggahan dari server. */
@@ -1109,11 +1113,15 @@ async function gambarKartu(teks, o = {}){
   const g = c.getContext("2d");
   g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
   const latar = o.latarImg !== undefined ? o.latarImg : await ambilLatarKartu();
-  if (latar) { const s = Math.max(W / latar.width, H / latar.height); g.drawImage(latar, (W - latar.width * s) / 2, (H - latar.height * s) / 2, latar.width * s, latar.height * s); }
+  const bw = latarBawaan(o.latarKode !== undefined ? o.latarKode : t.kartu_latar_kode);
+  // Desain bawaan: digambar memenuhi kartu persis (semua hiasan tampil); gambar unggahan: dipotong menyesuaikan.
+  if (latar && bw) g.drawImage(latar, 0, 0, W, H);
+  else if (latar) { const s = Math.max(W / latar.width, H / latar.height); g.drawImage(latar, (W - latar.width * s) / 2, (H - latar.height * s) / 2, latar.width * s, latar.height * s); }
   // Area teks
   const m = Math.min(W, H) * 0.09;
   let ax = m, ay = m, aw = W - 2 * m, ah = H - 2 * m;
-  if (t.kartu_area === "atas") ah = H / 2 - m; else if (t.kartu_area === "bawah") { ay = H / 2; ah = H / 2 - m; }
+  if (t.kartu_area === "desain" && bw && latar) { [ax, ay, aw, ah] = [bw.area[0] * W, bw.area[1] * H, bw.area[2] * W, bw.area[3] * H]; } // tidak menyentuh hiasan desain
+  else if (t.kartu_area === "atas") ah = H / 2 - m; else if (t.kartu_area === "bawah") { ay = H / 2; ah = H / 2 - m; }
   else if (t.kartu_area === "kiri") aw = W / 2 - m; else if (t.kartu_area === "kanan") { ax = W / 2; aw = W / 2 - m; }
   await muatFontKartu(t.kartu_huruf, o.fontData);
   const font = t.kartu_huruf === "kustom" ? `"RG Kustom ${fontKustom}", Georgia, serif` : (HURUF_KARTU[t.kartu_huruf] || HURUF_KARTU.grown), skala = t.kartu_huruf === "script" ? 1.15 : 1;
@@ -2472,16 +2480,17 @@ async function aturKartu(){
     <p class="small muted" style="margin:0">Bila ukuran di Canva dalam cm, kalikan 10 (10 cm = 100 mm). Dalam inci, kalikan 25,4. Dalam px (96 dpi), bagi 3,78.</p>
     <div class="row"><label class="f grow">Huruf<select id="kaH" ${dis}><option value="grown" ${s.kartu_huruf === "grown" ? "selected" : ""}>Grown (mirip, seperti di Canva)</option><option value="kustom" ${s.kartu_huruf === "kustom" ? "selected" : ""}>Font unggahan sendiri${s.kartu_font_kode ? "" : " (belum ada)"}</option><option value="script" ${s.kartu_huruf === "script" ? "selected" : ""}>Tulisan indah (script)</option><option value="serif" ${s.kartu_huruf === "serif" ? "selected" : ""}>Klasik (serif)</option><option value="sans" ${s.kartu_huruf === "sans" ? "selected" : ""}>Modern (sans)</option></select></label>
       <label class="f grow">Warna teks<input type="color" id="kaW" value="${esc(s.kartu_warna || "#3a2a2a")}" ${dis} style="height:44px"></label>
-      <label class="f grow">Posisi teks<select id="kaA" ${dis}>${[["tengah", "Tengah"], ["atas", "Setengah atas"], ["bawah", "Setengah bawah"], ["kiri", "Setengah kiri"], ["kanan", "Setengah kanan"]].map(([v, l]) => `<option value="${v}" ${s.kartu_area === v ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>
+      <label class="f grow">Posisi teks<select id="kaA" ${dis}>${[["desain", "Bagian kosong desain (otomatis)"], ["tengah", "Tengah"], ["atas", "Setengah atas"], ["bawah", "Setengah bawah"], ["kiri", "Setengah kiri"], ["kanan", "Setengah kanan"]].map(([v, l]) => `<option value="${v}" ${s.kartu_area === v ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>
     <p class="small muted" style="margin:0">"Grown" adalah font khusus Canva yang tidak bisa diunduh, jadi dipakai huruf gratis yang paling mirip (Gloock). Bila punya file font sendiri (.ttf / .otf), unggah di sini lalu pilih <b>Font unggahan sendiri</b>.</p>
     ${pusat ? "" : `<div class="row"><label class="btn sm" for="kaFont">Unggah file font</label><input type="file" id="kaFont" accept=".ttf,.otf,.woff,.woff2,font/*" hidden><span class="small muted" id="kaFontKet">${s.kartu_font_kode ? "Font sendiri sudah tersimpan." : ""}</span></div>`}
     <p class="small" style="margin:0"><b>Latar desain (opsional):</b> di Canva tekan <b>Bagikan → Unduh → PNG/JPG</b>, lalu pilih file itu di sini. Ucapan pelanggan dicetak di atas desain tersebut. Pilih posisi teks di bagian kosong desain.</p>
+    ${pusat ? "" : `<div class="row"><button class="btn sm" id="kaPita" type="button">🎀 Pakai desain pita Rich Gallery (120 × 90 mm)</button></div>`}
     ${pusat ? "" : `<div class="row"><label class="btn sm" for="kaFile">Pilih gambar desain</label><input type="file" id="kaFile" accept="image/png,image/jpeg" hidden><button class="btn sm ghost" id="kaHapus" type="button" ${s.kartu_latar_kode ? "" : "hidden"}>Hapus latar</button></div>`}
     <div class="kartu-pratinjau"><canvas id="kaCv"></canvas></div>
     ${pusat ? "" : `<button class="btn pri" id="kaSimpan" type="button">Simpan pengaturan kartu</button>`}`;
   const opsi = () => ({ kartu_lebar: num($("#kaL").value) || 100, kartu_tinggi: num($("#kaT").value) || 70, kartu_huruf: $("#kaH").value, kartu_warna: $("#kaW").value, kartu_area: $("#kaA").value });
-  let latarImg = await ambilLatarKartu(), fontBaru;
-  const contoh = async () => { const c = await gambarKartu("Happy Birthday, Sinta!\nSemoga panjang umur, sehat selalu, dan semua impianmu tercapai.\n\nDari: Rina", { ...opsi(), latarImg, fontData: fontBaru }); const cv = $("#kaCv"); if (!cv) return; cv.width = c.width; cv.height = c.height; cv.getContext("2d").drawImage(c, 0, 0); };
+  let latarImg = await ambilLatarKartu(), fontBaru, latarKode = s.kartu_latar_kode || "";
+  const contoh = async () => { const c = await gambarKartu("Happy Birthday, Sinta!\nSemoga panjang umur, sehat selalu, dan semua impianmu tercapai.\n\nDari: Rina", { ...opsi(), latarImg, latarKode, fontData: fontBaru }); const cv = $("#kaCv"); if (!cv) return; cv.width = c.width; cv.height = c.height; cv.getContext("2d").drawImage(c, 0, 0); };
   $$("#aKartu input:not([type=file]), #aKartu select").forEach(i => i.oninput = i.onchange = contoh);
   const f = $("#kaFile"); if (f) f.onchange = e => { const file = e.target.files[0]; if (!file) return; e.target.value = "";
     const r = new FileReader(); r.onload = async () => {
@@ -2490,11 +2499,16 @@ async function aturKartu(){
       const c = document.createElement("canvas"); c.width = W; c.height = H; const g = c.getContext("2d");
       const sk = Math.max(W / img.width, H / img.height); g.fillStyle = "#fff"; g.fillRect(0, 0, W, H); g.drawImage(img, (W - img.width * sk) / 2, (H - img.height * sk) / 2, img.width * sk, img.height * sk);
       let q = 0.88; latarBaru = c.toDataURL("image/jpeg", q); while (latarBaru.length > 1_300_000 && q > 0.4) { q -= 0.1; latarBaru = c.toDataURL("image/jpeg", q); }
-      latarImg = await muatGambar(latarBaru); $("#kaHapus").hidden = false;
+      latarImg = await muatGambar(latarBaru); latarKode = "unggah"; $("#kaHapus").hidden = false; if ($("#kaA").value === "desain") $("#kaA").value = "tengah";
       if (Math.abs(img.width / img.height - W / H) > 0.03) toast("Perbandingan gambar berbeda dengan ukuran kartu — gambar dipotong menyesuaikan. Periksa ukuran kartu.");
       contoh();
     }; r.readAsDataURL(file); };
-  const hp = $("#kaHapus"); if (hp) hp.onclick = () => { latarBaru = ""; latarImg = null; hp.hidden = true; contoh(); };
+  const hp = $("#kaHapus"); if (hp) hp.onclick = () => { latarBaru = ""; latarImg = null; latarKode = ""; hp.hidden = true; contoh(); };
+  const kp = $("#kaPita"); if (kp) kp.onclick = async () => {
+    const bw = LATAR_BAWAAN.pita; latarBaru = "bawaan:pita"; latarKode = "bawaan:pita"; latarImg = await muatGambar(bw.src);
+    $("#kaL").value = bw.lebar; $("#kaT").value = bw.tinggi; $("#kaA").value = "desain"; $("#kaHapus").hidden = false; contoh();
+    toast("Desain pita dipilih. Tekan Simpan pengaturan kartu.");
+  };
   const ff = $("#kaFont"); if (ff) ff.onchange = e => { const file = e.target.files[0]; if (!file) return; e.target.value = "";
     if (file.size > 1_400_000) return toast("File font terlalu besar (maks ± 1,4 MB)");
     const r = new FileReader(); r.onload = () => { fontBaru = String(r.result); $("#kaH").value = "kustom"; $("#kaFontKet").textContent = file.name + " — belum disimpan"; contoh(); }; r.readAsDataURL(file); };

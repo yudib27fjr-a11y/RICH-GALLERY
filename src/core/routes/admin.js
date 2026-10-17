@@ -37,7 +37,7 @@ route("PUT", "/api/pengaturan", "admin", ({ body }) => tx(() => {
     kartu_huruf: b.kartu_huruf != null ? (["grown", "kustom", "script", "serif", "sans"].includes(b.kartu_huruf) ? b.kartu_huruf : "grown") : undefined,
     kartu_font: b.kartu_font != null ? String(b.kartu_font) : undefined,
     kartu_warna: b.kartu_warna != null ? (/^#[0-9a-fA-F]{6}$/.test(b.kartu_warna) ? b.kartu_warna : "#3a2a2a") : undefined,
-    kartu_area: b.kartu_area != null ? (["tengah", "atas", "bawah", "kiri", "kanan"].includes(b.kartu_area) ? b.kartu_area : "tengah") : undefined,
+    kartu_area: b.kartu_area != null ? (["desain", "tengah", "atas", "bawah", "kiri", "kanan"].includes(b.kartu_area) ? b.kartu_area : "tengah") : undefined,
     kartu_latar: b.kartu_latar != null ? String(b.kartu_latar) : undefined,
     inv_tagline: b.inv_tagline != null ? teks(b.inv_tagline, { max: 120, nama: "Keterangan toko di nota" }) : undefined,
     inv_bank: b.inv_bank != null ? teks(b.inv_bank, { max: 300, nama: "Info rekening di nota" }) : undefined,
@@ -46,10 +46,13 @@ route("PUT", "/api/pengaturan", "admin", ({ body }) => tx(() => {
     inv_ttd: b.inv_ttd != null ? String(b.inv_ttd) : undefined,
     wa_nomor: b.wa_nomor != null ? teks(b.wa_nomor, { max: 30, nama: "Nomor WA toko" }) : undefined,
   };
+  // Desain kartu bawaan aplikasi (mis. "bawaan:pita"): tidak perlu menyimpan gambarnya di server.
+  let latarBawaan = null;
+  if (typeof v.kartu_latar === "string" && /^bawaan:[a-z0-9-]{1,30}$/.test(v.kartu_latar)) { latarBawaan = v.kartu_latar; v.kartu_latar = ""; }
   if (v.kartu_latar && (!/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(v.kartu_latar) || v.kartu_latar.length > 1_400_000)) throw bad("Gambar latar kartu tidak valid atau terlalu besar (maks ± 1 MB)");
   if (v.kartu_font && (!/^data:[a-z\/+.-]*;base64,[A-Za-z0-9+/=]+$/.test(v.kartu_font) || v.kartu_font.length > 2_000_000)) throw bad("File font tidak valid atau terlalu besar (maks ± 1,4 MB)");
   if (v.kartu_font !== undefined) setSetting("kartu_font_kode", v.kartu_font ? platform.sha256(v.kartu_font).slice(0, 12) : "");
-  if (v.kartu_latar !== undefined) setSetting("kartu_latar_kode", v.kartu_latar ? platform.sha256(v.kartu_latar).slice(0, 12) : "");
+  if (v.kartu_latar !== undefined) setSetting("kartu_latar_kode", latarBawaan || (v.kartu_latar ? platform.sha256(v.kartu_latar).slice(0, 12) : ""));
   if (v.inv_ttd && (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(v.inv_ttd) || v.inv_ttd.length > 150_000)) throw bad("Tanda tangan tidak valid atau terlalu besar");
   if (v.wa_nomor && String(v.wa_nomor).replace(/\D/g, "").length < 9) throw bad("Nomor WA toko tidak valid");
   if (v.canva_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.canva_email)) throw bad("Email Canva tidak valid");
