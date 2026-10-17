@@ -2693,20 +2693,22 @@ async function aturSync(){
 /** Server toko di Cloudflare (gratis, menyala 24 jam). Dipakai sebagai alamat bawaan di aplikasi. */
 const SERVER_TOKO = "https://pos.richgallery.my.id";
 const waktuLokal = iso => iso ? new Date(iso).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }) : "-";
-async function aturCabang(){
-  const el = $("#aCabang"); if (!el) return;
-  if (!LOKAL) { // di server: daftar perangkat yang tersambung
-    const d = await coba(() => api("GET", "/api/cabang/perangkat")); if (!d || view !== "atur") return;
-    el.innerHTML = `<h3 style="font-size:17px">Perangkat cabang</h3>
+/** Daftar perangkat kasir (aplikasi) yang tersambung ke server: izin absen, ganti nama, cabut.
+ *  Tampil di server (browser) dan juga di aplikasi perangkat untuk admin (diteruskan ke server). */
+async function daftarPerangkatCabang(el, kodeIni = ""){
+  const muat = () => daftarPerangkatCabang(el, kodeIni);
+    const d = await coba(() => api("GET", "/api/cabang/perangkat")); if (!d || view !== "atur" || !document.body.contains(el)) return;
+    el.innerHTML = `<h3 style="font-size:17px">Perangkat cabang${kodeIni ? " (semua aplikasi kasir)" : ""}</h3>
       <p class="small muted" style="margin:0">Perangkat kasir (mis. iMin) yang bekerja offline dan mengirim transaksinya ke server ini. Sambungkan dari Pengaturan di perangkat itu.</p>
       ${d.length ? d.map(x => `<div class="row" style="border:1px solid var(--line);border-radius:9px;padding:8px 10px;background:var(--surface);align-items:center">
-        <div style="flex:1;min-width:0"><b>${esc(x.kode)} · ${esc(x.nama)}</b>${x.dicabut ? ` <span class="pill mut">dicabut</span>` : ""}
+        <div style="flex:1;min-width:0"><b>${esc(x.kode)} · ${esc(x.nama)}</b>${x.kode === kodeIni ? ` <span class="pill ok">perangkat ini</span>` : ""}${x.dicabut ? ` <span class="pill mut">dicabut</span>` : ""}
           <div class="small muted">Terakhir: ${x.terakhir ? waktuLokal(x.terakhir.replace(" ", "T") + "Z") : "belum pernah"} · ${x.diterima} transaksi diterima${x.ditolak ? ` · <span style="color:var(--bad)">${x.ditolak} ditolak</span>` : ""}</div></div>
         ${x.dicabut ? "" : `<button class="btn sm ${x.absen ? "pri" : ""}" data-absen="${x.id}" data-v="${x.absen ? 0 : 1}" type="button">${x.absen ? "✓ Boleh absen" : "Izinkan absen"}</button><button class="btn sm" data-nama="${x.id}" type="button">Ganti nama</button><button class="btn sm danger" data-cabut="${x.id}" type="button">Cabut</button>`}</div>`).join("")
         : `<div class="empty">Belum ada perangkat yang tersambung.</div>`}`;
     el.querySelectorAll("[data-absen]").forEach(b => b.onclick = () => coba(async () => {
       await api("PUT", `/api/cabang/perangkat/${b.dataset.absen}`, { absen: b.dataset.v === "1" });
-      toast(b.dataset.v === "1" ? "Perangkat diizinkan untuk absen karyawan" : "Izin absen dicabut"); aturCabang();
+      if (LOKAL) { await cekKiosk(); renderNav(); }
+      toast(b.dataset.v === "1" ? "Perangkat diizinkan untuk absen karyawan" : "Izin absen dicabut"); muat();
     }, b));
     el.querySelectorAll("[data-nama]").forEach(b => b.onclick = () => {
       const x = d.find(y => y.id === +b.dataset.nama);
@@ -2714,10 +2716,15 @@ async function aturCabang(){
         <label class="f">Nama perangkat<input type="text" id="pn" value="${esc(x.nama)}" maxlength="40" placeholder="Contoh: iMin Kasir Depan"></label>
         <p class="small muted" style="margin:0">Nama baru otomatis tampil juga di perangkat itu saat sinkron berikutnya. Seri nota (${esc(x.kode)}) tidak berubah.</p>
         <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="pok" type="button">Simpan</button></div>`, m => {
-        $("#pok", m).onclick = e => coba(async () => { await api("PUT", `/api/cabang/perangkat/${x.id}`, { nama: $("#pn", m).value }); closeModal(); toast("Nama perangkat diganti"); aturCabang(); }, e.target);
+        $("#pok", m).onclick = e => coba(async () => { await api("PUT", `/api/cabang/perangkat/${x.id}`, { nama: $("#pn", m).value }); closeModal(); toast("Nama perangkat diganti"); muat(); }, e.target);
       });
     });
-    el.querySelectorAll("[data-cabut]").forEach(b => b.onclick = () => konfirmasi("Cabut perangkat ini?", "Perangkat tidak bisa mengirim transaksi lagi sampai disambungkan ulang. Data yang sudah diterima tetap ada.", "Cabut", async () => { await api("DELETE", `/api/cabang/perangkat/${b.dataset.cabut}`); toast("Perangkat dicabut"); aturCabang(); }));
+    el.querySelectorAll("[data-cabut]").forEach(b => b.onclick = () => konfirmasi("Cabut perangkat ini?", "Perangkat tidak bisa mengirim transaksi lagi sampai disambungkan ulang. Data yang sudah diterima tetap ada.", "Cabut", async () => { await api("DELETE", `/api/cabang/perangkat/${b.dataset.cabut}`); toast("Perangkat dicabut"); muat(); }));
+}
+async function aturCabang(){
+  const el = $("#aCabang"); if (!el) return;
+  if (!LOKAL) { // di server: daftar perangkat yang tersambung
+    await daftarPerangkatCabang(el);
     return;
   }
   const st = await coba(() => api("GET", "/api/cabang")); if (!st || view !== "atur") return;
@@ -2760,7 +2767,9 @@ async function aturCabang(){
       <button class="btn" id="cbUlang" type="button">Kirim ulang yang ditolak</button>` : ""}
     <p class="small muted" style="margin:0">Sinkron berjalan otomatis setiap ada transaksi, dan memeriksa data baru tiap 10 detik selama aplikasi terbuka dan ada internet. Tarik layar ke bawah untuk sinkron seketika. Produk, akun dan pengaturan toko diubah di server pusat.</p>
     ${![SERVER_TOKO, "https://rich-gallery-pos.yudi-b27fjr.workers.dev"].includes(st.url.replace(/\/+$/, "")) ? `<p class="note" style="margin:0">Server toko sekarang ada di Cloudflare: <b>${esc(SERVER_TOKO)}</b>. Untuk pindah: tekan <b>Putuskan</b> (setelah semua transaksi terkirim), lalu sambungkan lagi. Alamat Cloudflare sudah terisi otomatis.</p>` : ""}
-    <div class="row"><button class="btn pri" id="cbSync" type="button">Sinkron sekarang</button><button class="btn" id="cbNama" type="button">Ganti nama perangkat</button><button class="btn" id="cbPutus" type="button">Putuskan</button></div>`;
+    <div class="row"><button class="btn pri" id="cbSync" type="button">Sinkron sekarang</button><button class="btn" id="cbNama" type="button">Ganti nama perangkat</button><button class="btn" id="cbPutus" type="button">Putuskan</button></div>
+    <hr class="sep"><div class="stack" id="cbPerangkat"><div class="empty small">Memuat daftar perangkat…</div></div>`;
+  daftarPerangkatCabang($("#cbPerangkat"), st.kode).catch(() => { const x = $("#cbPerangkat"); if (x) x.innerHTML = `<p class="small muted" style="margin:0">Daftar perangkat belum bisa dimuat (butuh internet).</p>`; });
   $("#cbNama").onclick = () => modal(`<h3>Ganti nama perangkat</h3>
     <label class="f">Nama perangkat<input type="text" id="pn" value="${esc(st.nama)}" maxlength="40" placeholder="Contoh: iMin Kasir Depan"></label>
     <p class="small muted" style="margin:0">Nama ini tampil di server pusat. Seri nota (${esc(st.kode)}) tidak berubah. Butuh internet.</p>

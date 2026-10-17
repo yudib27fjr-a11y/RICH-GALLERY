@@ -609,6 +609,17 @@ test("perangkat kasir baru (dipasang ulang): admin sementara lalu tersambung, ak
   assert.equal((await k("POST", "/api/login", { nama: "Wulan", password: "2468" })).status, 200);
 });
 
+test("admin di aplikasi perangkat bisa melihat & mengizinkan absen perangkat (diteruskan ke server)", async () => {
+  const d = await cabang("GET", "/api/cabang/perangkat");
+  assert.equal(d.status, 200, JSON.stringify(d.data));
+  const st = (await cabang("GET", "/api/cabang")).data;
+  const ini = d.data.find(x => x.kode === st.kode);
+  assert.ok(ini, "perangkat ini ada di daftar");
+  assert.equal((await cabang("PUT", `/api/cabang/perangkat/${ini.id}`, { absen: true })).status, 200);
+  assert.equal((await pusat("GET", "/api/cabang/perangkat")).data.find(x => x.id === ini.id).absen, 1);
+  assert.equal((await cabang("GET", "/api/absen/kiosk")).status, 200);
+});
+
 test("putuskan: ditolak bila masih ada antrean, lalu berhasil", async () => {
   assert.equal((await cabang("POST", "/api/cabang/putus", {})).status, 200);
   const st = (await cabang("GET", "/api/cabang")).data;

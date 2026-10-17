@@ -10,7 +10,7 @@ import { cekPassword, cekBatasLogin, catatGagal, resetGagal } from "../auth.js";
 import { muatPenjualan, hapusPenjualan } from "./penjualan.js";
 import { rekapAbsen, terimaAbsen, fotoAbsen, cekLokasi, lemburPeriode } from "./absen.js";
 import { rekapGaji, daftarKasbon } from "./gaji.js";
-import { statusCabang, sinkronCabang, sambungCabang, putusCabang, gantiNamaPerangkat, kirimUlangDitolak } from "../cabang-perangkat.js";
+import { statusCabang, sinkronCabang, sambungCabang, putusCabang, gantiNamaPerangkat, kirimUlangDitolak, cabangAktif, mintaPusat } from "../cabang-perangkat.js";
 
 /* ================= di perangkat ================= */
 route("GET", "/api/cabang", "admin", () => statusCabang());
@@ -343,18 +343,40 @@ route("POST", "/api/cabang/lembur", false, ({ body }) => {
   return { lembur: lemburPeriode(tanggal(body.dari), tanggal(body.sampai || body.dari)) };
 });
 
-route("GET", "/api/cabang/perangkat", "admin", () =>
-  all(`SELECT p.id, p.kode, p.nama, p.dibuat, p.terakhir, p.dicabut, p.absen,
+/* Daftar perangkat kasir & izin absen. Di server langsung; di perangkat (aplikasi) diteruskan ke server pusat,
+   jadi admin bisa mengaturnya dari aplikasi juga. */
+const daftarPerangkat = () => all(`SELECT p.id, p.kode, p.nama, p.dibuat, p.terakhir, p.dicabut, p.absen,
     (SELECT COUNT(*) FROM cabang_terima t WHERE t.perangkat_id = p.id AND t.status = 'ok') diterima,
     (SELECT COUNT(*) FROM cabang_terima t WHERE t.perangkat_id = p.id AND t.status = 'ditolak') ditolak
-    FROM perangkat p ORDER BY p.dicabut IS NOT NULL, p.id`));
-
-route("PUT", "/api/cabang/perangkat/:id", "admin", ({ params, body }) => {
-  const d = one("SELECT id FROM perangkat WHERE id = ? AND dicabut IS NULL", [+params.id]);
+    FROM perangkat p ORDER BY p.dicabut IS NOT NULL, p.id`);
+function ubahPerangkat(id, body){
+  const d = one("SELECT id FROM perangkat WHERE id = ? AND dicabut IS NULL", [+id]);
   if (!d) throw notFound("Perangkat tidak ditemukan");
   if (body.nama != null) run("UPDATE perangkat SET nama = ? WHERE id = ?", [teks(body.nama, { wajib: true, max: 40, nama: "Nama perangkat" }), d.id]);
   if (body.absen != null) run("UPDATE perangkat SET absen = ? WHERE id = ?", [body.absen ? 1 : 0, d.id]);
   return { ok: true };
+}
+function cabutPerangkat(id){
+  const d = one("SELECT id FROM perangkat WHERE id = ? AND dicabut IS NULL", [+id]);
+  if (!d) throw notFound("Perangkat tidak ditemukan");
+  run("UPDATE perangkat SET dicabut = datetime('now') WHERE id = ?", [d.id]);
+  return { ok: true };
+}
+const kelolaDiPusat = async (aksi, id, data) => {
+  const r = await mintaPusat("/api/cabang/kelola-perangkat", { aksi, id, data });
+  if (aksi !== "daftar") await sinkronCabang({ paksa: true }).catch(() => {});
+  return r;
+};
+route("GET", "/api/cabang/perangkat", "admin", () => cabangAktif() ? kelolaDiPusat("daftar") : daftarPerangkat());
+route("PUT", "/api/cabang/perangkat/:id", "admin", ({ params, body }) => cabangAktif() ? kelolaDiPusat("ubah", +params.id, body) : ubahPerangkat(params.id, body));
+route("DELETE", "/api/cabang/perangkat/:id", "admin", ({ params }) => cabangAktif() ? kelolaDiPusat("cabut", +params.id) : cabutPerangkat(params.id));
+/* Diteruskan dari aplikasi di perangkat (admin di perangkat itu). */
+route("POST", "/api/cabang/kelola-perangkat", false, ({ body }) => {
+  perangkatDariToken(body.token);
+  if (body.aksi === "daftar") return daftarPerangkat();
+  if (body.aksi === "ubah") return ubahPerangkat(body.id, body.data || {});
+  if (body.aksi === "cabut") return cabutPerangkat(body.id);
+  throw bad("Aksi tidak dikenal");
 });
 
 /* Perangkat mengganti namanya sendiri (dari Pengaturan di perangkat). */
@@ -365,9 +387,4 @@ route("POST", "/api/cabang/nama-perangkat", false, ({ body }) => {
   return { nama };
 });
 
-route("DELETE", "/api/cabang/perangkat/:id", "admin", ({ params }) => {
-  const d = one("SELECT id FROM perangkat WHERE id = ? AND dicabut IS NULL", [+params.id]);
-  if (!d) throw notFound("Perangkat tidak ditemukan");
-  run("UPDATE perangkat SET dicabut = datetime('now') WHERE id = ?", [d.id]);
-  return { ok: true };
-});
+
