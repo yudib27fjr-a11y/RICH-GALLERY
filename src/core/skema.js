@@ -370,7 +370,7 @@ export const DEFAULT_SETTINGS = {
   impor_oleh: "",
   // Pesan WhatsApp ke pelanggan setelah transaksi
   wa_otomatis: false,
-  wa_template: "Halo {nama}, terima kasih sudah berbelanja di {toko} 🌸\n\nNo. nota: {no}\nTanggal: {tanggal}\nPesanan: {barang}\nTotal: {total}\n\nSemoga suka dengan pesanannya. Ditunggu kedatangannya kembali!",
+  wa_template: "Halo {nama}, terima kasih sudah berbelanja di {toko} 🌸\n\nNo. nota: {no}\nTanggal: {tanggal}\nPesanan: {barang}\nTotal: {total}\n\n📋 *Keterangan pesanan*\n{pesanan}\n\nSemoga suka dengan pesanannya. Ditunggu kedatangannya kembali!",
   // Link template kartu ucapan di Canva
   canva_url: "https://www.canva.com/design/DAGUxNBXd4E/goxmLsKxdhdJwkpg7AbxmA/edit",
   // Kartu ucapan: dicetak seukuran desain Canva, berisi ucapan dari pelanggan

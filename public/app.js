@@ -1199,14 +1199,35 @@ document.addEventListener("click", e => {
 }, true);
 
 /* ---------- Pesan WhatsApp ke pelanggan ---------- */
-/** Isi pesan dari templat di Pengaturan. Kode yang bisa dipakai: {nama} {toko} {no} {tanggal} {total} {barang} {struk} */
+/** Tanggal lengkap dengan hari, mis. "Senin, 20 Oktober 2026". */
+const tglHari = iso => { try { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" }); } catch { return tglID(iso); } };
+/** Keterangan pemesanan untuk pesan WA: DP, sisa, jadwal ambil/antar, request, catatan, ucapan kartu (hanya yang ada isinya). */
+function detailPesananWA(s){
+  const L = [], sisa = Math.max(0, (s.total || 0) - (s.bayar || 0));
+  if (sisa > 0) { L.push(`DP (${s.metode}): ${rp(s.bayar || 0)}`); L.push(`Sisa pembayaran: *${rp(sisa)}*`); }
+  else L.push(`Pembayaran: Lunas (${s.metode}) ✅`);
+  if (s.ambil_tgl) L.push(`${s.ambil_cara === "antar" ? "Diantar" : "Diambil"}: ${tglHari(s.ambil_tgl)}${s.ambil_jam ? " jam " + s.ambil_jam : ""}`);
+  if (s.request) L.push(`Request: ${s.request}`);
+  if (s.catatan) L.push(`Catatan: ${s.catatan}`);
+  if (s.kartu) L.push(`Ucapan kartu:\n"${s.kartu}"`);
+  return L.join("\n");
+}
+/** Isi pesan dari templat di Pengaturan. Kode: {nama} {toko} {no} {tanggal} {total} {barang} {struk} {wa_toko}
+ *  {pesanan} (blok keterangan lengkap) {dp} {sisa} {ambil} {request} {catatan} {ucapan} */
 function pesanWA(s){
   const tpl = (B.toko.wa_template || "").trim();
   if (!tpl) return "```\n" + strukText(s) + "\n```";
   const nama = s.pelanggan && s.pelanggan !== "CUSTOMER" ? toTitle(s.pelanggan) : "Kak";
+  const sisa = Math.max(0, (s.total || 0) - (s.bayar || 0));
   const isi = { nama, toko: toTitle(B.toko.nama_toko), no: s.no, tanggal: tglID(s.tgl), total: rp(s.total),
-    wa_toko: B.toko.wa_nomor || B.toko.telp || "", barang: s.items.map(i => toTitle(i.nama) + (i.qty != 1 ? " ×" + fq(i.qty) : "")).join(", "), struk: "```\n" + strukText(s) + "\n```" };
-  return tpl.replace(/\{(nama|toko|no|tanggal|total|barang|struk|wa_toko)\}/g, (_, k) => isi[k]);
+    wa_toko: B.toko.wa_nomor || B.toko.telp || "", barang: s.items.map(i => toTitle(i.nama) + (i.qty != 1 ? " ×" + fq(i.qty) : "")).join(", "), struk: "```\n" + strukText(s) + "\n```",
+    pesanan: detailPesananWA(s), dp: rp(Math.min(s.bayar || 0, s.total || 0)), sisa: rp(sisa),
+    ambil: s.ambil_tgl ? `${s.ambil_cara === "antar" ? "diantar" : "diambil"} ${tglHari(s.ambil_tgl)}${s.ambil_jam ? " jam " + s.ambil_jam : ""}` : "-",
+    request: s.request || "-", catatan: s.catatan || "-", ucapan: s.kartu || "-" };
+  let teks = tpl.replace(/\{(nama|toko|no|tanggal|total|barang|struk|wa_toko|pesanan|dp|sisa|ambil|request|catatan|ucapan)\}/g, (_, k) => isi[k]);
+  // Templat lama tanpa kode keterangan: keterangan pemesanan tetap ditambahkan otomatis.
+  if (!/\{(pesanan|struk)\}/.test(tpl) && !/\{(dp|sisa|ambil)\}/.test(tpl)) teks += "\n\n📋 *Keterangan pesanan*\n" + isi.pesanan;
+  return teks;
 }
 function nomorWA(hp){ let d = String(hp || "").replace(/\D/g, ""); if (d.startsWith("0")) d = "62" + d.slice(1); else if (d.startsWith("8")) d = "62" + d; return d.length >= 10 ? d : ""; }
 /** Buka WhatsApp dengan pesan terisi (tinggal tekan kirim). Di aplikasi Android langsung membuka WhatsApp. */
@@ -2451,7 +2472,7 @@ async function aturWA(){
       : NATIVE ? `<p class="small muted" style="margin:0">Untuk memilih WhatsApp / WhatsApp Business, pasang aplikasi versi terbaru (Pengaturan → Periksa pembaruan).</p>` : ""}
     <label class="row"><input type="checkbox" id="waAuto" ${s.wa_otomatis ? "checked" : ""} ${pusat ? "disabled" : ""}> <b>Kirim ucapan terima kasih otomatis setelah transaksi</b></label>
     <label class="f">Isi pesan<textarea id="waTpl" rows="7" ${pusat ? "disabled" : ""}>${esc(s.wa_template)}</textarea></label>
-    <p class="small muted" style="margin:0">Kode otomatis: <code>{nama}</code> · <code>{toko}</code> · <code>{no}</code> · <code>{tanggal}</code> · <code>{total}</code> · <code>{barang}</code> · <code>{struk}</code> · <code>{wa_toko}</code></p>
+    <p class="small muted" style="margin:0">Kode otomatis: <code>{nama}</code> · <code>{toko}</code> · <code>{no}</code> · <code>{tanggal}</code> · <code>{total}</code> · <code>{barang}</code> · <code>{struk}</code> · <code>{wa_toko}</code><br>Keterangan pesanan: <code>{pesanan}</code> (DP, sisa, jadwal ambil/antar, request, catatan, ucapan — otomatis hanya yang ada isinya) · <code>{dp}</code> · <code>{sisa}</code> · <code>{ambil}</code> · <code>{request}</code> · <code>{catatan}</code> · <code>{ucapan}</code></p>
     <div class="row"><button class="btn sm" id="waLihat" type="button">Lihat contoh pesan</button><button class="btn sm" id="waUji" type="button">Kirim tes ke nomor ini</button></div>
     ${pusat ? "" : `<button class="btn pri" id="waSimpan" type="button">Simpan pengaturan WhatsApp</button>`}`;
   const sel = $("#waApp"); if (sel) sel.onchange = e => { D.waApp = e.target.value; simpanD(); toast("Aplikasi WhatsApp perangkat ini disimpan"); };
