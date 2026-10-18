@@ -70,10 +70,13 @@ async function panggil(url, path, body){
 }
 
 /** Ambil data langsung dari server pusat (mis. rekap absensi). Butuh internet. */
+/** Galat dari server pusat untuk dikembalikan ke layar. 401 di server pusat (perangkat/akun admin ditolak) BUKAN berarti
+ *  sesi pengguna di perangkat ini habis, jadi dikirim sebagai 403 supaya pengguna tidak dikeluarkan dari aplikasi. */
+const galatPusat = e => new HttpError(e.status === 401 ? 403 : e.status && e.status < 500 ? e.status : 502, e.message);
 export async function mintaPusat(path, body){
   const s = getSettings();
   try { return await panggil(s.cabang_url, path, { token: s.cabang_token, ...body }); }
-  catch (e) { throw new HttpError(e.status && e.status < 500 ? e.status : 502, e.message); }
+  catch (e) { throw galatPusat(e); }
 }
 
 export function statusCabang(){
@@ -349,7 +352,7 @@ export async function sambungCabang({ url, nama, password, perangkat, paksa, ung
     j = await panggil(url, "/api/cabang/daftar", { nama, password, perangkat: perangkat || "Perangkat kasir", noTerakhir: terakhir ? terakhir.no : "", paksa: !!(paksa || kirimSemua || kirimLama), unggahAwal: !!kirimSemua });
     if (kirimSemua) await unggahAwal(url, j.token);
     versiServer = "";
-  } catch (e) { throw new HttpError(e.status && e.status < 500 ? e.status : 502, e.message); }
+  } catch (e) { throw galatPusat(e); }
   tx(() => {
     setSetting("cabang_url", url);
     setSetting("cabang_token", j.token);
@@ -370,7 +373,7 @@ export async function gantiNamaPerangkat(nama){
   const s = getSettings();
   let j;
   try { j = await panggil(s.cabang_url, "/api/cabang/nama-perangkat", { token: s.cabang_token, nama }); }
-  catch (e) { throw new HttpError(e.status && e.status < 500 ? e.status : 502, e.message); }
+  catch (e) { throw galatPusat(e); }
   setSetting("cabang_nama", j.nama || nama);
   return statusCabang();
 }

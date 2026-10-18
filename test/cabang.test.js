@@ -47,7 +47,7 @@ test("siapkan pusat & cabang, sambungkan", async () => {
   await segarkan();
   // Password admin pusat salah → ditolak
   let r = await cabang("POST", "/api/cabang/sambung", { url: `http://127.0.0.1:${PORT_P}`, nama: "Yudi", password: "salah-sekali" });
-  assert.equal(r.status, 401);
+  assert.equal(r.status, 403, "ditolak pusat, bukan sesi perangkat ini yang habis"); assert.match(r.data.error, /password|salah/i);
   r = await cabang("POST", "/api/cabang/sambung", { url: `http://127.0.0.1:${PORT_P}`, nama: "Yudi", password: "rahasia-123", perangkat: "iMin kasir" });
   assert.equal(r.status, 200, JSON.stringify(r.data));
   assert.equal(r.data.aktif, true);

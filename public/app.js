@@ -105,8 +105,10 @@ async function coba(fn, tombol){
 async function muatUlang(){ const b = await api("GET", "/api/bootstrap"); B = b; if (b && b.versi !== undefined) versiLayar = b.versi; }
 
 /* Galat tak terduga ditampilkan, bukan diam saja (mis. fitur browser yang belum ada di WebView perangkat lama). */
-window.addEventListener("error", e => { try { toast("Galat: " + (e.message || "tidak diketahui")); } catch {} });
-window.addEventListener("unhandledrejection", e => { try { const m = e.reason && e.reason.message; if (!(e.reason && e.reason.status === 401)) toast("Galat: " + (m || "tidak diketahui")); } catch {} });
+/* Galat sisa dari layar sebelumnya (mis. halaman yang masih memuat saat layar masuk muncul) tidak perlu ditampilkan. */
+const diLayarAplikasi = () => !!document.getElementById("main");
+window.addEventListener("error", e => { try { if (diLayarAplikasi()) toast("Galat: " + (e.message || "tidak diketahui")); } catch {} });
+window.addEventListener("unhandledrejection", e => { try { const m = e.reason && e.reason.message; if (!(e.reason && e.reason.status === 401) && diLayarAplikasi()) toast("Galat: " + (m || "tidak diketahui")); } catch {} });
 
 /* ================= toast & modal ================= */
 let tt;
@@ -1652,9 +1654,9 @@ function pasangJam(el){
 }
 async function vAbsenku(){
   $("#main").innerHTML = `<div class="view-head"><h2>Absen karyawan</h2></div><div id="akIsi"><div class="empty">Memuat…</div></div>`;
-  const K = await cekKiosk(); if (view !== "absenku") return;
-  $("#akIsi").innerHTML = panelAbsen(K);
-  pasangJam($("#akIsi"));
+  const K = await cekKiosk(); const el = $("#akIsi"); if (view !== "absenku" || !el) return;
+  el.innerHTML = panelAbsen(K);
+  pasangJam(el);
 }
 
 /** Layar absen: pilih nama + PIN + foto selfie, lokasi dicek otomatis. */
