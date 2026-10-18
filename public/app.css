@@ -296,3 +296,7 @@ input.sIn.berubah{background:#fff4c2;border-color:#d9a400;color:#1c2420}
 .absen-judul{margin:-4px -4px 0;padding:10px 12px;border-radius:12px;color:#fff;text-align:center}
 .absen-judul.masuk{background:#1f7a4d} .absen-judul.pulang{background:#b85c00}
 #lAbsen .absen-jam .jam{font-size:40px}
+
+/* Tanda pembuat aplikasi */
+.tag-pembuat{margin:0;text-align:center;font-size:12px;color:var(--muted,#888);opacity:.75;letter-spacing:.02em}
+.tag-pembuat b{font-weight:700;color:inherit}

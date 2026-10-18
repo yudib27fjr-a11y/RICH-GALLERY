@@ -358,9 +358,24 @@ test("ubah stok manual & hard reset dengan kode (bawaan OK, bisa diganti)", asyn
   assert.equal((await admin("PUT", "/api/reset/kode", { lama: "x", baru: "rahasia7" })).status, 401);
   assert.equal((await admin("PUT", "/api/reset/kode", { lama: "OK", baru: "rahasia7" })).status, 200);
   assert.equal((await admin("POST", "/api/reset", { kode: "OK", transaksi: true })).status, 401, "kode lama tidak berlaku");
+  // Hapus transaksi lama saja (sebelum tanggal): data mulai tanggal itu tetap, stok tidak berubah
+  const hari = (await admin("GET", "/api/bootstrap")).data.hariIni;
+  const besok = new Date(Date.parse(hari + "T00:00:00Z") + 864e5).toISOString().slice(0, 10);
+  const jumlahJual = async () => (await admin("GET", `/api/penjualan?dari=2000-01-01&sampai=${besok}`)).data.length;
+  const awal = await jumlahJual(); assert.ok(awal > 0);
+  assert.equal((await admin("POST", "/api/reset", { kode: "rahasia7", sebelum: "kemarin" })).status, 400);
+  assert.equal((await admin("POST", "/api/reset", { kode: "salah", sebelum: hari })).status, 401);
+  const lama = (await admin("GET", `/api/reset?sebelum=${hari}`)).data.jumlah.sales;
+  assert.ok(lama < awal, "ada transaksi hari ini");
+  assert.equal((await admin("POST", "/api/reset", { kode: "rahasia7", sebelum: hari })).data.dihapus.sales, lama);
+  assert.equal(await jumlahJual(), awal - lama, "transaksi hari ini tetap");
+  assert.equal((await admin("GET", `/api/reset?sebelum=${besok}`)).data.jumlah.sales, awal - lama);
+  const stokSebelum = (await admin("GET", "/api/bootstrap")).data.produk.map(x => x.stok).join();
+  const rl = await admin("POST", "/api/reset", { kode: "rahasia7", sebelum: besok });
+  assert.equal(rl.data.dihapus.sales, awal - lama); assert.equal(await jumlahJual(), 0, "transaksi lama terhapus");
+  assert.equal((await admin("GET", "/api/bootstrap")).data.produk.map(x => x.stok).join(), stokSebelum, "stok tidak berubah");
   const r = await admin("POST", "/api/reset", { kode: "rahasia7", transaksi: true, stok: true });
   assert.equal(r.status, 200, JSON.stringify(r.data));
-  const hari = (await admin("GET", "/api/bootstrap")).data.hariIni;
   assert.equal((await admin("GET", `/api/penjualan?dari=2000-01-01&sampai=${hari}`)).data.length, 0, "transaksi kosong");
   b = (await admin("GET", "/api/bootstrap")).data;
   assert.ok(b.produk.length > 0 && b.produk.every(x => x.stok === 0), "barang tetap, stok 0");

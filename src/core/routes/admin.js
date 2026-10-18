@@ -6,6 +6,7 @@ import { platform } from "../platform.js";
 import { bad, teks, angka } from "../util.js";
 import { kirimOutbox, statusSync, tarikSheet } from "../sync.js";
 import { cabangAktif, mintaPusat } from "../cabang-perangkat.js";
+import { hitungSebelum, hapusSebelum, tanggalValid } from "../hapus-transaksi.js";
 import { KATEGORI, KAT_BAHAN, KAT_PENGELUARAN, barcodeDefault, tebakKategori } from "../../../public/shared.js";
 
 /* ---- Pengaturan toko ---- */
@@ -111,7 +112,8 @@ function cekKodeReset(kode, ctx){
   if (!cocok) { catatGagal(kunci); throw new HttpError(401, "Kode reset salah"); }
   resetGagal(kunci);
 }
-route("GET", "/api/reset", "admin", () => ({ kodeBawaan: !getSettings().reset_kode }));
+route("GET", "/api/reset", "admin", ({ query }) => ({ kodeBawaan: !getSettings().reset_kode,
+  ...(tanggalValid(query.sebelum) ? { jumlah: hitungSebelum(query.sebelum) } : {}) }));
 route("PUT", "/api/reset/kode", "admin", ({ body, ctx }) => {
   cekKodeReset(body.lama, ctx);
   const baru = String(body.baru ?? "");
@@ -121,6 +123,16 @@ route("PUT", "/api/reset/kode", "admin", ({ body, ctx }) => {
 }, { pusatSaja: true });
 route("POST", "/api/reset", "admin", ({ body, ctx, user }) => {
   cekKodeReset(body.kode, ctx);
+  // Hanya transaksi lama: hapus yang tanggalnya sebelum `sebelum`, data sesudahnya tetap.
+  if (body.sebelum != null) {
+    const sebelum = String(body.sebelum);
+    if (!tanggalValid(sebelum)) throw bad("Tanggal tidak valid");
+    return tx(() => {
+      const n = hapusSebelum(sebelum);
+      setSetting("reset_terakhir", { id: Date.now().toString(36), transaksi: false, stok: false, katalog: false, sebelum, oleh: user.nama, waktu: new Date().toISOString() });
+      return { ok: true, dihapus: n, sebelum };
+    });
+  }
   const transaksi = !!body.transaksi, stok = !!body.stok, katalog = !!body.katalog;
   if (!transaksi && !stok && !katalog) throw bad("Pilih data yang mau direset");
   return tx(() => {

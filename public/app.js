@@ -577,6 +577,8 @@ function tawarBaru(kode){
 }
 
 /* ================= layar masuk & setup ================= */
+/** Tanda pembuat aplikasi (layar masuk, setup, dan bawah Pengaturan). */
+const TAG_PEMBUAT = `<p class="tag-pembuat">Dibuat oleh <b>Yudsky Tech</b></p>`;
 /** Tombol kirim form. e.submitter baru ada di Chrome 81+, WebView perangkat lama (mis. iMin) belum punya. */
 const tombolKirim = e => e.submitter || e.target.querySelector('button[type="submit"]');
 function tampilLogin(pesan = ""){
@@ -590,7 +592,7 @@ function tampilLogin(pesan = ""){
     <button class="btn pri big" type="submit">Masuk</button>
     <p class="small muted" style="margin:0">Lupa PIN? Minta admin menggantinya di Pengaturan → Pengguna.</p>
     <div id="lAbsen"></div>
-    <p class="small muted" style="margin:0;text-align:center;opacity:.7">${(() => { try { const i = JSON.parse(NATIVE.info()); return `Aplikasi ${esc(i.versi || "?")} · tampilan #${esc(String(i.web || "?"))}`; } catch { return ""; } })()}</p></form></div>`;
+    <p class="small muted" style="margin:0;text-align:center;opacity:.7">${(() => { try { const i = JSON.parse(NATIVE.info()); return `Aplikasi ${esc(i.versi || "?")} · tampilan #${esc(String(i.web || "?"))}`; } catch { return ""; } })()}</p>${TAG_PEMBUAT}</form></div>`;
   // Perangkat kasir: karyawan bisa absen tanpa masuk
   if (LOKAL) cekKiosk().then(K => { const d = $("#lAbsen"); if (!d || !K || !K.aktif) return;
     d.innerHTML = `<hr class="sep">` + panelAbsen(K, true);
@@ -613,7 +615,7 @@ function tampilSetupKasir(){
     <label class="f">Nama perangkat ini<input type="text" id="kAlat" value="iMin kasir" maxlength="40"></label>
     <div class="err" id="kErr"></div>
     <button class="btn pri big" type="submit">Sambungkan</button>
-    <button class="btn ghost sm" id="kSendiri" type="button">Pakai tanpa server (buat admin baru)</button></form></div>`;
+    <button class="btn ghost sm" id="kSendiri" type="button">Pakai tanpa server (buat admin baru)</button>${TAG_PEMBUAT}</form></div>`;
   $("#kSendiri").onclick = () => tampilSetup(true);
   $("#fKasir").onsubmit = async e => {
     e.preventDefault();
@@ -662,7 +664,7 @@ function tampilSetup(sendiri = false){
     <label class="f">Password (min. 8 karakter)<input type="password" id="sPw" autocomplete="new-password" required minlength="8"></label>
     <label class="f">Ulangi password<input type="password" id="sPw2" autocomplete="new-password" required></label>
     <div class="err" id="sErr"></div>
-    <button class="btn pri big" type="submit">Buat akun admin</button></form></div>`;
+    <button class="btn pri big" type="submit">Buat akun admin</button>${TAG_PEMBUAT}</form></div>`;
   $("#fSetup").onsubmit = async e => {
     e.preventDefault();
     if ($("#sPw").value !== $("#sPw2").value) { $("#sErr").textContent = "Kedua password tidak sama"; return; }
@@ -2407,6 +2409,7 @@ function vAtur(){
         <label class="btn" for="impFile">Pilih file cadangan lama (.json)</label><input type="file" id="impFile" accept=".json,application/json" hidden>
       </section>` : ""}
       ${NATIVE ? `<section class="panel stack" id="aMode"></section>` : ""}
+      ${TAG_PEMBUAT}
     </div>`;
   if (NATIVE) aturMode();
   $("#pK").onchange = e => { D.kertas = +e.target.value; simpanD(); vAtur(); };
@@ -2658,6 +2661,11 @@ async function aturReset(){
     <label class="row" style="flex-wrap:nowrap;align-items:flex-start"><input type="checkbox" id="rsS" style="margin-top:4px;flex:none"> <span><b>Nolkan semua stok</b><br><span class="small muted">Barang tetap ada, stoknya jadi 0 untuk diisi ulang di menu Stok.</span></span></label>
     <label class="row" style="flex-wrap:nowrap;align-items:flex-start"><input type="checkbox" id="rsK" style="margin-top:4px;flex:none"> <span><b>Hapus semua barang</b> (produk jadi & bahan baku)<br><span class="small muted">Katalog dikosongkan, barang dibuat ulang dari awal.</span></span></label>
     <button class="btn danger" id="rsGo" type="button">Hard reset…</button>
+    <hr class="sep">
+    <p class="small" style="margin:0"><b>Hapus transaksi lama saja.</b> Semua transaksi & catatan yang tanggalnya <u>sebelum</u> tanggal ini dihapus (penjualan, pesanan, riwayat stok, produksi, insentif, pengeluaran, absensi, gaji, kasbon). Data mulai tanggal ini tetap. Stok, barang, akun, dan pengaturan tidak berubah.</p>
+    <label class="f">Hapus semua yang sebelum tanggal<input type="date" id="rsTgl" value="${today().slice(0, 8)}15"></label>
+    <div class="small muted" id="rsJml">Menghitung…</div>
+    <button class="btn danger" id="rsLama" type="button">Hapus transaksi lama…</button>
     <details><summary class="small"><b>Ganti kode reset</b> ${R && R.kodeBawaan ? `<span class="pill warn">masih bawaan "OK"</span>` : ""}</summary>
       <div class="stack" style="margin-top:8px">
         <label class="f">Kode reset sekarang<input type="password" id="rkL" autocomplete="off"></label>
@@ -2666,6 +2674,33 @@ async function aturReset(){
         <button class="btn" id="rkOk" type="button">Simpan kode reset</button>
       </div></details>`}`;
   if (pusat) return;
+  const NAMA_TBL = { sales: "penjualan/pesanan", stock_moves: "riwayat stok", produksi: "produksi", insentif_bayar: "bayar insentif", insentif_lain: "insentif lain", kasbon: "kasbon", gaji_bayar: "gaji", expenses: "pengeluaran", absen: "absensi" };
+  const teksJumlah = j => { const a = Object.entries(j || {}).filter(([, n]) => n > 0).map(([t, n]) => `${n} ${NAMA_TBL[t] || t}`); return a.length ? a.join(", ") : "tidak ada"; };
+  let jml = null;
+  const hitung = async () => {
+    const t = $("#rsTgl").value; jml = null;
+    if (!t) { $("#rsJml").textContent = "Pilih tanggal."; return; }
+    $("#rsJml").textContent = "Menghitung…";
+    const r = await api("GET", "/api/reset?sebelum=" + encodeURIComponent(t)).catch(() => null);
+    if (!$("#rsJml") || $("#rsTgl").value !== t) return;
+    jml = r && r.jumlah; $("#rsJml").innerHTML = jml ? `Akan dihapus (sebelum ${esc(tglID(t))}): <b>${esc(teksJumlah(jml))}</b>` : "Gagal menghitung.";
+  };
+  $("#rsTgl").onchange = hitung; hitung();
+  $("#rsLama").onclick = () => {
+    const t = $("#rsTgl").value; if (!t) return toast("Pilih tanggal dulu");
+    modal(`<h3>⚠️ Hapus transaksi lama</h3><p>Semua transaksi & catatan <b>sebelum ${esc(tglHari(t))}</b> dihapus${jml ? `: <b>${esc(teksJumlah(jml))}</b>` : ""}. Tindakan ini <b>tidak bisa dibatalkan</b>${LOKAL ? "" : " dan perangkat kasir yang tersambung ikut menghapusnya saat sinkron"}. Stok barang tidak berubah.</p>
+      <p class="small muted">Saran: unduh cadangan database dulu (bagian Cadangan di bawah).</p>
+      <label class="f">Masukkan kode reset admin<input type="password" id="rsKode2" autocomplete="off" placeholder="Kode reset"></label>
+      <div class="actions"><button class="btn" data-close>Batal</button><button class="btn danger" id="rsYa2" type="button">Hapus sekarang</button></div>`, m => {
+      $("#rsKode2", m).focus();
+      $("#rsYa2", m).onclick = e => coba(async () => {
+        const r = await api("POST", "/api/reset", { sebelum: t, kode: $("#rsKode2", m).value });
+        closeModal(); await muatUlang(); renderNav();
+        toast("Terhapus: " + teksJumlah(r.dihapus)); vAtur();
+        return r;
+      }, e.target);
+    });
+  };
   $("#rsGo").onclick = () => {
     const pilih = { transaksi: $("#rsT").checked, stok: $("#rsS").checked, katalog: $("#rsK").checked };
     if (!pilih.transaksi && !pilih.stok && !pilih.katalog) return toast("Centang data yang mau direset");

@@ -543,6 +543,12 @@ test("hard reset di server → transaksi di perangkat cabang ikut kosong, stok 0
   const hari = BC.hariIni;
   assert.ok((await cabang("GET", `/api/penjualan?dari=2000-01-01&sampai=${hari}`)).data.length > 0);
   assert.equal((await cabang("POST", "/api/reset", { kode: "OK", transaksi: true })).status, 409, "reset dari server pusat");
+  // Hapus transaksi lama saja (sebelum hari ini): transaksi hari ini di perangkat tetap ada
+  const adaHariIni = (await cabang("GET", `/api/penjualan?dari=${hari}&sampai=${hari}`)).data.length;
+  assert.equal((await pusat("POST", "/api/reset", { kode: "OK", sebelum: hari })).status, 200);
+  await sinkron(); await segarkan();
+  assert.equal((await cabang("GET", `/api/penjualan?dari=${hari}&sampai=${hari}`)).data.length, adaHariIni, "hari ini tidak ikut terhapus");
+  assert.ok(adaHariIni > 0);
   assert.equal((await pusat("POST", "/api/reset", { kode: "OK", transaksi: true, stok: true })).status, 200);
   const st = await sinkron(); await segarkan();
   assert.equal(st.ditolak, 0);

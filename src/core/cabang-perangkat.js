@@ -7,6 +7,7 @@ import { one, all, run, tx, getSettings, setSetting, tandaiBerubah } from "./db.
 import { platform } from "./platform.js";
 import { HttpError, sekarang } from "./util.js";
 import { TABEL_DATA, eksporData } from "./ekspor.js";
+import { hapusSebelum, tanggalValid } from "./hapus-transaksi.js";
 
 export const PESAN_PUSAT = "Perangkat ini tersambung ke server pusat. Ubah data ini di server pusat; hasilnya otomatis masuk ke perangkat ini.";
 
@@ -190,6 +191,7 @@ export function terapkanSnapshot(snap){
       setSetting("cabang_reset", rs.id);
       if (kenal != null) {
         if (rs.transaksi) for (const t of ["sale_items", "sales", "stock_moves", "produksi", "insentif_bayar", "insentif_lain", "kasbon", "gaji_bayar", "expenses", "absen", "outbox"]) run(`DELETE FROM ${t}`);
+        if (!rs.transaksi && tanggalValid(rs.sebelum)) hapusSebelum(rs.sebelum); // hapus transaksi lama saja
         if (rs.katalog) for (const t of ["products", "materials"]) run(`UPDATE ${t} SET dihapus = datetime('now'), barcode = NULL WHERE dihapus IS NULL`);
       }
     }
