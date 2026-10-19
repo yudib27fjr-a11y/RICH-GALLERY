@@ -86,7 +86,7 @@ export function statusCabang(){
     aktif: cabangAktif(), url: s.cabang_url || "", kode: s.cabang_kode || "", nama: s.cabang_nama || "",
     menunggu: n("SELECT COUNT(*) n FROM cabang_kirim WHERE terkirim IS NULL"),
     ditolak: n("SELECT COUNT(*) n FROM cabang_kirim WHERE hasil = 'ditolak'"),
-    galatTerakhir: s.cabang_galat || "", terakhir: s.cabang_terakhir || null,
+    galatTerakhir: s.cabang_galat || "", terakhir: s.cabang_terakhir || null, dicabut: !!s.cabang_dicabut,
     ditolakDaftar: all("SELECT aksi, galat, dibuat, data FROM cabang_kirim WHERE hasil = 'ditolak' ORDER BY id DESC LIMIT 10")
       .map(r => { let no = ""; try { no = JSON.parse(r.data).no || ""; } catch { /* abaikan */ } return { aksi: r.aksi, galat: r.galat, dibuat: r.dibuat, no }; }),
   };
@@ -134,8 +134,9 @@ export async function sinkronCabang({ paksa = false } = {}){
     }
     setSetting("cabang_terakhir", new Date().toISOString());
     setSetting("cabang_galat", "");
+    if (getSettings().cabang_dicabut) setSetting("cabang_dicabut", false);
   } catch (e) {
-    if (e.status === 401) setSetting("cabang_galat", "Perangkat ini sudah dicabut dari server pusat. Sambungkan ulang di Pengaturan.");
+    if (e.status === 401) { setSetting("cabang_dicabut", true); setSetting("cabang_galat", "Perangkat ini sudah dicabut dari server pusat. Admin: Pengaturan → Server pusat → Sambungkan ulang."); }
     else setSetting("cabang_galat", String(e.message || e).slice(0, 300));
   } finally {
     jalan = false;
@@ -364,6 +365,28 @@ export async function sambungCabang({ url, nama, password, perangkat, paksa, ung
     // Transaksi yang dibuat di perangkat ini sebelum tersambung ikut dikirim ke server (server melewati yang sudah ada).
     if (kirimLama) antreTransaksiLama();
   });
+  return sinkronCabang({ paksa: true });
+}
+
+/** Perangkat dicabut / tidak dikenal lagi oleh server pusat: daftar ulang ke server YANG SAMA dengan akun admin server.
+ *  Transaksi yang belum terkirim TIDAK hilang: tetap di antrean dan langsung dikirim memakai tanda pengenal baru
+ *  (server melewati yang sudah pernah diterima). */
+export async function sambungUlangCabang({ nama, password }){
+  if (!cabangAktif()) throw new HttpError(409, "Perangkat ini belum tersambung ke server pusat");
+  const s = getSettings();
+  let j;
+  try { j = await panggil(s.cabang_url, "/api/cabang/daftar", { nama, password, perangkat: s.cabang_nama || "Perangkat kasir", paksa: true }); }
+  catch (e) { throw galatPusat(e); }
+  tx(() => {
+    setSetting("cabang_token", j.token);
+    setSetting("cabang_kode", j.kode);
+    setSetting("cabang_nama", j.nama);
+    setSetting("cabang_galat", "");
+    setSetting("cabang_dicabut", false);
+    // Yang tadi ditolak karena perangkat dicabut ikut dicoba lagi.
+    run("UPDATE cabang_kirim SET hasil = NULL, galat = NULL WHERE terkirim IS NULL AND hasil = 'ditolak' AND galat LIKE '%dicabut%'");
+  });
+  versiServer = "";
   return sinkronCabang({ paksa: true });
 }
 

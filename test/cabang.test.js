@@ -626,6 +626,25 @@ test("admin di aplikasi perangkat bisa melihat & mengizinkan absen perangkat (di
   assert.equal((await cabang("GET", "/api/absen/kiosk")).status, 200);
 });
 
+test("perangkat dicabut di server: tetap masuk, transaksi menunggu, sambungkan ulang → terkirim", async () => {
+  await sinkron();
+  const st0 = (await cabang("GET", "/api/cabang")).data;
+  const ini = (await pusat("GET", "/api/cabang/perangkat")).data.find(x => x.kode === st0.kode);
+  assert.equal((await pusat("DELETE", `/api/cabang/perangkat/${ini.id}`)).status, 200);
+  const j = await cabang("POST", "/api/penjualan", { items: [{ nama: "custom dicabut", harga: 123000, qty: 1 }] });
+  assert.equal(j.status, 200, JSON.stringify(j.data));
+  let st = await sinkron();
+  assert.equal(st.dicabut, true); assert.equal(st.menunggu, 1);
+  // Halaman yang diteruskan ke server tidak mengeluarkan pengguna (bukan 401)
+  assert.equal((await cabang("GET", "/api/cabang/perangkat")).status, 403);
+  assert.equal((await cabang("GET", "/api/bootstrap")).status, 200, "masih masuk");
+  assert.equal((await cabang("POST", "/api/cabang/sambung-ulang", { nama: "Yudi", password: "salah" })).status, 403);
+  st = (await cabang("POST", "/api/cabang/sambung-ulang", { nama: "Yudi", password: "rahasia-123" })).data;
+  assert.equal(st.dicabut, false); assert.equal(st.menunggu, 0); assert.equal(st.galatTerakhir, "");
+  const hari = BC.hariIni;
+  assert.ok((await pusat("GET", `/api/penjualan?dari=${hari}&sampai=${hari}`)).data.some(x => x.no === j.data.no), "transaksi sampai di server");
+});
+
 test("perangkat baru yang sudah punya penjualan: sambung dengan kirim transaksi lama → masuk server, stok berkurang", async () => {
   const PORT_D = PORT_C + 9;
   await nyalakan(PORT_D, "cabang3");

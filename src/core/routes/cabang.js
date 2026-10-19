@@ -10,7 +10,7 @@ import { cekPassword, cekBatasLogin, catatGagal, resetGagal } from "../auth.js";
 import { muatPenjualan, hapusPenjualan } from "./penjualan.js";
 import { rekapAbsen, terimaAbsen, fotoAbsen, cekLokasi, lemburPeriode } from "./absen.js";
 import { rekapGaji, daftarKasbon } from "./gaji.js";
-import { statusCabang, sinkronCabang, sambungCabang, putusCabang, gantiNamaPerangkat, kirimUlangDitolak, cabangAktif, mintaPusat } from "../cabang-perangkat.js";
+import { statusCabang, sinkronCabang, sambungCabang, sambungUlangCabang, putusCabang, gantiNamaPerangkat, kirimUlangDitolak, cabangAktif, mintaPusat } from "../cabang-perangkat.js";
 
 /* ================= di perangkat ================= */
 route("GET", "/api/cabang", "admin", () => statusCabang());
@@ -23,6 +23,8 @@ route("POST", "/api/cabang/sambung", "admin", async ({ body }) => sambungCabang(
   unggahAwal: !!body.unggahAwal,
   kirimLama: !!body.kirimLama,
 }), { batas: 100_000 });
+route("POST", "/api/cabang/sambung-ulang", "admin", ({ body }) => sambungUlangCabang({
+  nama: teks(body.nama, { wajib: true, max: 40, nama: "Nama admin server" }), password: String(body.password ?? "") }));
 route("POST", "/api/cabang/putus", "admin", ({ body }) => putusCabang({ paksa: !!body.paksa }));
 route("GET", "/api/cabang/ringkas", "semua", () => { const s = statusCabang(); return { aktif: s.aktif, menunggu: s.menunggu, ditolak: s.ditolak, galat: s.galatTerakhir, terakhir: s.terakhir }; });
 route("POST", "/api/cabang/sinkron", "semua", () => sinkronCabang({ paksa: true }));

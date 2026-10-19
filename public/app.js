@@ -2856,6 +2856,8 @@ async function aturCabang(){
       <button class="btn" id="cbUlang" type="button">Kirim ulang yang ditolak</button>` : ""}
     <p class="small muted" style="margin:0">Sinkron berjalan otomatis setiap ada transaksi, dan memeriksa data baru tiap 10 detik selama aplikasi terbuka dan ada internet. Tarik layar ke bawah untuk sinkron seketika. Produk, akun dan pengaturan toko diubah di server pusat.</p>
     ${![SERVER_TOKO, "https://rich-gallery-pos.yudi-b27fjr.workers.dev"].includes(st.url.replace(/\/+$/, "")) ? `<p class="note" style="margin:0">Server toko sekarang ada di Cloudflare: <b>${esc(SERVER_TOKO)}</b>. Untuk pindah: tekan <b>Putuskan</b> (setelah semua transaksi terkirim), lalu sambungkan lagi. Alamat Cloudflare sudah terisi otomatis.</p>` : ""}
+    ${st.dicabut ? `<div class="note" style="margin:0"><b>Perangkat ini dicabut dari server pusat.</b> Transaksi di perangkat ini tetap aman dan belum hilang. Tekan <b>Sambungkan ulang</b> lalu masukkan akun admin server; transaksi yang menunggu langsung dikirim.</div>
+      <button class="btn pri big" id="cbSU" type="button">🔄 Sambungkan ulang</button>` : ""}
     <div class="row"><button class="btn pri" id="cbSync" type="button">Sinkron sekarang</button><button class="btn" id="cbNama" type="button">Ganti nama perangkat</button><button class="btn" id="cbPutus" type="button">Putuskan</button></div>
     <hr class="sep"><div class="stack" id="cbPerangkat"><div class="empty small">Memuat daftar perangkat…</div></div>`;
   daftarPerangkatCabang($("#cbPerangkat"), st.kode).catch(() => { const x = $("#cbPerangkat"); if (x) x.innerHTML = `<p class="small muted" style="margin:0">Daftar perangkat belum bisa dimuat (butuh internet).</p>`; });
@@ -2864,6 +2866,18 @@ async function aturCabang(){
     <p class="small muted" style="margin:0">Nama ini tampil di server pusat. Seri nota (${esc(st.kode)}) tidak berubah. Butuh internet.</p>
     <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="pok" type="button">Simpan</button></div>`, m => {
     $("#pok", m).onclick = e => coba(async () => { await api("POST", "/api/cabang/nama", { nama: $("#pn", m).value }); closeModal(); toast("Nama perangkat diganti"); aturCabang(); }, e.target);
+  });
+  const su = $("#cbSU"); if (su) su.onclick = () => modal(`<h3>Sambungkan ulang ke server pusat</h3>
+    <p class="small" style="margin:0">Server: <b>${esc(st.url)}</b>. Masukkan akun <b>admin di server</b>. Transaksi yang belum terkirim (${st.menunggu}) tidak hilang dan langsung dikirim.</p>
+    <label class="f">Nama admin server<input type="text" id="suN" autocapitalize="none" autocorrect="off" spellcheck="false" value="${esc(B.me.peran === "admin" ? B.me.nama : "")}"></label>
+    <label class="f">Password admin server<input type="password" id="suP" autocomplete="off"></label>
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="suOk" type="button">Sambungkan ulang</button></div>`, m => {
+    $("#suOk", m).onclick = e => coba(async () => {
+      const r = await api("POST", "/api/cabang/sambung-ulang", { nama: $("#suN", m).value, password: $("#suP", m).value });
+      closeModal(); await muatUlang();
+      toast(r.galatTerakhir ? "Tersambung, tapi: " + r.galatTerakhir : r.menunggu ? `Tersambung. ${r.menunggu} transaksi masih menunggu` : "Tersambung ulang. Semua transaksi terkirim ✅");
+      aturCabang(); cekSync();
+    }, e.target);
   });
   const cu = $("#cbUlang"); if (cu) cu.onclick = e => coba(async () => { const r = await api("POST", "/api/cabang/kirim-ulang"); await muatUlang(); toast(r.ditolak ? `${r.ditolak} masih ditolak` : `${r.dikirimUlang} transaksi berhasil dikirim ulang`); aturCabang(); cekSync(); }, e.target);
   $("#cbSync").onclick = e => coba(async () => { const r = await api("POST", "/api/cabang/sinkron"); await muatUlang(); toast(r.galatTerakhir ? "Belum terkirim: " + r.galatTerakhir : r.menunggu ? `${r.menunggu} masih menunggu` : "Sinkron selesai"); aturCabang(); cekSync(); }, e.target);
