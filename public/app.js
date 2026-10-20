@@ -3158,8 +3158,16 @@ async function bukaTautanNotif(){
   if (!s) return;
   if (v === "pesanan") detailPesanan(s); else lihatStruk(s);
 }
-// Aplikasi sudah terbuka saat notifikasi diketuk: alamat berubah tanpa memuat ulang.
+// Aplikasi sudah terbuka saat notifikasi diketuk: alamat berubah tanpa memuat ulang / pesan dari sw.js.
 window.addEventListener("hashchange", () => { if (location.hash.includes("?")) bukaTautanNotif(); });
+if (!LOKAL && "serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("message", e => {
+    const u = e.data && e.data.rgBuka; if (!u) return;
+    try { const h = new URL(u, location.origin).hash; if (h.includes("?")) { history.replaceState(null, "", h); bukaTautanNotif(); } } catch { /* abaikan */ }
+  });
+  // Pakai sw.js terbaru (aturan buka notifikasi bisa berubah).
+  navigator.serviceWorker.getRegistration("/").then(r => r && r.update()).catch(() => {});
+}
 /** Halaman berhasil tampil: konfirmasi ke aplikasi (jaring pengaman pembaruan), lalu tampilkan pembaruan yang menunggu. */
 function halamanTampil(){
   try { NATIVE?.webSiap?.(); const s = NATIVE?.statusPembaruan?.(); if (s) { const o = JSON.parse(s); if (o.jenis === "web") tawarkanWebBila(o.teks); else window.rgPembaruan(o.jenis, o.teks); } } catch {}

@@ -38,7 +38,13 @@ self.addEventListener("notificationclick", e => {
   const url = new URL((e.notification.data && e.notification.data.url) || "/", self.location.origin).href;
   e.waitUntil((async () => {
     const semua = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    for (const c of semua) { if (c.url.startsWith(self.location.origin)) { await c.focus(); try { await c.navigate(url); } catch { /* abaikan */ } return; } }
+    const c = semua.find(x => x.url.startsWith(self.location.origin));
+    if (c) {
+      // Aplikasi sudah terbuka: minta halaman membuka isinya sendiri (navigate() tidak selalu jalan di iPhone/Android).
+      try { await c.focus(); } catch { /* abaikan */ }
+      c.postMessage({ rgBuka: url });
+      return;
+    }
     await self.clients.openWindow(url);
   })());
 });
