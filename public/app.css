@@ -300,3 +300,7 @@ input.sIn.berubah{background:#fff4c2;border-color:#d9a400;color:#1c2420}
 /* Tanda pembuat aplikasi */
 .tag-pembuat{margin:0;text-align:center;font-size:12px;color:var(--muted,#888);opacity:.75;letter-spacing:.02em}
 .tag-pembuat b{font-weight:700;color:inherit}
+
+/* Baris yang dibuka dari notifikasi: disorot sebentar */
+.li.sorot{animation:sorot 2.4s ease-out}
+@keyframes sorot{0%,35%{background:var(--accent-soft)}100%{background:transparent}}

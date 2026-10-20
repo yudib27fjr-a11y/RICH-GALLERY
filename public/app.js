@@ -1424,7 +1424,7 @@ async function vRiwayat(){
   let t; $("#rQ").oninput = e => { rQ = e.target.value; clearTimeout(t); t = setTimeout(muatRiwayat, 300); };
   const hs = $("#rHapusSemua"); if (hs) hs.onclick = hapusRentang;
   const rp_ = $("#rPel"); if (rp_) rp_.onclick = dataPelanggan;
-  muatRiwayat();
+  await muatRiwayat();
 }
 async function muatRiwayat(){
   await coba(async () => {
@@ -3137,26 +3137,26 @@ async function mulai(){
   bukaTautanNotif();
   setTimeout(pengingatPesanan, 800);
 }
-/** Ketuk notifikasi → langsung ke isinya: #riwayat?id=… (struk transaksi), #pesanan?id=… (rincian pesanan),
- *  #absen?tgl=…&u=… (rincian absen karyawan hari itu, dengan foto selfie). */
+/** Ketuk notifikasi → langsung ke halamannya: transaksi & pesanan → halaman Transaksi (baris transaksinya disorot),
+ *  absen → Rekap Absen tanggal itu (baris karyawannya disorot). */
+const sorotBaris = el => { if (!el) return; el.scrollIntoView({ block: "center" }); el.classList.remove("sorot"); void el.offsetWidth; el.classList.add("sorot"); };
 async function bukaTautanNotif(){
   const [v, q] = location.hash.slice(1).split("?");
   if (!q || !B) return;
-  try { history.replaceState(null, "", "#" + v); } catch {}
-  if (!daftarView().some(x => x[0] === v)) return;
   const p = new URLSearchParams(q);
+  const tujuan = v === "absen" ? "absen" : "riwayat"; // pesanan juga ke halaman Transaksi
+  try { history.replaceState(null, "", "#" + tujuan); } catch {}
+  if (!daftarView().some(x => x[0] === tujuan)) return;
   closeModal();
-  if (v === "absen" && /^\d{4}-\d{2}-\d{2}$/.test(p.get("tgl") || "")) {
-    aDari = aSampai = p.get("tgl"); view = "absen"; await render();
-    const r = $(`#aIsi .li[data-k="${p.get("tgl")}|${+p.get("u") || 0}"]`);
-    if (r) { r.scrollIntoView({ block: "center" }); r.click(); }
+  if (tujuan === "absen") {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(p.get("tgl") || "")) aDari = aSampai = p.get("tgl");
+    view = "absen"; await render();
+    sorotBaris($(`#aIsi .li[data-k="${p.get("tgl")}|${+p.get("u") || 0}"]`));
     return;
   }
-  const id = +p.get("id"); if (!id) return;
-  if (view !== v) { view = v; await render(); }
-  const s = await api("GET", `/api/penjualan/${id}`).catch(e => { toast(e.message); return null; });
-  if (!s) return;
-  if (v === "pesanan") detailPesanan(s); else lihatStruk(s);
+  rQ = ""; if (isAdmin()) rDari = rSampai = today(); // notifikasi = transaksi baru: tampilkan hari ini tanpa saringan
+  view = "riwayat"; await render();
+  sorotBaris($(`#rList .li[data-id="${+p.get("id") || 0}"]`));
 }
 // Aplikasi sudah terbuka saat notifikasi diketuk: alamat berubah tanpa memuat ulang / pesan dari sw.js.
 window.addEventListener("hashchange", () => { if (location.hash.includes("?")) bukaTautanNotif(); });

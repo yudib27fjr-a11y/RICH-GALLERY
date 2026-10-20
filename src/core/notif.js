@@ -54,7 +54,7 @@ export function antreNotifPenjualan({ id, total, bayar, metode, pelanggan, items
     judul = `🛍️ Transaksi baru · ${rp(total)}`;
     isi = `${plg} · ${metode}\n${barang} · kasir ${judulBesar(kasir)}`;
   }
-  antreNotif(judul, isi, pesanan ? `/#pesanan?id=${id}` : `/#riwayat?id=${id}`); // ketuk notifikasi → langsung terbuka transaksinya
+  antreNotif(judul, isi, `/#riwayat?id=${id}`); // ketuk notifikasi → halaman Transaksi, baris transaksinya disorot
 }
 
 let mengirim = false;
