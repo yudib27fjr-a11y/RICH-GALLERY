@@ -347,6 +347,9 @@ UPDATE settings SET nilai = '4300' WHERE kunci = 'lembur_per_jam' AND nilai = '0
 
 /* 11: desain kartu ucapan baru (pita merah @RichGallery, 120 × 90 mm), teks di bagian kosong desain. */
 `INSERT OR REPLACE INTO settings(kunci, nilai) VALUES ('kartu_lebar', '120'), ('kartu_tinggi', '90'), ('kartu_latar_kode', '"bawaan:pita"'), ('kartu_latar', '""'), ('kartu_area', '"desain"');`,
+
+/* 12: kartu yang dipakai sekarang: desain bunga @Rich_Galleryimy (120 × 90 mm). Hanya mengganti bila masih desain pita. */
+`UPDATE settings SET nilai = '"bawaan:bunga"' WHERE kunci = 'kartu_latar_kode' AND nilai = '"bawaan:pita"';`,
 ];
 
 export const DEFAULT_SETTINGS = {
@@ -382,7 +385,7 @@ export const DEFAULT_SETTINGS = {
   kartu_warna: "#3a2a2a",
   kartu_area: "desain",
   kartu_latar: "",
-  kartu_latar_kode: "bawaan:pita",
+  kartu_latar_kode: "bawaan:bunga",
   canva_email: "",
   wa_nomor: "",
   // Absensi sidik jari

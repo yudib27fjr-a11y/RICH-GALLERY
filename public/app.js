@@ -1078,7 +1078,10 @@ function pasangTombolKartu(akar, teks){
 /* ---------- Kartu ucapan seukuran desain Canva: teks ucapan pelanggan di atas latar desain ---------- */
 const PX_MM = 12; // ± 300 dpi
 /** Desain kartu bawaan toko (ikut di aplikasi, bisa offline). area = bagian kosong untuk teks [x, y, lebar, tinggi] dalam pecahan gambar. */
-const LATAR_BAWAAN = { pita: { src: "/kartu/pita.jpg", nama: "Pita merah @RichGallery (120 × 90 mm)", lebar: 120, tinggi: 90, area: [0.1125, 0.3125, 0.7375, 0.4534] } };
+const LATAR_BAWAAN = {
+  bunga: { src: "/kartu/bunga.jpg", nama: "Bunga @Rich_Galleryimy", ikon: "💐", lebar: 120, tinggi: 90, area: [0.19, 0.17, 0.62, 0.66] }, // area simetris → teks tepat di tengah kartu, tidak kena logo & buket
+  pita: { src: "/kartu/pita.jpg", nama: "Pita merah @RichGallery", ikon: "🎀", lebar: 120, tinggi: 90, area: [0.1125, 0.3125, 0.7375, 0.4534] },
+};
 const latarBawaan = kode => String(kode || "").startsWith("bawaan:") ? LATAR_BAWAAN[String(kode).slice(7)] || null : null;
 let latarKartu = { kode: "", img: null }, fontKustom = "";
 /** Aset kartu dari server (latar desain & font unggahan), disimpan di perangkat supaya cepat & bisa offline. */
@@ -1156,7 +1159,7 @@ async function gambarKartu(teks, o = {}){
     });
     return out;
   };
-  let size = Math.min(ah / 3, aw / 8) * skala, L;
+  let size = Math.min(ah / 3, aw / 8) * skala * 0.8, L; // ukuran awal (ucapan pendek); ucapan panjang otomatis mengecil
   for (let n = 0; n < 40; n++) {
     L = susun(size);
     const tinggiTeks = L.reduce((a, l) => a + l.sz * 1.3, 0);
@@ -2564,7 +2567,7 @@ async function aturKartu(){
     <p class="small muted" style="margin:0">"Grown" adalah font khusus Canva yang tidak bisa diunduh, jadi dipakai huruf gratis yang paling mirip (Gloock). Bila punya file font sendiri (.ttf / .otf), unggah di sini lalu pilih <b>Font unggahan sendiri</b>.</p>
     ${pusat ? "" : `<div class="row"><label class="btn sm" for="kaFont">Unggah file font</label><input type="file" id="kaFont" accept=".ttf,.otf,.woff,.woff2,font/*" hidden><span class="small muted" id="kaFontKet">${s.kartu_font_kode ? "Font sendiri sudah tersimpan." : ""}</span></div>`}
     <p class="small" style="margin:0"><b>Latar desain (opsional):</b> di Canva tekan <b>Bagikan → Unduh → PNG/JPG</b>, lalu pilih file itu di sini. Ucapan pelanggan dicetak di atas desain tersebut. Pilih posisi teks di bagian kosong desain.</p>
-    ${pusat ? "" : `<div class="row"><button class="btn sm" id="kaPita" type="button">🎀 Pakai desain pita Rich Gallery (120 × 90 mm)</button></div>`}
+    ${pusat ? "" : `<div class="row" style="flex-wrap:wrap">${Object.entries(LATAR_BAWAAN).map(([k, d]) => `<button class="btn sm" data-bawaan="${k}" type="button">${d.ikon} Pakai desain ${esc(d.nama)} (${d.lebar} × ${d.tinggi} mm)</button>`).join("")}</div>`}
     ${pusat ? "" : `<div class="row"><label class="btn sm" for="kaFile">Pilih gambar desain</label><input type="file" id="kaFile" accept="image/png,image/jpeg" hidden><button class="btn sm ghost" id="kaHapus" type="button" ${s.kartu_latar_kode ? "" : "hidden"}>Hapus latar</button></div>`}
     <div class="kartu-pratinjau"><canvas id="kaCv"></canvas></div>
     ${pusat ? "" : `<button class="btn pri" id="kaSimpan" type="button">Simpan pengaturan kartu</button>`}`;
@@ -2584,11 +2587,11 @@ async function aturKartu(){
       contoh();
     }; r.readAsDataURL(file); };
   const hp = $("#kaHapus"); if (hp) hp.onclick = () => { latarBaru = ""; latarImg = null; latarKode = ""; hp.hidden = true; contoh(); };
-  const kp = $("#kaPita"); if (kp) kp.onclick = async () => {
-    const bw = LATAR_BAWAAN.pita; latarBaru = "bawaan:pita"; latarKode = "bawaan:pita"; latarImg = await muatGambar(bw.src);
+  $$("[data-bawaan]", $("#aKartu")).forEach(kp => kp.onclick = async () => {
+    const k = kp.dataset.bawaan, bw = LATAR_BAWAAN[k]; latarBaru = "bawaan:" + k; latarKode = latarBaru; latarImg = await muatGambar(bw.src);
     $("#kaL").value = bw.lebar; $("#kaT").value = bw.tinggi; $("#kaA").value = "desain"; $("#kaHapus").hidden = false; contoh();
-    toast("Desain pita dipilih. Tekan Simpan pengaturan kartu.");
-  };
+    toast(`Desain ${bw.nama} dipilih. Tekan Simpan pengaturan kartu.`);
+  });
   const ff = $("#kaFont"); if (ff) ff.onchange = e => { const file = e.target.files[0]; if (!file) return; e.target.value = "";
     if (file.size > 1_400_000) return toast("File font terlalu besar (maks ± 1,4 MB)");
     const r = new FileReader(); r.onload = () => { fontBaru = String(r.result); $("#kaH").value = "kustom"; $("#kaFontKet").textContent = file.name + " — belum disimpan"; contoh(); }; r.readAsDataURL(file); };
