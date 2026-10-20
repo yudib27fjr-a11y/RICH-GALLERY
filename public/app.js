@@ -1130,7 +1130,9 @@ async function gambarKartu(teks, o = {}){
   const latar = o.latarImg !== undefined ? o.latarImg : await ambilLatarKartu();
   const bw = latarBawaan(o.latarKode !== undefined ? o.latarKode : t.kartu_latar_kode);
   // Desain bawaan: digambar memenuhi kartu persis (semua hiasan tampil); gambar unggahan: dipotong menyesuaikan.
-  if (latar && bw) g.drawImage(latar, 0, 0, W, H);
+  // polos: hanya teks (untuk dicetak di kartu yang desainnya sudah tercetak); posisi teks tetap sama seperti pratinjau.
+  if (o.polos) { /* tanpa gambar latar */ }
+  else if (latar && bw) g.drawImage(latar, 0, 0, W, H);
   else if (latar) { const s = Math.max(W / latar.width, H / latar.height); g.drawImage(latar, (W - latar.width * s) / 2, (H - latar.height * s) / 2, latar.width * s, latar.height * s); }
   // Area teks
   const m = Math.min(W, H) * 0.09;
@@ -1182,7 +1184,7 @@ function bukaPdfKartuHP(kanvas, lebar, tinggi, jendela){
 }
 async function cetakKartuKertas(teks, jendela){
   const lebar = Number(B.toko.kartu_lebar) || 100, tinggi = Number(B.toko.kartu_tinggi) || 70;
-  const c = await gambarKartu(teks);
+  const c = await gambarKartu(teks, { polos: true }); // hasil cetak: teks saja, tanpa gambar desain
   if (NATIVE && versiApi() < 6) return toast("Cetak kartu butuh aplikasi versi terbaru. Sementara pakai Unduh gambar.");
   // iPhone/iPad tidak bisa memakai ukuran kertas bebas & mengecilkan halaman web saat dicetak:
   // cetak lewat PDF seukuran kertas biasa, kartu tetap 100% ukuran asli + garis potong.
@@ -1205,19 +1207,42 @@ function bukaKartu(teks){
     <div class="kartu-pratinjau"><canvas id="kCv"></canvas></div>
     ${!NATIVE && apakahIOS() ? `<label class="f">Kertas di printer (cetak dari iPhone)<select id="kKertas">${Object.keys(KERTAS_HP).map(k => `<option ${k === kertasHP() ? "selected" : ""}>${k}</option>`).join("")}</select></label>
       <p class="small muted" style="margin:0">iPhone tidak bisa memilih ukuran kertas bebas. Kartu dicetak di kertas biasa dengan ukuran asli ${lebar} × ${tinggi} mm dan garis potong.</p>` : ""}
-    <div class="actions" style="flex-wrap:wrap"><button class="btn" data-close>Tutup</button><button class="btn" id="kStruk" type="button">Cetak di printer struk</button><button class="btn" id="kUnduh" type="button">Unduh gambar</button><button class="btn" id="kPdf" type="button">PDF polos</button><button class="btn pri" id="kCetak" type="button">Cetak kartu</button></div>`, m => {
-    let t;
-    const gambar = async () => { const c = await gambarKartu($("#kTeks", m).value), cv = $("#kCv", m); if (!cv) return; cv.width = c.width; cv.height = c.height; cv.getContext("2d").drawImage(c, 0, 0); return c; };
+    <p class="small muted" style="margin:0">Gambar di atas hanya contoh tampilan. Hasil cetak, unduhan, dan PDF <b>polos (teks saja)</b> di posisi yang sama, untuk dicetak di kartu yang desainnya sudah ada.</p>
+    <div class="actions" style="flex-wrap:wrap"><button class="btn" data-close>Tutup</button><button class="btn" id="kStruk" type="button">Cetak di printer struk</button><button class="btn" id="kUnduh" type="button">${apakahIOS() && !NATIVE ? "Simpan gambar" : "Unduh gambar"}</button><button class="btn" id="kPdf" type="button">PDF</button><button class="btn pri" id="kCetak" type="button">Cetak kartu</button></div>`, m => {
+    let t, siap = null; // hasil polos terakhir (PNG & PDF) disiapkan lebih dulu, supaya tombol di iPhone langsung jalan
+    const gambar = async () => {
+      const teksNow = $("#kTeks", m).value;
+      const [c, p] = await Promise.all([gambarKartu(teksNow), gambarKartu(teksNow, { polos: true })]);
+      const cv = $("#kCv", m); if (!cv) return;
+      cv.width = c.width; cv.height = c.height; cv.getContext("2d").drawImage(c, 0, 0);
+      const png = await new Promise(r => p.toBlob(r, "image/png"));
+      siap = { teks: teksNow, kanvas: p, png, nama: `kartu-ucapan-${Date.now()}` };
+      return p;
+    };
+    const hasil = async () => (siap && siap.teks === $("#kTeks", m).value) ? siap : (await gambar(), siap);
+    const keBiner = biner => { const u8 = new Uint8Array(biner.length); for (let i = 0; i < biner.length; i++) u8[i] = biner.charCodeAt(i); return u8; };
+    /** iPhone: bagikan file (Simpan Gambar / Cetak / Simpan ke File). Gagal → buka di tab baru. */
+    const bagikan = async (blob, nama, cadangan) => {
+      const f = new File([blob], nama, { type: blob.type });
+      try { if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f] }); return; } }
+      catch (e) { if (e && e.name === "AbortError") return; }
+      const u = URL.createObjectURL(blob); if (cadangan && !cadangan.closed) cadangan.location.href = u; else location.href = u;
+    };
     $("#kTeks", m).oninput = () => { clearTimeout(t); t = setTimeout(gambar, 250); };
-    // iPhone: jendela PDF dibuka langsung saat tombol ditekan (kalau menunggu, Safari memblokirnya).
-    $("#kCetak", m).onclick = () => cetakKartuKertas($("#kTeks", m).value, !NATIVE && apakahIOS() ? window.open("", "_blank") : null);
+    const iosWeb = !NATIVE && apakahIOS();
+    $("#kCetak", m).onclick = () => cetakKartuKertas($("#kTeks", m).value, iosWeb ? window.open("", "_blank") : null);
     const kh = $("#kKertas", m); if (kh) kh.onchange = () => { try { localStorage.setItem("rg_kertas_hp", kh.value); } catch {} };
-    $("#kPdf", m).onclick = async () => { const c = await gambar(); simpanPdf(`kartu-ucapan-${Date.now()}.pdf`, buatPdf(c, lebar, tinggi)); };
+    $("#kPdf", m).onclick = async () => {
+      const h = await hasil(), biner = buatPdf(h.kanvas, lebar, tinggi);
+      if (iosWeb) return bagikan(new Blob([keBiner(biner)], { type: "application/pdf" }), h.nama + ".pdf");
+      simpanPdf(h.nama + ".pdf", biner);
+    };
     $("#kStruk", m).onclick = () => cetakKartu($("#kTeks", m).value);
     $("#kUnduh", m).onclick = async () => {
-      const c = await gambar(), url = c.toDataURL("image/png"), nama = `kartu-ucapan-${Date.now()}.png`;
-      if (NATIVE && NATIVE.simpanFile) { const lok = NATIVE.simpanFile(nama, "image/png", url.split(",")[1]); toast(lok ? `Tersimpan di ${lok}` : "Gagal menyimpan"); return; }
-      const a = document.createElement("a"); a.href = url; a.download = nama; document.body.appendChild(a); a.click(); a.remove();
+      const h = await hasil(), nama = h.nama + ".png";
+      if (NATIVE && NATIVE.simpanFile) { const lok = NATIVE.simpanFile(nama, "image/png", h.kanvas.toDataURL("image/png").split(",")[1]); toast(lok ? `Tersimpan di ${lok}` : "Gagal menyimpan"); return; }
+      if (iosWeb) return bagikan(h.png, nama);
+      const a = document.createElement("a"); a.href = URL.createObjectURL(h.png); a.download = nama; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
     };
     gambar();
   });
