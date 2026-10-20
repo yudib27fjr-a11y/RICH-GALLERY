@@ -1185,9 +1185,29 @@ function bukaPdfKartuHP(kanvas, lebar, tinggi, jendela){
   if (jendela && !jendela.closed) jendela.location.href = url; else location.href = url;
   toast(`Pilih kertas ${k} saat mencetak. Kartu tercetak ${lebar} × ${tinggi} mm, gunting di garis potong.`);
 }
+/* Kertas kartu di printer (per perangkat). Printer Epson L3250 tidak punya ukuran 120 × 90 mm, jadi kartu dimasukkan
+   TEGAK dengan ukuran kertas 3,5 × 5 in (9 × 13 cm = 88,9 × 127 mm): lebar kertas = lebar kartu (90 mm).
+   Gambar kartu diputar & ditaruh di atas halaman, jadi teks jatuh tepat di tempatnya. */
+const KERTAS_KARTU = {
+  epson: { nama: "Epson 3,5 × 5 in / 9 × 13 cm (kartu dimasukkan tegak)", lebar: 88.9, tinggi: 127, putar: true },
+  pas: { nama: "Pas ukuran kartu (printer yang bisa ukuran bebas)" },
+};
+const kertasKartu = () => { try { const k = localStorage.getItem("rg_kertas_kartu"); if (KERTAS_KARTU[k]) return k; } catch {} return "epson"; };
+/** Kanvas siap cetak sesuai kertas pilihan: { kanvas, lebar, tinggi } dalam mm. */
+function halamanKartu(c, lebar, tinggi){
+  const k = KERTAS_KARTU[kertasKartu()];
+  if (!k.putar) return { kanvas: c, lebar, tinggi };
+  const W = Math.round(k.lebar * PX_MM), H = Math.round(k.tinggi * PX_MM);
+  const h = document.createElement("canvas"); h.width = W; h.height = H;
+  const g = h.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
+  // Putar 90° searah jarum jam: sisi KIRI kartu (logo & buket) jadi tepi atas = masuk printer lebih dulu.
+  const kw = tinggi * PX_MM, kh = lebar * PX_MM; // ukuran kartu setelah diputar
+  g.save(); g.translate((W - kw) / 2 + kw, 0); g.rotate(Math.PI / 2); g.drawImage(c, 0, 0, kh, kw); g.restore();
+  return { kanvas: h, lebar: k.lebar, tinggi: k.tinggi };
+}
 async function cetakKartuKertas(teks, jendela){
-  const lebar = Number(B.toko.kartu_lebar) || 100, tinggi = Number(B.toko.kartu_tinggi) || 70;
-  const c = await gambarKartu(teks, { polos: true }); // hasil cetak: teks saja, tanpa gambar desain
+  const lebarK = Number(B.toko.kartu_lebar) || 100, tinggiK = Number(B.toko.kartu_tinggi) || 70;
+  const { kanvas: c, lebar, tinggi } = halamanKartu(await gambarKartu(teks, { polos: true }), lebarK, tinggiK); // hasil cetak: teks saja, tanpa gambar desain
   if (NATIVE && versiApi() < 6) return toast("Cetak kartu butuh aplikasi versi terbaru. Sementara pakai Unduh gambar.");
   // iPhone/iPad tidak bisa memakai ukuran kertas bebas & mengecilkan halaman web saat dicetak:
   // cetak lewat PDF seukuran kertas biasa, kartu tetap 100% ukuran asli + garis potong.
@@ -1195,6 +1215,7 @@ async function cetakKartuKertas(teks, jendela){
   $("#page-style").textContent = `@page{size:${lebar}mm ${tinggi}mm;margin:0}`;
   $("#print-area").innerHTML = `<img src="${c.toDataURL("image/png")}" alt="" style="width:${lebar}mm;height:${tinggi}mm;display:block">`;
   $("#print-area").classList.add("a4");
+  if (kertasKartu() === "epson") toast("Pilih ukuran kertas 3.5 x 5 in di layar cetak. Kartu masuk tegak, sisi buket & logo duluan.");
   setTimeout(() => {
     if (NATIVE && NATIVE.cetakUkuran) NATIVE.cetakUkuran(lebar, tinggi);
     else if (NATIVE) { NATIVE.cetak(210); toast("Kartu dicetak seukuran aslinya di kertas A4 — gunting sesuai tepi. Pasang aplikasi terbaru untuk cetak langsung di kertas kartu."); }
@@ -1208,7 +1229,9 @@ function bukaKartu(teks){
   modal(`<h3>💌 Kartu ucapan <span class="small muted">${lebar} × ${tinggi} mm</span></h3>
     <label class="f">Teks ucapan (sesuai permintaan pelanggan)<textarea id="kTeks" rows="4">${esc(teks)}</textarea></label>
     <div class="kartu-pratinjau"><canvas id="kCv"></canvas></div>
-    ${!NATIVE && apakahIOS() ? `<p class="note small" style="margin:0"><b>Cetak di Epson (iPhone):</b> tekan <b>Cetak kartu</b> → pilih <b>Smart Panel</b> (Epson) di menu Bagikan → atur kertas ${lebar} × ${tinggi} mm → Cetak. Gambar sudah pas ${lebar} × ${tinggi} mm, tidak perlu diunduh.</p>
+    <label class="f">Kertas di printer<select id="kKK">${Object.entries(KERTAS_KARTU).map(([k, v]) => `<option value="${k}" ${k === kertasKartu() ? "selected" : ""}>${esc(v.nama)}</option>`).join("")}</select></label>
+    <p class="note small" style="margin:0" id="kKKket"></p>
+    ${!NATIVE && apakahIOS() ? `
       <details class="small"><summary>Cetak di kertas biasa (A4, Letter, …) lalu digunting</summary>
         <label class="f" style="margin-top:6px">Kertas di printer<select id="kKertas">${Object.keys(KERTAS_HP).map(k => `<option ${k === kertasHP() ? "selected" : ""}>${k}</option>`).join("")}</select></label>
         <p class="small muted" style="margin:4px 0">Tekan <b>PDF</b>: kartu ukuran asli ${lebar} × ${tinggi} mm dengan garis potong.</p></details>` : ""}
@@ -1221,7 +1244,8 @@ function bukaKartu(teks){
       const cv = $("#kCv", m); if (!cv) return;
       cv.width = c.width; cv.height = c.height; cv.getContext("2d").drawImage(c, 0, 0);
       const png = await new Promise(r => p.toBlob(r, "image/png"));
-      siap = { teks: teksNow, kanvas: p, png, nama: `kartu-ucapan-${Date.now()}` };
+      const pngCetak = await new Promise(r => halamanKartu(p, lebar, tinggi).kanvas.toBlob(r, "image/png")); // sesuai kertas printer
+      siap = { teks: teksNow, kanvas: p, png, pngCetak, nama: `kartu-ucapan-${Date.now()}` };
       return p;
     };
     const hasil = async () => (siap && siap.teks === $("#kTeks", m).value) ? siap : (await gambar(), siap);
@@ -1235,10 +1259,14 @@ function bukaKartu(teks){
     };
     $("#kTeks", m).oninput = () => { clearTimeout(t); t = setTimeout(gambar, 250); };
     const iosWeb = !NATIVE && apakahIOS();
+    const ketKK = () => { $("#kKKket", m).innerHTML = kertasKartu() === "epson"
+      ? `Pilih kertas <b>3,5 × 5 in</b> (9 × 13 cm) di layar cetak${iosWeb ? " Smart Panel" : ""}. Masukkan kartu <b>tegak</b> di baki belakang, muka desain menghadap depan, <b>sisi buket & logo masuk duluan</b>.`
+      : `Pilih ukuran kertas ${lebar} × ${tinggi} mm di layar cetak (bila printer mendukung).`; };
+    ketKK(); $("#kKK", m).onchange = e => { try { localStorage.setItem("rg_kertas_kartu", e.target.value); } catch {} ketKK(); siap = null; };
     // iPhone: langsung ke menu Bagikan dengan gambar kartu (pilih Smart Panel / Cetak) — tanpa mengunduh.
     $("#kCetak", m).onclick = async () => {
       if (!iosWeb) return cetakKartuKertas($("#kTeks", m).value);
-      const h = await hasil(); bagikan(h.png, h.nama + ".png");
+      const h = await hasil(); bagikan(h.pngCetak, h.nama + ".png");
     };
     const kh = $("#kKertas", m); if (kh) kh.onchange = () => { try { localStorage.setItem("rg_kertas_hp", kh.value); } catch {} };
     $("#kPdf", m).onclick = async () => {
@@ -1251,7 +1279,7 @@ function bukaKartu(teks){
     $("#kUnduh", m).onclick = async () => {
       const h = await hasil(), nama = h.nama + ".png";
       if (NATIVE && NATIVE.simpanFile) { const lok = NATIVE.simpanFile(nama, "image/png", h.kanvas.toDataURL("image/png").split(",")[1]); toast(lok ? `Tersimpan di ${lok}` : "Gagal menyimpan"); return; }
-      if (iosWeb) return bagikan(h.png, nama);
+      if (iosWeb) return bagikan(h.pngCetak, nama);
       const a = document.createElement("a"); a.href = URL.createObjectURL(h.png); a.download = nama; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
     };
     gambar();
