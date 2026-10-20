@@ -1208,8 +1208,10 @@ function bukaKartu(teks){
   modal(`<h3>💌 Kartu ucapan <span class="small muted">${lebar} × ${tinggi} mm</span></h3>
     <label class="f">Teks ucapan (sesuai permintaan pelanggan)<textarea id="kTeks" rows="4">${esc(teks)}</textarea></label>
     <div class="kartu-pratinjau"><canvas id="kCv"></canvas></div>
-    ${!NATIVE && apakahIOS() ? `<label class="f">Kertas di printer (cetak dari iPhone)<select id="kKertas">${Object.keys(KERTAS_HP).map(k => `<option ${k === kertasHP() ? "selected" : ""}>${k}</option>`).join("")}</select></label>
-      <p class="small muted" style="margin:0">iPhone tidak bisa memilih ukuran kertas bebas. Kartu dicetak di kertas biasa dengan ukuran asli ${lebar} × ${tinggi} mm dan garis potong.</p>` : ""}
+    ${!NATIVE && apakahIOS() ? `<p class="note small" style="margin:0"><b>Cetak di Epson (iPhone):</b> tekan <b>Cetak kartu</b> → pilih <b>Smart Panel</b> (Epson) di menu Bagikan → atur kertas ${lebar} × ${tinggi} mm → Cetak. Gambar sudah pas ${lebar} × ${tinggi} mm, tidak perlu diunduh.</p>
+      <details class="small"><summary>Cetak di kertas biasa (A4, Letter, …) lalu digunting</summary>
+        <label class="f" style="margin-top:6px">Kertas di printer<select id="kKertas">${Object.keys(KERTAS_HP).map(k => `<option ${k === kertasHP() ? "selected" : ""}>${k}</option>`).join("")}</select></label>
+        <p class="small muted" style="margin:4px 0">Tekan <b>PDF</b>: kartu ukuran asli ${lebar} × ${tinggi} mm dengan garis potong.</p></details>` : ""}
     <p class="small muted" style="margin:0">Gambar di atas hanya contoh tampilan. Hasil cetak, unduhan, dan PDF <b>polos (teks saja)</b> di posisi yang sama, untuk dicetak di kartu yang desainnya sudah ada.</p>
     <div class="actions" style="flex-wrap:wrap"><button class="btn" data-close>Tutup</button><button class="btn" id="kStruk" type="button">Cetak di printer struk</button><button class="btn" id="kUnduh" type="button">${apakahIOS() && !NATIVE ? "Simpan gambar" : "Unduh gambar"}</button><button class="btn" id="kPdf" type="button">PDF</button><button class="btn pri" id="kCetak" type="button">Cetak kartu</button></div>`, m => {
     let t, siap = null; // hasil polos terakhir (PNG & PDF) disiapkan lebih dulu, supaya tombol di iPhone langsung jalan
@@ -1233,11 +1235,16 @@ function bukaKartu(teks){
     };
     $("#kTeks", m).oninput = () => { clearTimeout(t); t = setTimeout(gambar, 250); };
     const iosWeb = !NATIVE && apakahIOS();
-    $("#kCetak", m).onclick = () => cetakKartuKertas($("#kTeks", m).value, iosWeb ? window.open("", "_blank") : null);
+    // iPhone: langsung ke menu Bagikan dengan gambar kartu (pilih Smart Panel / Cetak) — tanpa mengunduh.
+    $("#kCetak", m).onclick = async () => {
+      if (!iosWeb) return cetakKartuKertas($("#kTeks", m).value);
+      const h = await hasil(); bagikan(h.png, h.nama + ".png");
+    };
     const kh = $("#kKertas", m); if (kh) kh.onchange = () => { try { localStorage.setItem("rg_kertas_hp", kh.value); } catch {} };
     $("#kPdf", m).onclick = async () => {
-      const h = await hasil(), biner = buatPdf(h.kanvas, lebar, tinggi);
-      if (iosWeb) return bagikan(new Blob([keBiner(biner)], { type: "application/pdf" }), h.nama + ".pdf");
+      const h = await hasil();
+      if (iosWeb) return bagikan(new Blob([keBiner(buatPdf(h.kanvas, lebar, tinggi, { halaman: KERTAS_HP[kertasHP()] }))], { type: "application/pdf" }), h.nama + ".pdf");
+      const biner = buatPdf(h.kanvas, lebar, tinggi);
       simpanPdf(h.nama + ".pdf", biner);
     };
     $("#kStruk", m).onclick = () => cetakKartu($("#kTeks", m).value);
