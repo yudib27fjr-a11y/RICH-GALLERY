@@ -3,6 +3,7 @@ import { one, all, run, tx, getSettings, setSetting } from "../db.js";
 import { HttpError, bad, notFound, teks, angka, tanggal, pilihan, daftar, sekarang } from "../util.js";
 import { ambilItem, ubahStok, antre } from "../stok.js";
 import { cabangAktif } from "../cabang-perangkat.js";
+import { antreNotifPenjualan } from "../notif.js";
 import { KATEGORI, METODE, tebakKategori, periodeDari } from "../../../public/shared.js";
 
 /** Pembuat barang (karyawan aktif): dari id (perangkat ini) atau nama (kiriman perangkat lain). */
@@ -103,6 +104,8 @@ route("POST", "/api/penjualan", "semua", ({ body, user, ctx }) => tx(() => {
   if (prodRows.length) antre("produksi", prodRows);
   antre("penjualan", items.map(it => { const bagian = subtotal ? it.harga * it.qty / subtotal : 0;
     return [String(saleId), tgl, jam, no, it.kode, it.nama, it.kategori, it.harga, it.qty, Math.round(it.harga * it.qty), it.ready ? "READY STOK" : "PRODUKSI", pelanggan, hp, user.nama, metode, Math.round(diskon * bagian), Math.round(ongkir * bagian), Math.round(it.hpp * it.qty), catatan]; }));
+  // Kabari HP admin (transaksi / pesanan baru). Transaksi lama yang baru dipindahkan dari perangkat tidak dikabarkan.
+  if (!(kiriman && kiriman.lama)) antreNotifPenjualan({ total, bayar, metode, pelanggan, items, pesanan, kasir: user.nama });
   return sembunyikanHpp(muatPenjualan("id = ?", [saleId])[0], user);
 }), { cabang: ({ hasil: x }) => ({ aksi: "jual", data: {
   no: x.no, tgl: x.tgl, jam: x.jam, pelanggan: x.pelanggan, hp: x.hp, diskon: x.diskon, ongkir: x.ongkir, metode: x.metode, bayar: x.bayar, catatan: x.catatan, kartu: x.kartu,

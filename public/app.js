@@ -1707,6 +1707,55 @@ async function aturAbsen(){
   }, e.target);
 }
 
+/* ---------- Notifikasi HP admin: transaksi & pesanan baru (Web Push) ---------- */
+const bisaNotif = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+const b64uKeBytes = s => { const b = atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)); return Uint8Array.from(b, c => c.charCodeAt(0)); };
+async function langgananIni(){
+  if (!bisaNotif()) return null;
+  const reg = await navigator.serviceWorker.getRegistration("/").catch(() => null);
+  return reg ? await reg.pushManager.getSubscription().catch(() => null) : null;
+}
+async function aturNotif(){
+  const el = $("#aNotif"); if (!el || LOKAL) return;
+  const ios = apakahIOS(), sub = await langgananIni();
+  const daftar = await api("GET", "/api/notif/langganan").catch(() => []); if (!$("#aNotif")) return;
+  const aktif = !!(sub && Notification.permission === "granted");
+  const ini = sub ? sub.endpoint.slice(-24) : "";
+  el.innerHTML = `<h3 style="font-size:17px">🔔 Notifikasi HP admin</h3>
+    <p class="small muted" style="margin:0">Muncul langsung di HP setiap ada <b>transaksi baru</b> atau <b>pesanan baru</b> (dari kasir web, iMin, maupun Samsung) — walau aplikasi sedang ditutup. Hanya untuk akun admin.</p>
+    ${!bisaNotif() ? (ios && !navigator.standalone
+        ? `<p class="note small" style="margin:0"><b>iPhone:</b> notifikasi hanya bisa dari ikon di Layar Utama. Di Safari tekan <b>Bagikan → Tambah ke Layar Utama</b>, buka dari ikon itu, masuk sebagai admin, lalu kembali ke sini.</p>`
+        : `<p class="note small" style="margin:0">Browser ini belum mendukung notifikasi. Pakai Chrome (Android/komputer) atau iPhone dari ikon Layar Utama (iOS 16.4 ke atas).</p>`)
+      : Notification.permission === "denied" ? `<p class="note small" style="margin:0">Notifikasi <b>diblokir</b> untuk situs ini. Buka pengaturan ${ios ? "iPhone → Notifikasi → Rich Gallery" : "browser (ikon gembok di alamat situs) → Notifikasi"} → Izinkan, lalu muat ulang.</p>`
+      : aktif ? `<p class="small" style="margin:0">HP ini: <b style="color:var(--ok)">notifikasi aktif ✅</b></p>
+          <div class="row"><button class="btn" id="ntUji" type="button">Kirim notifikasi uji</button><button class="btn ghost" id="ntMati" type="button">Matikan di HP ini</button></div>`
+      : `<button class="btn pri big" id="ntAktif" type="button">🔔 Aktifkan notifikasi di HP ini</button>`}
+    ${daftar.length ? `<hr class="sep"><p class="small" style="margin:0"><b>HP yang menerima notifikasi</b></p>
+      ${daftar.map(d => `<div class="row" style="align-items:center"><span style="flex:1" class="small"><b>${esc(d.nama)}</b>${d.kunci === ini ? ' <span class="pill ok">HP ini</span>' : ""}<br><span class="muted">${d.terakhir ? "Terakhir terkirim " + esc(waktuLokal(d.terakhir.replace(" ", "T") + "Z")) : "Belum pernah terkirim"}${d.galat ? ` · <span style="color:var(--bad)">${esc(d.galat)}</span>` : ""}</span></span><button class="btn sm ghost" data-ntHapus="${d.id}" type="button">Hapus</button></div>`).join("")}` : ""}`;
+  const a = $("#ntAktif"); if (a) a.onclick = e => coba(async () => {
+    const izin = await Notification.requestPermission(); // harus langsung dari tekan tombol (aturan iPhone)
+    if (izin !== "granted") throw new Error("Izin notifikasi tidak diberikan. Tekan Izinkan saat diminta.");
+    const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+    await navigator.serviceWorker.ready;
+    const { publik } = await api("GET", "/api/notif/kunci");
+    let sb = await reg.pushManager.getSubscription();
+    if (!sb) sb = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uKeBytes(publik) });
+    await api("POST", "/api/notif/langganan", { endpoint: sb.endpoint, nama: `${ios ? "iPhone" : /Android/i.test(navigator.userAgent) ? "HP Android" : "Komputer"} · ${B.me.nama}` });
+    await api("POST", "/api/notif/uji").catch(() => {});
+    toast("Notifikasi aktif. Notifikasi uji dikirim ke HP ini."); aturNotif();
+  }, e.target);
+  const u = $("#ntUji"); if (u) u.onclick = e => coba(async () => {
+    const r = await api("POST", "/api/notif/uji");
+    toast(r.galat && r.galat.length ? "Ada HP yang gagal: " + r.galat.map(g => g.nama).join(", ") : `Notifikasi uji dikirim ke ${r.hp} HP`); setTimeout(aturNotif, 1500);
+  }, e.target);
+  const m = $("#ntMati"); if (m) m.onclick = e => coba(async () => {
+    const sb = await langgananIni();
+    if (sb) { await api("DELETE", "/api/notif/langganan", { endpoint: sb.endpoint }); await sb.unsubscribe().catch(() => {}); }
+    toast("Notifikasi dimatikan di HP ini"); aturNotif();
+  }, e.target);
+  $$("[data-ntHapus]", el).forEach(b => b.onclick = () => coba(async () => { await api("DELETE", "/api/notif/langganan", { id: +b.dataset.nthapus }); aturNotif(); }, b));
+}
+
 /** Admin: daftarkan HP / komputer (browser) yang sedang dipakai sebagai tempat absen. */
 function daftarHpAbsen(){
   const ios = apakahIOS();
@@ -2542,6 +2591,7 @@ function vAtur(){
       <section class="panel stack" id="aSync"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aJam"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aAbsen"><div class="empty">Memuat…</div></section>
+      ${LOKAL ? "" : `<section class="panel stack" id="aNotif"><div class="empty">Memuat…</div></section>`}
       <section class="panel stack" id="aReset"><div class="empty">Memuat…</div></section>
       <section class="panel stack"><h3 style="font-size:17px">Cadangan &amp; impor</h3>
         <p class="small muted" style="margin:0">${LOKAL ? "Aplikasi menyimpan cadangan otomatis setiap hari di folder Download/RichGallery (7 hari terakhir)." : "Server juga membuat cadangan otomatis setiap hari (lihat panduan pemasangan)."}</p>
@@ -2564,7 +2614,7 @@ function vAtur(){
   $("#pKartu").onclick = () => cetakKartu("Happy Birthday!\nSemoga panjang umur, sehat selalu,\ndan bahagia.\n\nDari: Rina");
   $("#pwSave").onclick = e => coba(async () => { await api("POST", "/api/akun/password", { lama: $("#pwL").value, baru: $("#pwB").value }); $("#pwL").value = $("#pwB").value = ""; toast("Password diganti"); }, e.target);
   if (!isAdmin()) return;
-  aturToko(); aturUser(); aturWA(); aturCanva(); aturKartu(); aturNota(); aturSync(); aturCabang(); aturJam(); aturAbsen(); aturReset();
+  aturToko(); aturUser(); aturWA(); aturCanva(); aturKartu(); aturNota(); aturSync(); aturCabang(); aturJam(); aturAbsen(); aturNotif(); aturReset();
   if ($("#bkDb")) $("#bkDb").onclick = e => coba(async () => { const r = await api("GET", "/api/cadangan"); toast(`Cadangan tersimpan di ${r.disimpan}`); }, e.target);
   $("#rsFile").onchange = e => { const f = e.target.files[0]; if (!f) return; e.target.value = "";
     const r = new FileReader();

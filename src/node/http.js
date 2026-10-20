@@ -2,6 +2,7 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { config } from "./config.js";
 import { jalankan, cariRoute } from "../core/router.js";
+import { kirimNotif } from "../core/notif.js";
 
 const COOKIE = "rg_sid";
 const HEADER_AMAN = {
@@ -73,6 +74,7 @@ export async function handle(req, res){
       return res.end(hasil.unduh.isi);
     }
     kirimJSON(res, hasil.status, hasil.data, extra);
+    if (req.method !== "GET") kirimNotif().catch(e => console.error("notif:", e.message)); // kabari HP admin (setelah jawaban terkirim)
   } catch (e) {
     kirimJSON(res, e.status || 500, { error: e.status ? e.message : "Terjadi kesalahan di server" });
   }

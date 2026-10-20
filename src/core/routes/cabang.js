@@ -145,7 +145,7 @@ function terapkan(p, d, alat, aman = false){
         const b = idBarang("produk", i.kode);
         return b ? { product_id: b.id, harga: i.harga, qty: i.qty, ready: i.ready, pembuat: i.pembuat } : { nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty, pembuat: i.pembuat };
       });
-      const waktuJual = { tgl: x.tgl || w?.tgl, jam: x.jam || w?.jam }, replay = { no: x.no, tgl: x.tgl, jam: x.jam };
+      const waktuJual = { tgl: x.tgl || w?.tgl, jam: x.jam || w?.jam }, replay = { no: x.no, tgl: x.tgl, jam: x.jam, lama: !!x.lama };
       const body = { items, diskon: x.diskon, ongkir: x.ongkir, metode: x.metode, bayar: x.bayar, pelanggan: x.pelanggan, hp: x.hp, catatan: x.catatan, kartu: x.kartu, pesanan: x.pesanan || null };
       if (!aman) return panggil("POST", "/api/penjualan", body, user, waktuJual, replay);
       {

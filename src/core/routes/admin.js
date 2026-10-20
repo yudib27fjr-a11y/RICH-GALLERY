@@ -10,7 +10,7 @@ import { hitungSebelum, hapusSebelum, tanggalValid } from "../hapus-transaksi.js
 import { KATEGORI, KAT_BAHAN, KAT_PENGELUARAN, barcodeDefault, tebakKategori } from "../../../public/shared.js";
 
 /* ---- Pengaturan toko ---- */
-route("GET", "/api/pengaturan", "admin", () => { const { cabang_token, kartu_latar, kartu_font, ...s } = getSettings(); return { ...s, sync: statusSync() }; });
+route("GET", "/api/pengaturan", "admin", () => { const { cabang_token, kartu_latar, kartu_font, vapid, ...s } = getSettings(); return { ...s, sync: statusSync() }; });
 
 /* Gambar latar kartu ucapan (desain Canva yang diunduh). Disimpan terpisah supaya data lain tetap ringan. */
 route("GET", "/api/kartu/latar", "semua", async () => { if (cabangAktif()) return mintaPusat("/api/cabang/kartu-latar", {}); const s = getSettings(); return { latar: s.kartu_latar || "", font: s.kartu_font || "" }; });

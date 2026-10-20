@@ -3,7 +3,7 @@
    - Semua /api/* diteruskan ke SATU Durable Object "toko" yang memegang database SQLite toko.
      Satu objek = satu database = semua permintaan berurutan, jadi aturan stok & nomor nota tetap aman.
    - Cron tiap 5 menit membangunkan objek untuk mengirim antrean ke Google Sheet. */
-import { pasangDriver, migrasi, seedJikaKosong, jalankan, cariRoute, kirimOutbox, bersihkanSesiKadaluarsa, hapusFotoAbsenLama } from "../core/semua.js";
+import { pasangDriver, migrasi, seedJikaKosong, jalankan, cariRoute, kirimOutbox, kirimNotif, bersihkanSesiKadaluarsa, hapusFotoAbsenLama } from "../core/semua.js";
 import { buatDriverDO } from "./driver.js";
 import { pasangPlatformCF } from "./platform.js";
 
@@ -45,6 +45,7 @@ export class Toko {
       bersihkanSesiKadaluarsa();
       try { hapusFotoAbsenLama(); } catch (e) { console.error("hapus foto absen", e.message); }
       await kirimOutbox().catch(() => {});
+      await kirimNotif().catch(() => {});
       return json(200, { ok: true });
     }
     try {
@@ -73,6 +74,7 @@ export class Toko {
       }
       // Ada antrean Google Sheet: kirim sebentar lagi (tanpa menahan jawaban ke kasir).
       this.state.waitUntil?.(kirimOutbox().catch(() => {}));
+      if (req.method !== "GET") this.state.waitUntil?.(kirimNotif().catch(e => console.error("notif", e.message))); // kabari HP admin
       return json(hasil.status, hasil.data, extra);
     } catch (e) {
       return json(e.status || 500, { error: e.status ? e.message : "Terjadi kesalahan di server" });

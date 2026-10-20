@@ -383,3 +383,25 @@ test("ubah stok manual & hard reset dengan kode (bawaan OK, bisa diganti)", asyn
   assert.equal((await admin("POST", "/api/reset", { kode: "rahasia7", katalog: true })).status, 200);
   assert.equal((await admin("GET", "/api/bootstrap")).data.produk.length, 0, "katalog kosong");
 });
+
+test("notifikasi HP admin: langganan, transaksi & pesanan baru tercatat, kunci VAPID sah", async () => {
+  assert.equal((await kasir("GET", "/api/notif/kunci")).status, 403, "hanya admin");
+  const { publik } = (await admin("GET", "/api/notif/kunci")).data;
+  assert.equal(Buffer.from(publik, "base64url").length, 65, "kunci publik P-256");
+  assert.equal((await admin("POST", "/api/notif/langganan", { endpoint: "https://jahat.example.com/x" })).status, 400, "alamat push asing ditolak");
+  assert.equal((await admin("POST", "/api/notif/langganan", { endpoint: "https://fcm.googleapis.com/fcm/send/uji123", nama: "HP Android · Yudi" })).status, 200);
+  assert.ok(!("vapid" in (await admin("GET", "/api/pengaturan")).data), "kunci rahasia tidak dikirim ke layar");
+  const b = (await admin("GET", "/api/bootstrap")).data;
+  assert.equal((await kasir("POST", "/api/penjualan", { items: [{ nama: "buket bunga 100k", harga: 100000, qty: 1 }], metode: "Tunai" })).status, 200);
+  assert.equal((await kasir("POST", "/api/penjualan", { items: [{ nama: "custom bloom box", harga: 250000, qty: 1 }], metode: "Transfer", bayar: 100000,
+    pesanan: { tgl: b.hariIni, jam: "15:00", cara: "antar" } })).status, 200);
+  const n = (await admin("GET", "/api/notif/terbaru")).data;
+  assert.ok(n.some(x => /Transaksi baru · Rp100\.000/.test(x.judul)), JSON.stringify(n));
+  const ps = n.find(x => /Pesanan baru · Rp250\.000/.test(x.judul));
+  assert.ok(ps && /diantar/.test(ps.isi) && /sisa Rp150\.000/.test(ps.isi), JSON.stringify(ps));
+  assert.equal((await kasir("GET", "/api/notif/terbaru")).status, 403, "karyawan tidak bisa membaca notifikasi");
+  const l = (await admin("GET", "/api/notif/langganan")).data;
+  assert.equal(l.length, 1); assert.ok(!("endpoint" in l[0]));
+  assert.equal((await admin("DELETE", "/api/notif/langganan", { id: l[0].id })).status, 200);
+  assert.equal((await admin("GET", "/api/notif/langganan")).data.length, 0);
+});

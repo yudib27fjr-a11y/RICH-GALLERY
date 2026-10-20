@@ -350,6 +350,25 @@ UPDATE settings SET nilai = '4300' WHERE kunci = 'lembur_per_jam' AND nilai = '0
 
 /* 12: kartu yang dipakai sekarang: desain bunga @Rich_Galleryimy (120 × 90 mm). Hanya mengganti bila masih desain pita. */
 `UPDATE settings SET nilai = '"bawaan:bunga"' WHERE kunci = 'kartu_latar_kode' AND nilai = '"bawaan:pita"';`,
+
+/* 13: notifikasi HP admin (Web Push) untuk transaksi & pesanan baru. */
+`CREATE TABLE push_langganan(
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL UNIQUE,
+  nama TEXT NOT NULL DEFAULT '',
+  dibuat TEXT NOT NULL DEFAULT (datetime('now')),
+  terakhir TEXT,
+  galat TEXT
+);
+CREATE TABLE notif(
+  id INTEGER PRIMARY KEY,
+  waktu TEXT NOT NULL DEFAULT (datetime('now')),
+  judul TEXT NOT NULL,
+  isi TEXT NOT NULL DEFAULT '',
+  url TEXT NOT NULL DEFAULT '/',
+  terkirim TEXT
+);`,
 ];
 
 export const DEFAULT_SETTINGS = {
