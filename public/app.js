@@ -1707,6 +1707,20 @@ async function aturAbsen(){
   }, e.target);
 }
 
+/** Admin: daftarkan HP / komputer (browser) yang sedang dipakai sebagai tempat absen. */
+function daftarHpAbsen(){
+  const ios = apakahIOS();
+  modal(`<h3>Daftarkan HP ini untuk absen</h3>
+    <label class="f">Nama HP<input type="text" id="hpN" maxlength="40" value="${ios ? "iPhone admin" : "HP admin"}"></label>
+    <p class="small muted" style="margin:0">Setelah ini izinkan <b>Kamera</b> dan <b>Lokasi</b> saat diminta. Bisa dicabut kapan saja di Pengaturan → Server pusat → Perangkat.</p>
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="hpOk" type="button">Daftarkan</button></div>`, m => {
+    $("#hpOk", m).onclick = e => coba(async () => {
+      const r = await api("POST", "/api/absen/daftar-hp", { nama: $("#hpN", m).value });
+      try { localStorage.setItem("rg_hp_absen", r.token); } catch { throw new Error("HP ini tidak bisa menyimpan data (mode privat?)"); }
+      closeModal(); await cekKiosk(); shell(); render(); toast("HP ini sekarang bisa dipakai absen. Tombol 🕘 Absen ada di atas.");
+    }, e.target);
+  });
+}
 /** Pengaturan "absen dari HP ini" (browser di server): daftarkan / lepas HP yang sedang dipakai. */
 async function hpAbsenPengaturan(){
   const el = $("#abHp"); if (!el) return;
@@ -1721,16 +1735,7 @@ async function hpAbsenPengaturan(){
     : `<p class="small muted" style="margin:0">Jadikan HP yang sedang Anda pakai sebagai tempat absen (karyawan pilih nama, ketik PIN, foto selfie — hanya bisa di lokasi toko). Bisa dicabut kapan saja di <b>Server pusat → Perangkat cabang</b>.</p>
        ${ios && !navigator.standalone ? `<p class="note small" style="margin:0">Di iPhone: sebaiknya dulu Safari → tombol Bagikan → <b>Tambah ke Layar Utama</b>, buka dari ikon itu, masuk sebagai admin, lalu tekan tombol di bawah.</p>` : ""}
        <button class="btn pri" id="abHpDaftar" type="button">📱 Jadikan HP ini tempat absen</button>`;
-  const d = $("#abHpDaftar"); if (d) d.onclick = () => modal(`<h3>Daftarkan HP ini untuk absen</h3>
-    <label class="f">Nama HP<input type="text" id="hpN" maxlength="40" value="${ios ? "iPhone admin" : "HP admin"}"></label>
-    <p class="small muted" style="margin:0">Setelah ini izinkan <b>Kamera</b> dan <b>Lokasi</b> saat diminta.</p>
-    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="hpOk" type="button">Daftarkan</button></div>`, m => {
-    $("#hpOk", m).onclick = e => coba(async () => {
-      const r = await api("POST", "/api/absen/daftar-hp", { nama: $("#hpN", m).value });
-      try { localStorage.setItem("rg_hp_absen", r.token); } catch { throw new Error("HP ini tidak bisa menyimpan data (mode privat?)"); }
-      closeModal(); await cekKiosk(); shell(); render(); toast("HP ini sekarang bisa dipakai absen. Tombol 🕘 Absen ada di atas.");
-    }, e.target);
-  });
+  const d = $("#abHpDaftar"); if (d) d.onclick = daftarHpAbsen;
   const l = $("#abHpLepas"); if (l) l.onclick = () => konfirmasi("Lepas HP ini dari absen?", "Tombol Absen tidak muncul lagi di HP ini. Untuk mencabut sepenuhnya, cabut juga di Server pusat → Perangkat cabang.", "Lepas", async () => {
     try { localStorage.removeItem("rg_hp_absen"); } catch {}
     kioskInfo = null; shell(); render();
@@ -1752,7 +1757,7 @@ let kioskInfo = null;
 const tokenHpAbsen = () => { try { return localStorage.getItem("rg_hp_absen") || ""; } catch { return ""; } };
 async function cekKiosk(){
   const t = !LOKAL && tokenHpAbsen();
-  kioskInfo = LOKAL || t ? await api("GET", "/api/absen/kiosk" + (t ? "?alat=" + encodeURIComponent(t) : "")).catch(() => null) : null;
+  kioskInfo = await api("GET", "/api/absen/kiosk" + (t ? "?alat=" + encodeURIComponent(t) : "")).catch(() => null); // web juga: menu Absen tampil bila absen aktif
   return kioskInfo;
 }
 /* ================= ABSEN (untuk semua karyawan) =================
@@ -1788,6 +1793,12 @@ async function vAbsenku(){
   $("#main").innerHTML = `<div class="view-head"><h2>Absen karyawan</h2></div><div id="akIsi"><div class="empty">Memuat…</div></div>`;
   const K = await cekKiosk(); const el = $("#akIsi"); if (view !== "absenku" || !el) return;
   el.innerHTML = panelAbsen(K);
+  // Web: HP ini belum didaftarkan → admin bisa langsung mendaftarkannya dari sini.
+  if (!LOKAL && K && K.aktif && !K.boleh && !K.hp && isAdmin()) {
+    el.insertAdjacentHTML("beforeend", `<div class="stack" style="margin-top:12px"><button class="btn pri big" id="akDaftar" type="button">📱 Jadikan HP ini tempat absen</button>
+      <p class="small muted" style="margin:0;text-align:center">Karyawan bisa absen di HP ini (pilih nama, PIN, selfie) — hanya di lokasi toko.${apakahIOS() && !navigator.standalone ? " Di iPhone, sebaiknya buka dari ikon Layar Utama (Safari → Bagikan → Tambah ke Layar Utama)." : ""}</p></div>`);
+    $("#akDaftar").onclick = daftarHpAbsen;
+  }
   pasangJam(el);
 }
 
@@ -2928,7 +2939,7 @@ async function daftarPerangkatCabang(el, kodeIni = ""){
         : `<div class="empty">Belum ada perangkat yang tersambung.</div>`}`;
     el.querySelectorAll("[data-absen]").forEach(b => b.onclick = () => coba(async () => {
       await api("PUT", `/api/cabang/perangkat/${b.dataset.absen}`, { absen: b.dataset.v === "1" });
-      if (LOKAL || tokenHpAbsen()) { await cekKiosk(); renderNav(); }
+      await cekKiosk(); renderNav();
       toast(b.dataset.v === "1" ? "Perangkat diizinkan untuk absen karyawan" : "Izin absen dicabut"); muat();
     }, b));
     el.querySelectorAll("[data-nama]").forEach(b => b.onclick = () => {
@@ -3070,7 +3081,7 @@ async function mulai(){
     $("#ulang").onclick = mulai; return;
   }
   try { const h = location.hash.slice(1); if (SEMUA_VIEW.some(v => v[0] === h)) view = h; } catch {}
-  if (LOKAL || tokenHpAbsen()) await cekKiosk();
+  await cekKiosk();
   pPer = null; shell(); render();
   halamanTampil();
   setTimeout(pengingatPesanan, 800);
