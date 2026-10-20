@@ -360,14 +360,25 @@ async function gambarNota(d){
 /** Ukuran kertas nota (mm): lebar setengah A4 mendatar (210 mm), tinggi sebanding isi. */
 const ukuranNota = c => [210, Math.round(210 * c.height / c.width * 10) / 10];
 /** PDF satu halaman berisi gambar (JPEG) — tanpa pustaka tambahan. Ukuran halaman dalam mm. */
-function buatPdf(kanvas, lebarMm, tinggiMm){
+/** opsi.halaman = [lebar, tinggi] mm: gambar ditaruh seukuran asli di tengah atas halaman itu, dengan garis potong (untuk cetak dari HP). */
+function buatPdf(kanvas, lebarMm, tinggiMm, opsi = {}){
   const jpg = atob(kanvas.toDataURL("image/jpeg", 0.92).split(",")[1]);
-  const W = (lebarMm / 25.4 * 72).toFixed(2), H = (tinggiMm / 25.4 * 72).toFixed(2);
-  const isi = `q ${W} 0 0 ${H} 0 0 cm /Im0 Do Q`;
+  const pt = mm => +(mm / 25.4 * 72).toFixed(2);
+  const W = pt(lebarMm), H = pt(tinggiMm);
+  const [PW, PH] = opsi.halaman ? opsi.halaman.map(pt) : [W, H];
+  const X = opsi.halaman ? +((PW - W) / 2).toFixed(2) : 0, Y = opsi.halaman ? +(PH - pt(15) - H).toFixed(2) : 0;
+  let isi = `q ${W} 0 0 ${H} ${X} ${Y} cm /Im0 Do Q`;
+  if (opsi.halaman) { // garis potong di keempat sudut, sedikit di luar kartu
+    const a = pt(2), b = pt(7), g = [];
+    for (const [x, sx] of [[X, -1], [X + W, 1]]) for (const [y, sy] of [[Y, -1], [Y + H, 1]]) {
+      g.push(`${x + sx * a} ${y} m ${x + sx * b} ${y} l S`, `${x} ${y + sy * a} m ${x} ${y + sy * b} l S`);
+    }
+    isi += `\n0.4 w 0 G ${g.join(" ")}`;
+  }
   const obj = [
     "<< /Type /Catalog /Pages 2 0 R >>",
     "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`,
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`,
     `<< /Type /XObject /Subtype /Image /Width ${kanvas.width} /Height ${kanvas.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpg.length} >>\nstream\n${jpg}\nendstream`,
     `<< /Length ${isi.length} >>\nstream\n${isi}\nendstream`,
   ];
@@ -1158,10 +1169,24 @@ async function gambarKartu(teks, o = {}){
   return c;
 }
 /** Cetak kartu di printer biasa dengan ukuran kertas = ukuran kartu. */
-async function cetakKartuKertas(teks){
+const apakahIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const KERTAS_HP = { A4: [210, 297], Letter: [215.9, 279.4], Legal: [215.9, 355.6], A5: [148, 210] };
+const kertasHP = () => { try { const k = localStorage.getItem("rg_kertas_hp"); if (KERTAS_HP[k]) return k; } catch {} return "A4"; };
+/** Buka PDF kartu (ukuran asli di kertas biasa) di penampil PDF iPhone → tombol Bagikan → Cetak. */
+function bukaPdfKartuHP(kanvas, lebar, tinggi, jendela){
+  const k = kertasHP(), biner = buatPdf(kanvas, lebar, tinggi, { halaman: KERTAS_HP[k] });
+  const u8 = new Uint8Array(biner.length); for (let i = 0; i < biner.length; i++) u8[i] = biner.charCodeAt(i);
+  const url = URL.createObjectURL(new Blob([u8], { type: "application/pdf" }));
+  if (jendela && !jendela.closed) jendela.location.href = url; else location.href = url;
+  toast(`Pilih kertas ${k} saat mencetak. Kartu tercetak ${lebar} × ${tinggi} mm, gunting di garis potong.`);
+}
+async function cetakKartuKertas(teks, jendela){
   const lebar = Number(B.toko.kartu_lebar) || 100, tinggi = Number(B.toko.kartu_tinggi) || 70;
   const c = await gambarKartu(teks);
   if (NATIVE && versiApi() < 6) return toast("Cetak kartu butuh aplikasi versi terbaru. Sementara pakai Unduh gambar.");
+  // iPhone/iPad tidak bisa memakai ukuran kertas bebas & mengecilkan halaman web saat dicetak:
+  // cetak lewat PDF seukuran kertas biasa, kartu tetap 100% ukuran asli + garis potong.
+  if (!NATIVE && apakahIOS()) return bukaPdfKartuHP(c, lebar, tinggi, jendela);
   $("#page-style").textContent = `@page{size:${lebar}mm ${tinggi}mm;margin:0}`;
   $("#print-area").innerHTML = `<img src="${c.toDataURL("image/png")}" alt="" style="width:${lebar}mm;height:${tinggi}mm;display:block">`;
   $("#print-area").classList.add("a4");
@@ -1178,11 +1203,15 @@ function bukaKartu(teks){
   modal(`<h3>💌 Kartu ucapan <span class="small muted">${lebar} × ${tinggi} mm</span></h3>
     <label class="f">Teks ucapan (sesuai permintaan pelanggan)<textarea id="kTeks" rows="4">${esc(teks)}</textarea></label>
     <div class="kartu-pratinjau"><canvas id="kCv"></canvas></div>
+    ${!NATIVE && apakahIOS() ? `<label class="f">Kertas di printer (cetak dari iPhone)<select id="kKertas">${Object.keys(KERTAS_HP).map(k => `<option ${k === kertasHP() ? "selected" : ""}>${k}</option>`).join("")}</select></label>
+      <p class="small muted" style="margin:0">iPhone tidak bisa memilih ukuran kertas bebas. Kartu dicetak di kertas biasa dengan ukuran asli ${lebar} × ${tinggi} mm dan garis potong.</p>` : ""}
     <div class="actions" style="flex-wrap:wrap"><button class="btn" data-close>Tutup</button><button class="btn" id="kStruk" type="button">Cetak di printer struk</button><button class="btn" id="kUnduh" type="button">Unduh gambar</button><button class="btn" id="kPdf" type="button">PDF polos</button><button class="btn pri" id="kCetak" type="button">Cetak kartu</button></div>`, m => {
     let t;
     const gambar = async () => { const c = await gambarKartu($("#kTeks", m).value), cv = $("#kCv", m); if (!cv) return; cv.width = c.width; cv.height = c.height; cv.getContext("2d").drawImage(c, 0, 0); return c; };
     $("#kTeks", m).oninput = () => { clearTimeout(t); t = setTimeout(gambar, 250); };
-    $("#kCetak", m).onclick = () => cetakKartuKertas($("#kTeks", m).value);
+    // iPhone: jendela PDF dibuka langsung saat tombol ditekan (kalau menunggu, Safari memblokirnya).
+    $("#kCetak", m).onclick = () => cetakKartuKertas($("#kTeks", m).value, !NATIVE && apakahIOS() ? window.open("", "_blank") : null);
+    const kh = $("#kKertas", m); if (kh) kh.onchange = () => { try { localStorage.setItem("rg_kertas_hp", kh.value); } catch {} };
     $("#kPdf", m).onclick = async () => { const c = await gambar(); simpanPdf(`kartu-ucapan-${Date.now()}.pdf`, buatPdf(c, lebar, tinggi)); };
     $("#kStruk", m).onclick = () => cetakKartu($("#kTeks", m).value);
     $("#kUnduh", m).onclick = async () => {
