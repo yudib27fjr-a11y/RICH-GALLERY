@@ -10,6 +10,7 @@ import { HttpError, bad, notFound, teks, tanggal, sekarang } from "../util.js";
 import { periodeDari, tambahHari } from "../../../public/shared.js";
 import { cabangAktif, mintaPusat } from "../cabang-perangkat.js";
 import { cekPassword, cekBatasLogin, catatGagal, resetGagal } from "../auth.js";
+import { antreNotif } from "../notif.js";
 
 /* ================= Absen PIN + foto selfie dari perangkat kasir di lokasi toko =================
    - Hanya dari aplikasi Android (perangkat kasir) yang tersambung ke server & diizinkan admin untuk absen.
@@ -82,6 +83,7 @@ route("POST", "/api/absen/pin", false, ({ body, ctx }) => {
   const id = Number(run(`INSERT INTO absen(tgl, jam, user_id, sumber, jenis, foto, lat, lng, jarak, uid, mesin, oleh) VALUES (?,?,?, 'pin', ?,?,?,?,?,?,?,?)`,
     [w.tgl, w.jam.slice(0, 5) + ":00", u.id, jenis, foto, +body.lat, +body.lng, jarak, uid, st.hp || getSettings().cabang_nama || "", u.nama]).lastInsertRowid);
   if (st.hpId) run("UPDATE perangkat SET terakhir = datetime('now') WHERE id = ?", [st.hpId]);
+  notifAbsen({ userId: u.id, tgl: w.tgl, jam: w.jam, jenis, tempat: st.hp || getSettings().cabang_nama || "" });
   return { ok: true, id, uid, nama: u.nama, jenis, jam: w.jam.slice(0, 5), jarak };
 }, { batas: 500_000, cabang: ({ hasil: h }) => {
   const a = one("SELECT a.tgl, a.jam, a.jenis, a.foto, a.lat, a.lng, u.nama_key FROM absen a JOIN users u ON u.id = a.user_id WHERE a.uid = ?", [h.uid]);
@@ -94,8 +96,9 @@ export function terimaAbsen(x, alat){
   const u = one("SELECT id, nama FROM users WHERE nama_key = ?", [String(x.nama_key || "")]);
   if (!u) throw bad("Karyawan tidak dikenal di server");
   const jarak = cekLokasi(x.lat, x.lng, 0);
-  run(`INSERT OR IGNORE INTO absen(tgl, jam, user_id, sumber, jenis, foto, lat, lng, jarak, uid, mesin, oleh) VALUES (?,?,?, 'pin', ?,?,?,?,?,?,?,?)`,
+  const r = run(`INSERT OR IGNORE INTO absen(tgl, jam, user_id, sumber, jenis, foto, lat, lng, jarak, uid, mesin, oleh) VALUES (?,?,?, 'pin', ?,?,?,?,?,?,?,?)`,
     [tanggal(x.tgl), String(x.jam || "00:00").slice(0, 5) + ":00", u.id, x.jenis === "pulang" ? "pulang" : "masuk", String(x.foto || "").slice(0, 400_000), +x.lat, +x.lng, jarak, String(x.uid), alat.nama, u.nama]);
+  if (Number(r.changes || 0) > 0) notifAbsen({ userId: u.id, tgl: tanggal(x.tgl), jam: String(x.jam || "00:00"), jenis: x.jenis === "pulang" ? "pulang" : "masuk", tempat: alat.nama });
   return { ok: true };
 }
 
@@ -122,7 +125,9 @@ function simpanScan(x, mesin){
   if (!pin || !m) return false;
   const r = run(`INSERT OR IGNORE INTO absen(tgl, jam, pin, sumber, mesin, verify, status_scan) VALUES (?,?,?, 'mesin', ?,?,?)`,
     [m[1], m[2] + (m[3] || ":00"), pin, mesin, x.verify == null ? null : String(x.verify).slice(0, 10), x.status_scan == null ? null : String(x.status_scan).slice(0, 10)]);
-  return Number(r.changes || 0) > 0;
+  const baru = Number(r.changes || 0) > 0;
+  if (baru) { const u = one("SELECT id FROM users WHERE pin_absen = ?", [pin]); if (u) notifAbsen({ userId: u.id, tgl: m[1], jam: m[2], jenis: null, tempat: "mesin sidik jari" }); }
+  return baru;
 }
 
 /* Penerima data dari mesin. Publik (mesin tidak bisa login), dilindungi kunci rahasia di alamatnya. */
@@ -151,6 +156,21 @@ route("POST", "/api/absen/mesin/:kunci", false, ({ params, body }) => {
    Lembur = datang lebih awal dari jam masuk shift + pulang lebih lambat dari jam pulang shift,
    dibulatkan ke bawah per blok (bawaan 30 menit), dibayar per jam sesuai tarif yang bisa diubah. */
 const menit = j => { const [h, m] = String(j || "0:0").split(":").map(Number); return (h || 0) * 60 + (m || 0); };
+/** Kabari HP admin: karyawan absen masuk / pulang, lengkap dengan shift & terlambat / lembur. */
+function notifAbsen({ userId, tgl, jam, jenis, tempat }){
+  try {
+    const u = one("SELECT nama, shift FROM users WHERE id = ?", [userId]); if (!u) return;
+    if (tgl !== sekarang().tgl) return; // absen lama yang baru terkirim tidak perlu dikabarkan
+    const j = String(jam).slice(0, 5), nm = String(u.nama).toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+    const masukHariIni = one("SELECT MIN(jam) j FROM absen WHERE user_id = ? AND tgl = ? AND (jenis = 'masuk' OR jenis IS NULL)", [userId, tgl])?.j;
+    const sh = pilihShift(daftarShift(), u.shift, jenis === "masuk" ? j : (masukHariIni || j).slice(0, 5));
+    let ket = "";
+    if (jenis === "masuk") { const d = menit(j) - menit(sh.masuk); ket = d > 0 ? `terlambat ${d} menit` : d < 0 ? `datang ${-d} menit lebih awal` : "tepat waktu"; }
+    else if (jenis === "pulang") { const d = menit(j) - menit(sh.pulang); ket = d > 0 ? `lewat ${d} menit dari jam pulang` : d < 0 ? `pulang ${-d} menit lebih awal` : "tepat jam pulang"; }
+    const judul = jenis === "masuk" ? `☀️ ${nm} absen masuk · ${j}` : jenis === "pulang" ? `🌙 ${nm} absen pulang · ${j}` : `🖐️ ${nm} scan absen · ${j}`;
+    antreNotif(judul, [`${sh.nama} (${sh.masuk}–${sh.pulang})`, ket, tempat].filter(Boolean).join(" · "), "/#absen");
+  } catch { /* notifikasi tidak boleh menggagalkan absen */ }
+}
 export function daftarShift(s = getSettings()){
   const a = Array.isArray(s.shifts) ? s.shifts.filter(x => x && JAM.test(x.masuk) && JAM.test(x.pulang) && menit(x.pulang) > menit(x.masuk)) : [];
   return a.length ? a.map((x, i) => ({ nama: String(x.nama || `Shift ${i + 1}`), masuk: x.masuk, pulang: x.pulang }))

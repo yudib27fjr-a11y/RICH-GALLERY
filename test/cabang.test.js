@@ -500,8 +500,11 @@ test("absen PIN + selfie: hanya perangkat yang diizinkan & di lokasi toko", asyn
   const absenHp = b => tamuP("POST", "/api/absen/pin", { alat: hp.token, user_id: izaP.id, pin: "1234", jenis: "pulang", foto: FOTO, akurasi: 10, ...LOK, ...b });
   assert.equal((await absenHp({ alat: "palsu" })).status, 403, "token salah");
   assert.equal((await absenHp(JAUH)).status, 400, "di luar toko");
+  assert.equal((await pusat("POST", "/api/notif/langganan", { endpoint: "https://fcm.googleapis.com/fcm/send/uji-absen", nama: "HP admin" })).status, 200);
   const okHp = await absenHp({});
   assert.equal(okHp.status, 200, JSON.stringify(okHp.data)); assert.equal(okHp.data.jenis, "pulang");
+  const nt = (await pusat("GET", "/api/notif/terbaru")).data;
+  assert.ok(nt.some(x => /Iza absen pulang/.test(x.judul) && /iPhone admin/.test(x.isi)), "notifikasi absen ke HP admin: " + JSON.stringify(nt));
   const R2 = (await pusat("GET", `/api/absen?dari=${hari}&sampai=${hari}`)).data;
   assert.ok(R2.harian.find(x => x.nama === "IZA").scan.some(x => x.sumber === "pin" && x.jenis === "pulang"), "absen HP masuk rekap");
   // Token HP absen tidak bisa dipakai sebagai perangkat kasir (kirim transaksi)

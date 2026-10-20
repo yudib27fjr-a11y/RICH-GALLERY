@@ -1722,7 +1722,7 @@ async function aturNotif(){
   const aktif = !!(sub && Notification.permission === "granted");
   const ini = sub ? sub.endpoint.slice(-24) : "";
   el.innerHTML = `<h3 style="font-size:17px">🔔 Notifikasi HP admin</h3>
-    <p class="small muted" style="margin:0">Muncul langsung di HP setiap ada <b>transaksi baru</b> atau <b>pesanan baru</b> (dari kasir web, iMin, maupun Samsung) — walau aplikasi sedang ditutup. Hanya untuk akun admin.</p>
+    <p class="small muted" style="margin:0">Muncul langsung di HP setiap ada <b>transaksi baru</b>, <b>pesanan baru</b> (dari kasir web, iMin, maupun Samsung), dan <b>absensi karyawan</b> (masuk / pulang, terlambat / lembur) — walau aplikasi sedang ditutup. Hanya untuk akun admin.</p>
     ${!bisaNotif() ? (ios && !navigator.standalone
         ? `<p class="note small" style="margin:0"><b>iPhone:</b> notifikasi hanya bisa dari ikon di Layar Utama. Di Safari tekan <b>Bagikan → Tambah ke Layar Utama</b>, buka dari ikon itu, masuk sebagai admin, lalu kembali ke sini.</p>`
         : `<p class="note small" style="margin:0">Browser ini belum mendukung notifikasi. Pakai Chrome (Android/komputer) atau iPhone dari ikon Layar Utama (iOS 16.4 ke atas).</p>`)

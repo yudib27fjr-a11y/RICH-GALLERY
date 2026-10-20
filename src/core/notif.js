@@ -1,4 +1,4 @@
-/* Notifikasi HP untuk admin (Web Push, standar VAPID): transaksi & pesanan baru.
+/* Notifikasi HP untuk admin (Web Push, standar VAPID): transaksi, pesanan & absensi baru.
    - HP admin (Chrome Android, iPhone dari ikon Layar Utama, komputer) berlangganan dari Pengaturan → Notifikasi.
    - Saat ada penjualan, server mencatat notifikasi lalu "membangunkan" HP lewat layanan push (tanpa isi).
      HP (sw.js) lalu mengambil isi notifikasi dari /api/notif/terbaru memakai sesi admin-nya sendiri,
@@ -33,10 +33,16 @@ async function tokenVapid(endpoint, v){
 
 const rp = n => "Rp" + Math.round(Number(n) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 const judulBesar = s => String(s || "").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+/** Catat satu notifikasi untuk HP admin (dikirim setelah permintaan selesai). Di perangkat kasir tidak dicatat:
+ *  server pusat yang mengabari saat datanya sampai. */
+export function antreNotif(judul, isi, url = "/"){
+  if (platform.perangkat) return;
+  if (!one("SELECT 1 x FROM push_langganan LIMIT 1")) return;
+  run("INSERT INTO notif(judul, isi, url) VALUES (?,?,?)", [String(judul).slice(0, 120), String(isi).slice(0, 400), url]);
+}
 /** Catat notifikasi penjualan baru (dipanggil di dalam transaksi database penjualan). */
 export function antreNotifPenjualan({ total, bayar, metode, pelanggan, items, pesanan, kasir }){
-  if (platform.perangkat) return; // perangkat kasir: server pusat yang mengabari saat transaksinya sampai
-  if (!one("SELECT 1 x FROM push_langganan LIMIT 1")) return;
+  if (platform.perangkat || !one("SELECT 1 x FROM push_langganan LIMIT 1")) return;
   const barang = items.slice(0, 3).map(i => judulBesar(i.nama) + (i.qty != 1 ? " ×" + i.qty : "")).join(", ") + (items.length > 3 ? `, +${items.length - 3} lagi` : "");
   const plg = pelanggan && pelanggan !== "CUSTOMER" ? judulBesar(pelanggan) : "Pelanggan";
   let judul, isi;
@@ -48,7 +54,7 @@ export function antreNotifPenjualan({ total, bayar, metode, pelanggan, items, pe
     judul = `🛍️ Transaksi baru · ${rp(total)}`;
     isi = `${plg} · ${metode}\n${barang} · kasir ${judulBesar(kasir)}`;
   }
-  run("INSERT INTO notif(judul, isi, url) VALUES (?,?,?)", [judul.slice(0, 120), isi.slice(0, 400), pesanan ? "/#pesanan" : "/#riwayat"]);
+  antreNotif(judul, isi, pesanan ? "/#pesanan" : "/#riwayat");
 }
 
 let mengirim = false;
@@ -86,7 +92,7 @@ route("POST", "/api/notif/langganan", "admin", ({ body, user }) => {
 }, { pusatSaja: true });
 route("DELETE", "/api/notif/langganan", "admin", ({ body }) => { run("DELETE FROM push_langganan WHERE endpoint = ? OR id = ?", [String(body.endpoint || ""), +body.id || 0]); return { ok: true }; });
 route("POST", "/api/notif/uji", "admin", async ({ user }) => {
-  run("INSERT INTO notif(judul, isi, url) VALUES (?,?,?)", ["🔔 Notifikasi Rich Gallery aktif", `Uji coba oleh ${judulBesar(user.nama)}. Transaksi & pesanan baru akan muncul seperti ini.`, "/#riwayat"]);
+  run("INSERT INTO notif(judul, isi, url) VALUES (?,?,?)", ["🔔 Notifikasi Rich Gallery aktif", `Uji coba oleh ${judulBesar(user.nama)}. Transaksi, pesanan & absensi baru akan muncul seperti ini.`, "/#riwayat"]);
   await kirimNotif();
   return { ok: true, hp: one("SELECT COUNT(*) n FROM push_langganan").n, galat: all("SELECT nama, galat FROM push_langganan WHERE galat IS NOT NULL") };
 }, { pusatSaja: true });
