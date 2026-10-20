@@ -105,7 +105,7 @@ route("POST", "/api/penjualan", "semua", ({ body, user, ctx }) => tx(() => {
   antre("penjualan", items.map(it => { const bagian = subtotal ? it.harga * it.qty / subtotal : 0;
     return [String(saleId), tgl, jam, no, it.kode, it.nama, it.kategori, it.harga, it.qty, Math.round(it.harga * it.qty), it.ready ? "READY STOK" : "PRODUKSI", pelanggan, hp, user.nama, metode, Math.round(diskon * bagian), Math.round(ongkir * bagian), Math.round(it.hpp * it.qty), catatan]; }));
   // Kabari HP admin (transaksi / pesanan baru). Transaksi lama yang baru dipindahkan dari perangkat tidak dikabarkan.
-  if (!(kiriman && kiriman.lama)) antreNotifPenjualan({ total, bayar, metode, pelanggan, items, pesanan, kasir: user.nama });
+  if (!(kiriman && kiriman.lama)) antreNotifPenjualan({ id: saleId, total, bayar, metode, pelanggan, items, pesanan, kasir: user.nama });
   return sembunyikanHpp(muatPenjualan("id = ?", [saleId])[0], user);
 }), { cabang: ({ hasil: x }) => ({ aksi: "jual", data: {
   no: x.no, tgl: x.tgl, jam: x.jam, pelanggan: x.pelanggan, hp: x.hp, diskon: x.diskon, ongkir: x.ongkir, metode: x.metode, bayar: x.bayar, catatan: x.catatan, kartu: x.kartu,

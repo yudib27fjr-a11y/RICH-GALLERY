@@ -41,7 +41,7 @@ export function antreNotif(judul, isi, url = "/"){
   run("INSERT INTO notif(judul, isi, url) VALUES (?,?,?)", [String(judul).slice(0, 120), String(isi).slice(0, 400), url]);
 }
 /** Catat notifikasi penjualan baru (dipanggil di dalam transaksi database penjualan). */
-export function antreNotifPenjualan({ total, bayar, metode, pelanggan, items, pesanan, kasir }){
+export function antreNotifPenjualan({ id, total, bayar, metode, pelanggan, items, pesanan, kasir }){
   if (platform.perangkat || !one("SELECT 1 x FROM push_langganan LIMIT 1")) return;
   const barang = items.slice(0, 3).map(i => judulBesar(i.nama) + (i.qty != 1 ? " ×" + i.qty : "")).join(", ") + (items.length > 3 ? `, +${items.length - 3} lagi` : "");
   const plg = pelanggan && pelanggan !== "CUSTOMER" ? judulBesar(pelanggan) : "Pelanggan";
@@ -54,7 +54,7 @@ export function antreNotifPenjualan({ total, bayar, metode, pelanggan, items, pe
     judul = `🛍️ Transaksi baru · ${rp(total)}`;
     isi = `${plg} · ${metode}\n${barang} · kasir ${judulBesar(kasir)}`;
   }
-  antreNotif(judul, isi, pesanan ? "/#pesanan" : "/#riwayat");
+  antreNotif(judul, isi, pesanan ? `/#pesanan?id=${id}` : `/#riwayat?id=${id}`); // ketuk notifikasi → langsung terbuka transaksinya
 }
 
 let mengirim = false;

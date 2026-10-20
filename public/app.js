@@ -3130,12 +3130,36 @@ async function mulai(){
     $("#root").innerHTML = `<div class="auth"><div class="card"><h1>Tidak terhubung</h1><p>${esc(e.message)}</p><button class="btn pri" id="ulang">Coba lagi</button></div></div>`;
     $("#ulang").onclick = mulai; return;
   }
-  try { const h = location.hash.slice(1); if (SEMUA_VIEW.some(v => v[0] === h)) view = h; } catch {}
+  try { const h = location.hash.slice(1).split("?")[0]; if (SEMUA_VIEW.some(v => v[0] === h)) view = h; } catch {}
   await cekKiosk();
   pPer = null; shell(); render();
   halamanTampil();
+  bukaTautanNotif();
   setTimeout(pengingatPesanan, 800);
 }
+/** Ketuk notifikasi → langsung ke isinya: #riwayat?id=… (struk transaksi), #pesanan?id=… (rincian pesanan),
+ *  #absen?tgl=…&u=… (rincian absen karyawan hari itu, dengan foto selfie). */
+async function bukaTautanNotif(){
+  const [v, q] = location.hash.slice(1).split("?");
+  if (!q || !B) return;
+  try { history.replaceState(null, "", "#" + v); } catch {}
+  if (!daftarView().some(x => x[0] === v)) return;
+  const p = new URLSearchParams(q);
+  closeModal();
+  if (v === "absen" && /^\d{4}-\d{2}-\d{2}$/.test(p.get("tgl") || "")) {
+    aDari = aSampai = p.get("tgl"); view = "absen"; await render();
+    const r = $(`#aIsi .li[data-k="${p.get("tgl")}|${+p.get("u") || 0}"]`);
+    if (r) { r.scrollIntoView({ block: "center" }); r.click(); }
+    return;
+  }
+  const id = +p.get("id"); if (!id) return;
+  if (view !== v) { view = v; await render(); }
+  const s = await api("GET", `/api/penjualan/${id}`).catch(e => { toast(e.message); return null; });
+  if (!s) return;
+  if (v === "pesanan") detailPesanan(s); else lihatStruk(s);
+}
+// Aplikasi sudah terbuka saat notifikasi diketuk: alamat berubah tanpa memuat ulang.
+window.addEventListener("hashchange", () => { if (location.hash.includes("?")) bukaTautanNotif(); });
 /** Halaman berhasil tampil: konfirmasi ke aplikasi (jaring pengaman pembaruan), lalu tampilkan pembaruan yang menunggu. */
 function halamanTampil(){
   try { NATIVE?.webSiap?.(); const s = NATIVE?.statusPembaruan?.(); if (s) { const o = JSON.parse(s); if (o.jenis === "web") tawarkanWebBila(o.teks); else window.rgPembaruan(o.jenis, o.teks); } } catch {}

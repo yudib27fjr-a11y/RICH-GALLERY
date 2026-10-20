@@ -168,7 +168,7 @@ function notifAbsen({ userId, tgl, jam, jenis, tempat }){
     if (jenis === "masuk") { const d = menit(j) - menit(sh.masuk); ket = d > 0 ? `terlambat ${d} menit` : d < 0 ? `datang ${-d} menit lebih awal` : "tepat waktu"; }
     else if (jenis === "pulang") { const d = menit(j) - menit(sh.pulang); ket = d > 0 ? `lewat ${d} menit dari jam pulang` : d < 0 ? `pulang ${-d} menit lebih awal` : "tepat jam pulang"; }
     const judul = jenis === "masuk" ? `☀️ ${nm} absen masuk · ${j}` : jenis === "pulang" ? `🌙 ${nm} absen pulang · ${j}` : `🖐️ ${nm} scan absen · ${j}`;
-    antreNotif(judul, [`${sh.nama} (${sh.masuk}–${sh.pulang})`, ket, tempat].filter(Boolean).join(" · "), "/#absen");
+    antreNotif(judul, [`${sh.nama} (${sh.masuk}–${sh.pulang})`, ket, tempat].filter(Boolean).join(" · "), `/#absen?tgl=${tgl}&u=${userId}`); // ketuk → rincian absen hari itu
   } catch { /* notifikasi tidak boleh menggagalkan absen */ }
 }
 export function daftarShift(s = getSettings()){
