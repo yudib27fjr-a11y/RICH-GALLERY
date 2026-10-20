@@ -32,24 +32,40 @@ export function cekLokasi(lat, lng, akurasi){
   if (jarak > radius + Math.min(akurasi, 50)) throw bad(`Absen hanya bisa di toko. Perangkat berjarak ±${Math.round(jarak)} m dari lokasi toko (batas ${radius} m).`);
   return Math.round(jarak);
 }
-/** Status absen di perangkat ini (untuk tombol Absen di layar kasir). */
-function statusKiosk(){
+/* HP (browser, mis. iPhone) yang didaftarkan admin untuk absen. Tanda pengenalnya disimpan di HP itu
+   dan dikirim saat absen; admin bisa mencabutnya di daftar perangkat seperti perangkat kasir. */
+const hpAbsen = token => token ? one("SELECT id, nama, absen FROM perangkat WHERE token_hash = ? AND dicabut IS NULL AND kode LIKE 'W%'", [platform.sha256(String(token))]) : null;
+/** Status absen di perangkat ini (untuk tombol Absen di layar kasir / HP absen). */
+function statusKiosk(token){
   const s = getSettings();
+  const hp = !platform.perangkat ? hpAbsen(token) : null;
   const alasan = !s.absen_pin_aktif ? "Absen PIN belum diaktifkan admin"
-    : !platform.perangkat ? "Absen hanya bisa dari aplikasi di perangkat kasir (iMin)"
-    : !cabangAktif() ? "Perangkat ini belum tersambung ke server pusat"
-    : !s.cabang_absen ? "Perangkat ini belum diizinkan untuk absen (admin: Pengaturan → Server pusat → Perangkat cabang)"
-    : !(isFinite(parseFloat(s.absen_lat)) && isFinite(parseFloat(s.absen_lng))) ? "Lokasi toko untuk absen belum diatur"
-    : "";
-  return { aktif: !!s.absen_pin_aktif, boleh: !alasan, alasan, radius: Number(s.absen_radius) || 100, lat: parseFloat(s.absen_lat), lng: parseFloat(s.absen_lng) };
+    : platform.perangkat ? (
+        !cabangAktif() ? "Perangkat ini belum tersambung ke server pusat"
+        : !s.cabang_absen ? "Perangkat ini belum diizinkan untuk absen (admin: Pengaturan → Server pusat → Perangkat cabang)" : "")
+    : !hp ? "HP ini belum didaftarkan untuk absen (admin: masuk di HP ini → Pengaturan → Absensi → Jadikan HP ini tempat absen)"
+    : !hp.absen ? "HP ini belum diizinkan untuk absen (admin: Pengaturan → Server pusat → Perangkat)" : "";
+  const lokasiAda = isFinite(parseFloat(s.absen_lat)) && isFinite(parseFloat(s.absen_lng));
+  const alasan2 = alasan || (!lokasiAda ? "Lokasi toko untuk absen belum diatur" : "");
+  return { aktif: !!s.absen_pin_aktif, boleh: !alasan2, alasan: alasan2, hp: hp ? hp.nama : null, hpId: hp ? hp.id : null,
+    radius: Number(s.absen_radius) || 100, lat: parseFloat(s.absen_lat), lng: parseFloat(s.absen_lng) };
 }
-route("GET", "/api/absen/kiosk", false, () => {
-  const st = statusKiosk();
+route("GET", "/api/absen/kiosk", false, ({ query }) => {
+  const { hpId, ...st } = statusKiosk(query.alat);
   return st.boleh ? { ...st, staf: all("SELECT id, nama FROM users WHERE aktif = 1 AND pass_hash IS NOT NULL ORDER BY nama") } : st;
 });
+/** Admin mendaftarkan HP yang sedang dipakai (browser) sebagai tempat absen. Langsung diizinkan absen. */
+route("POST", "/api/absen/daftar-hp", "admin", ({ body, user }) => {
+  const nama = teks(body.nama, { wajib: true, max: 40, nama: "Nama HP" });
+  const dipakai = new Set(all("SELECT kode FROM perangkat").map(r => r.kode));
+  let i = 1; while (dipakai.has("W" + i)) i++;
+  const token = platform.token();
+  run("INSERT INTO perangkat(kode, nama, token_hash, admin_id, absen) VALUES (?,?,?,?,1)", ["W" + i, nama, platform.sha256(token), user.id]);
+  return { token, kode: "W" + i, nama };
+}, { pusatSaja: true });
 const FOTO = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
 route("POST", "/api/absen/pin", false, ({ body, ctx }) => {
-  const st = statusKiosk();
+  const st = statusKiosk(body.alat);
   if (!st.boleh) throw new HttpError(403, st.alasan);
   const u = one("SELECT id, nama, nama_key, pass_hash, aktif FROM users WHERE id = ?", [+body.user_id]);
   if (!u || !u.aktif) throw bad("Pilih nama karyawan");
@@ -64,7 +80,8 @@ route("POST", "/api/absen/pin", false, ({ body, ctx }) => {
   const jenis = body.jenis === "pulang" ? "pulang" : "masuk";
   const w = sekarang(), uid = platform.token();
   const id = Number(run(`INSERT INTO absen(tgl, jam, user_id, sumber, jenis, foto, lat, lng, jarak, uid, mesin, oleh) VALUES (?,?,?, 'pin', ?,?,?,?,?,?,?,?)`,
-    [w.tgl, w.jam.slice(0, 5) + ":00", u.id, jenis, foto, +body.lat, +body.lng, jarak, uid, getSettings().cabang_nama || "", u.nama]).lastInsertRowid);
+    [w.tgl, w.jam.slice(0, 5) + ":00", u.id, jenis, foto, +body.lat, +body.lng, jarak, uid, st.hp || getSettings().cabang_nama || "", u.nama]).lastInsertRowid);
+  if (st.hpId) run("UPDATE perangkat SET terakhir = datetime('now') WHERE id = ?", [st.hpId]);
   return { ok: true, id, uid, nama: u.nama, jenis, jam: w.jam.slice(0, 5), jarak };
 }, { batas: 500_000, cabang: ({ hasil: h }) => {
   const a = one("SELECT a.tgl, a.jam, a.jenis, a.foto, a.lat, a.lng, u.nama_key FROM absen a JOIN users u ON u.id = a.user_id WHERE a.uid = ?", [h.uid]);

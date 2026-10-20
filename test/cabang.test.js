@@ -488,6 +488,28 @@ test("absen PIN + selfie: hanya perangkat yang diizinkan & di lokasi toko", asyn
   assert.equal((await pusat("PUT", `/api/cabang/perangkat/${a.id}`, { absen: false })).status, 200);
   await sinkron();
   assert.equal((await cabang("GET", "/api/absen/kiosk")).data.boleh, false);
+  // HP admin (browser, mis. iPhone) didaftarkan sebagai tempat absen di server
+  const tamuP = klien(PORT_P), LOK = { lat: -6.3275, lng: 108.3248 };
+  assert.match((await tamuP("GET", "/api/absen/kiosk")).data.alasan, /belum didaftarkan/);
+  assert.equal((await tamuP("POST", "/api/absen/daftar-hp", { nama: "iPhone admin" })).status, 401, "hanya admin");
+  const hp = (await pusat("POST", "/api/absen/daftar-hp", { nama: "iPhone admin" })).data;
+  assert.ok(hp.token && /^W\d+$/.test(hp.kode));
+  k = (await tamuP("GET", `/api/absen/kiosk?alat=${encodeURIComponent(hp.token)}`)).data;
+  assert.equal(k.boleh, true, JSON.stringify(k)); assert.equal(k.hp, "iPhone admin"); assert.ok(k.staf.length);
+  const izaP = k.staf.find(s => s.nama === "IZA");
+  const absenHp = b => tamuP("POST", "/api/absen/pin", { alat: hp.token, user_id: izaP.id, pin: "1234", jenis: "pulang", foto: FOTO, akurasi: 10, ...LOK, ...b });
+  assert.equal((await absenHp({ alat: "palsu" })).status, 403, "token salah");
+  assert.equal((await absenHp(JAUH)).status, 400, "di luar toko");
+  const okHp = await absenHp({});
+  assert.equal(okHp.status, 200, JSON.stringify(okHp.data)); assert.equal(okHp.data.jenis, "pulang");
+  const R2 = (await pusat("GET", `/api/absen?dari=${hari}&sampai=${hari}`)).data;
+  assert.ok(R2.harian.find(x => x.nama === "IZA").scan.some(x => x.sumber === "pin" && x.jenis === "pulang"), "absen HP masuk rekap");
+  // Token HP absen tidak bisa dipakai sebagai perangkat kasir (kirim transaksi)
+  assert.equal((await tamuP("POST", "/api/cabang/kirim", { token: hp.token, perintah: [] })).status, 401);
+  // Dicabut admin → tidak bisa absen lagi
+  const w = (await pusat("GET", "/api/cabang/perangkat")).data.find(x => x.kode === hp.kode);
+  assert.equal((await pusat("DELETE", `/api/cabang/perangkat/${w.id}`)).status, 200);
+  assert.equal((await absenHp({})).status, 403);
 });
 
 test("barang custom dengan pembuat otomatis masuk produksi & insentif (cabang → pusat), batal → hilang", async () => {

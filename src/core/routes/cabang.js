@@ -45,7 +45,7 @@ for (const [m, p] of [
 
 /* ================= di server pusat ================= */
 function perangkatDariToken(token){
-  const d = token ? one("SELECT * FROM perangkat WHERE token_hash = ? AND dicabut IS NULL", [platform.sha256(String(token))]) : null;
+  const d = token ? one("SELECT * FROM perangkat WHERE token_hash = ? AND dicabut IS NULL AND kode NOT LIKE 'W%'", [platform.sha256(String(token))]) : null;
   if (!d) throw new HttpError(401, "Perangkat tidak dikenal atau sudah dicabut. Sambungkan ulang dari Pengaturan di perangkat.");
   // Dicatat paling sering 2 menit sekali: perangkat bertanya tiap beberapa detik, jangan boros tulis.
   run("UPDATE perangkat SET terakhir = datetime('now') WHERE id = ? AND (terakhir IS NULL OR terakhir < datetime('now', '-2 minutes'))", [d.id]);

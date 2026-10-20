@@ -607,7 +607,7 @@ function tampilLogin(pesan = ""){
     <div id="lAbsen"></div>
     <p class="small muted" style="margin:0;text-align:center;opacity:.7">${(() => { try { const i = JSON.parse(NATIVE.info()); return `Aplikasi ${esc(i.versi || "?")} · tampilan #${esc(String(i.web || "?"))}`; } catch { return ""; } })()}</p>${TAG_PEMBUAT}</form></div>`;
   // Perangkat kasir: karyawan bisa absen tanpa masuk
-  if (LOKAL) cekKiosk().then(K => { const d = $("#lAbsen"); if (!d || !K || !K.aktif) return;
+  if (LOKAL || tokenHpAbsen()) cekKiosk().then(K => { const d = $("#lAbsen"); if (!d || !K || !K.aktif) return;
     d.innerHTML = `<hr class="sep">` + panelAbsen(K, true);
     pasangJam(d);
     const bm = $("#lAbsenMasuk"); if (bm) bm.onclick = () => bukaAbsen("masuk");
@@ -705,7 +705,7 @@ const ICON = {
 };
 const SEMUA_VIEW = [["kasir", "Kasir"], ["absenku", "Absen"], ["pesanan", "Pesanan"], ["riwayat", "Transaksi"], ["produksi", "Produksi"], ["stok", "Stok"], ["mutasi", "Masuk/Keluar"], ["opname", "Opname"], ["biaya", "Pengeluaran", 1], ["laporan", "Laporan", 1], ["absen", "Rekap Absen", 1], ["gaji", "Gaji", 1], ["atur", "Pengaturan"]];
 const daftarView = () => SEMUA_VIEW.filter(v => (!v[2] || isAdmin()) && (v[0] !== "absen" || (B && B.toko.absen_aktif))
-  && (v[0] !== "absenku" || (LOKAL && kioskInfo && kioskInfo.aktif)));
+  && (v[0] !== "absenku" || (kioskInfo && kioskInfo.aktif)));
 let view = "kasir";
 function shell(){
   $("#root").innerHTML = `<div class="app">
@@ -713,7 +713,7 @@ function shell(){
       <div class="brand"><img src="/monogram.png" alt="" width="30" height="30"><h1>${esc(toTitle(B.toko.nama_toko))}</h1><small>POS</small></div>
       <span class="sp"></span>
       ${isAdmin() ? `<span class="sync-dot" id="syncDot" title="Status sinkron Google Sheet"></span>` : ""}${LOKAL ? `<button class="sync-chip" id="syncChip" type="button" hidden></button>` : ""}
-      ${LOKAL && kioskInfo && kioskInfo.boleh ? `<button class="btn sm absen-masuk" id="tbAbsen" type="button">🕘 Absen</button>` : ""}
+      ${kioskInfo && kioskInfo.boleh ? `<button class="btn sm absen-masuk" id="tbAbsen" type="button">🕘 Absen</button>` : ""}
       <span class="userchip"><b>${esc(B.me.nama)}</b><span class="pill mut">${isAdmin() ? "ADMIN" : "KARYAWAN"}</span><button class="btn ghost sm" id="keluar" type="button">Keluar</button></span>
     </header>
     <nav class="tabs" id="tabs"></nav>
@@ -1658,6 +1658,9 @@ async function aturAbsen(){
     <p class="small muted" style="margin:0">Izinkan perangkat kasir mana yang boleh dipakai absen di bagian <b>Server pusat → Perangkat cabang</b> (tombol "Izinkan absen").</p>
     <button class="btn pri" id="abSimpanUmum" type="button">Simpan pengaturan absen</button>
 
+    <hr class="sep"><h4 style="margin:4px 0 0">📱 Absen dari HP ini (mis. iPhone)</h4>
+    <div id="abHp" class="stack"><div class="empty small">Memeriksa…</div></div>
+
     <hr class="sep"><h4 style="margin:4px 0 0">🖐️ Mesin sidik jari (Fingerspot)</h4>
     <p class="small muted" style="margin:0">Untuk mesin absen <b>Fingerspot Revo</b> yang tersambung WiFi ke layanan <b>developer.fingerspot.io</b>. Setiap scan dikirim otomatis ke ${LOKAL ? "aplikasi ini" : "server ini"} dan tampil di menu <b>Absensi</b>.</p>
     <label class="row"><input type="checkbox" id="abAktif" ${A.aktif ? "checked" : ""}> <b>Aktifkan mesin sidik jari</b></label>
@@ -1675,6 +1678,7 @@ async function aturAbsen(){
         <li>Daftarkan sidik jari tiap karyawan di mesin. Catat nomor ID (PIN) masing-masing, lalu isi di kolom PIN di atas.</li>
         <li>Masuk ke <b>developer.fingerspot.io</b>, pilih mesin, lalu isi <b>Webhook URL</b> dengan alamat di atas.</li>
         <li>Coba scan satu jari, lalu buka menu <b>Absensi</b>: scan harus muncul dalam beberapa detik.</li></ol></details>` : ""}`;
+  hpAbsenPengaturan();
   $("#abLokasiSaya").onclick = e => coba(async () => {
     toast("Membaca lokasi…");
     const p = await ambilLokasi();
@@ -1703,6 +1707,36 @@ async function aturAbsen(){
   }, e.target);
 }
 
+/** Pengaturan "absen dari HP ini" (browser di server): daftarkan / lepas HP yang sedang dipakai. */
+async function hpAbsenPengaturan(){
+  const el = $("#abHp"); if (!el) return;
+  if (LOKAL) { el.innerHTML = `<p class="small muted" style="margin:0">Untuk HP seperti iPhone: buka ${esc(SERVER_TOKO)} di HP itu, masuk sebagai admin, lalu daftarkan dari Pengaturan → Absensi.</p>`; return; }
+  const K = await cekKiosk(); if (!$("#abHp")) return;
+  const terdaftar = !!(tokenHpAbsen() && K && K.hp);
+  const ios = apakahIOS();
+  el.innerHTML = terdaftar
+    ? `<p class="small" style="margin:0">HP ini terdaftar sebagai tempat absen: <b>${esc(K.hp)}</b> — ${K.boleh ? `<b style="color:var(--ok)">siap dipakai</b>. Tombol <b>🕘 Absen</b> ada di atas dan di layar masuk.` : `<b>belum bisa</b>: ${esc(K.alasan)}`}</p>
+       ${ios && !navigator.standalone ? `<p class="note small" style="margin:0"><b>Penting di iPhone:</b> buka dari ikon di layar utama (Safari → tombol Bagikan → <b>Tambah ke Layar Utama</b>), lalu daftarkan lagi dari situ. Safari bisa menghapus pendaftaran bila situs tidak dibuka 7 hari.</p>` : ""}
+       <button class="btn sm ghost" id="abHpLepas" type="button">Lepas HP ini dari absen</button>`
+    : `<p class="small muted" style="margin:0">Jadikan HP yang sedang Anda pakai sebagai tempat absen (karyawan pilih nama, ketik PIN, foto selfie — hanya bisa di lokasi toko). Bisa dicabut kapan saja di <b>Server pusat → Perangkat cabang</b>.</p>
+       ${ios && !navigator.standalone ? `<p class="note small" style="margin:0">Di iPhone: sebaiknya dulu Safari → tombol Bagikan → <b>Tambah ke Layar Utama</b>, buka dari ikon itu, masuk sebagai admin, lalu tekan tombol di bawah.</p>` : ""}
+       <button class="btn pri" id="abHpDaftar" type="button">📱 Jadikan HP ini tempat absen</button>`;
+  const d = $("#abHpDaftar"); if (d) d.onclick = () => modal(`<h3>Daftarkan HP ini untuk absen</h3>
+    <label class="f">Nama HP<input type="text" id="hpN" maxlength="40" value="${ios ? "iPhone admin" : "HP admin"}"></label>
+    <p class="small muted" style="margin:0">Setelah ini izinkan <b>Kamera</b> dan <b>Lokasi</b> saat diminta.</p>
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="hpOk" type="button">Daftarkan</button></div>`, m => {
+    $("#hpOk", m).onclick = e => coba(async () => {
+      const r = await api("POST", "/api/absen/daftar-hp", { nama: $("#hpN", m).value });
+      try { localStorage.setItem("rg_hp_absen", r.token); } catch { throw new Error("HP ini tidak bisa menyimpan data (mode privat?)"); }
+      closeModal(); await cekKiosk(); shell(); render(); toast("HP ini sekarang bisa dipakai absen. Tombol 🕘 Absen ada di atas.");
+    }, e.target);
+  });
+  const l = $("#abHpLepas"); if (l) l.onclick = () => konfirmasi("Lepas HP ini dari absen?", "Tombol Absen tidak muncul lagi di HP ini. Untuk mencabut sepenuhnya, cabut juga di Server pusat → Perangkat cabang.", "Lepas", async () => {
+    try { localStorage.removeItem("rg_hp_absen"); } catch {}
+    kioskInfo = null; shell(); render();
+  });
+}
+
 /* ================= ABSEN KARYAWAN DI PERANGKAT KASIR (PIN + selfie + lokasi) ================= */
 /** Lokasi perangkat (GPS). Mengembalikan { lat, lng, akurasi }. */
 function ambilLokasi(){
@@ -1714,7 +1748,13 @@ function ambilLokasi(){
   });
 }
 let kioskInfo = null;
-async function cekKiosk(){ kioskInfo = LOKAL ? await api("GET", "/api/absen/kiosk").catch(() => null) : null; return kioskInfo; }
+/** HP (browser, mis. iPhone admin) yang didaftarkan sebagai tempat absen: tanda pengenalnya disimpan di HP ini. */
+const tokenHpAbsen = () => { try { return localStorage.getItem("rg_hp_absen") || ""; } catch { return ""; } };
+async function cekKiosk(){
+  const t = !LOKAL && tokenHpAbsen();
+  kioskInfo = LOKAL || t ? await api("GET", "/api/absen/kiosk" + (t ? "?alat=" + encodeURIComponent(t) : "")).catch(() => null) : null;
+  return kioskInfo;
+}
 /* ================= ABSEN (untuk semua karyawan) =================
    Halaman sederhana: jam sekarang, dua tombol besar (MASUK / PULANG), dan langkah-langkahnya.
    Data absensi tidak ditampilkan di sini (rekap hanya untuk admin di menu Rekap Absen). */
@@ -1736,7 +1776,7 @@ function panelAbsen(K, ringkas = false){
       <li><span class="n">4</span><div>Tekan <b>Simpan</b> — selesai ✅</div></li>
     </ol>
     ${shifts.length ? `<div class="absen-shift">${shifts.map(x => `<span><b>${esc(x.nama)}</b> ${esc(x.masuk)}–${esc(x.pulang)}</span>`).join("")}</div>` : ""}
-    <p class="small muted" style="margin:0;text-align:center">Jam absen tercatat otomatis. Absen hanya bisa di toko, dari perangkat kasir ini.</p>`}
+    <p class="small muted" style="margin:0;text-align:center">Jam absen tercatat otomatis. Absen hanya bisa di toko, dari perangkat ini.</p>`}
   </div>`;
 }
 function pasangJam(el){
@@ -1813,7 +1853,7 @@ async function bukaAbsen(jenisAwal){
     };
     bacaLokasi();
     $("#akKirim", m).onclick = e => coba(async () => {
-      const r = await api("POST", "/api/absen/pin", { user_id: +$("#akU", m).value, pin: $("#akP", m).value, jenis, foto, lat: lokasi.lat, lng: lokasi.lng, akurasi: lokasi.akurasi });
+      const r = await api("POST", "/api/absen/pin", { alat: LOKAL ? undefined : tokenHpAbsen(), user_id: +$("#akU", m).value, pin: $("#akP", m).value, jenis, foto, lat: lokasi.lat, lng: lokasi.lng, akurasi: lokasi.akurasi });
       matikan(); closeModal();
       modal(`<h3>✅ Absen ${r.jenis} tercatat</h3><p style="font-size:18px;margin:0"><b>${esc(r.nama)}</b> — jam <b>${esc(r.jam)}</b></p><p class="small muted">±${r.jarak} m dari titik toko</p><div class="actions"><button class="btn pri" data-close>Selesai</button></div>`);
     }, e.target);
@@ -2888,7 +2928,7 @@ async function daftarPerangkatCabang(el, kodeIni = ""){
         : `<div class="empty">Belum ada perangkat yang tersambung.</div>`}`;
     el.querySelectorAll("[data-absen]").forEach(b => b.onclick = () => coba(async () => {
       await api("PUT", `/api/cabang/perangkat/${b.dataset.absen}`, { absen: b.dataset.v === "1" });
-      if (LOKAL) { await cekKiosk(); renderNav(); }
+      if (LOKAL || tokenHpAbsen()) { await cekKiosk(); renderNav(); }
       toast(b.dataset.v === "1" ? "Perangkat diizinkan untuk absen karyawan" : "Izin absen dicabut"); muat();
     }, b));
     el.querySelectorAll("[data-nama]").forEach(b => b.onclick = () => {
@@ -3030,7 +3070,7 @@ async function mulai(){
     $("#ulang").onclick = mulai; return;
   }
   try { const h = location.hash.slice(1); if (SEMUA_VIEW.some(v => v[0] === h)) view = h; } catch {}
-  if (LOKAL) await cekKiosk();
+  if (LOKAL || tokenHpAbsen()) await cekKiosk();
   pPer = null; shell(); render();
   halamanTampil();
   setTimeout(pengingatPesanan, 800);
