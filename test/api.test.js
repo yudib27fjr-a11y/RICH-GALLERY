@@ -477,3 +477,18 @@ test("paket & harga jasa: bawaan dari price list, admin bisa ubah, karyawan bisa
     pesanan: { tgl: (await kasir("GET", "/api/bootstrap")).data.hariIni, cara: "antar" }, jenis: "standing", detail: { paket: "Papan Acrylic C", tulisan: "Congratulations", dari: "PT XYZ" } });
   assert.equal(st.status, 200, JSON.stringify(st.data)); assert.equal(st.data.jenis, "standing");
 });
+
+test("jam toko per hari (Minggu 09–17, Sabtu 12–21) & hari libur karyawan", async () => {
+  const J = (await admin("GET", "/api/jam-kerja")).data;
+  assert.deepEqual(J.jam_hari, { "0": { buka: "09:00", tutup: "17:00" }, "6": { buka: "12:00", tutup: "21:00" } });
+  const k = J.karyawan.find(u => u.peran !== "admin" && u.aktif);
+  assert.equal((await admin("PUT", "/api/jam-kerja", { libur_karyawan: [{ user_id: k.id, libur: "6" }], jam_hari: { "0": { buka: "09:00", tutup: "17:00" }, "6": { buka: "12:00", tutup: "21:00" } } })).status, 200);
+  assert.equal((await admin("GET", "/api/jam-kerja")).data.karyawan.find(u => u.id === k.id).libur, "6");
+  assert.equal((await admin("PUT", "/api/jam-kerja", { jam_hari: { "0": { buka: "17:00", tutup: "09:00" } } })).status, 400);
+  // Sabtu 2026-10-24: karyawan k libur; absen manual hari ini tidak bisa diatur tanggalnya, jadi cek rekap untuk sebuah Sabtu
+  const R = (await admin("GET", "/api/absen?dari=2026-10-24&sampai=2026-10-24")).data;
+  assert.equal(R.hari, "Sabtu"); assert.deepEqual(R.jam_khusus, { buka: "12:00", tutup: "21:00" });
+  assert.ok(R.libur.some(x => x.user_id === k.id), "tampil sebagai libur Sabtu");
+  const R2 = (await admin("GET", "/api/absen?dari=2026-10-21&sampai=2026-10-21")).data;
+  assert.equal(R2.hari, "Rabu"); assert.equal(R2.jam_khusus, null);
+});

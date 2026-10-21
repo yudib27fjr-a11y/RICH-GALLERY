@@ -2099,16 +2099,17 @@ async function vAbsen(){
   if (!R || view !== "absen") { if (view === "absen" && !R) $("#aIsi").innerHTML = `<div class="empty">Data absensi belum bisa dimuat${LOKAL ? " (perangkat ini mengambilnya dari server pusat, butuh internet)" : ""}.</div>`; return; }
   const satuHari = aDari === aSampai;
   $("#aIsi").innerHTML = `
-    <p class="small muted" style="margin:0 0 12px">${(R.shifts || []).map(x => `${esc(x.nama)} ${esc(x.masuk)}–${esc(x.pulang)}`).join(" · ")}. Masuk = absen masuk pertama, pulang = absen pulang terakhir. Datang sebelum jam masuk shift & pulang setelah jam pulang shift dihitung <b>lembur</b>${R.lembur_bulat > 1 ? ` (dibulatkan per ${R.lembur_bulat} menit)` : ""}.</p>
+    ${satuHari ? `<div class="note" style="margin:0 0 12px"><b>${esc(R.hari || "")}</b>: ${R.jam_khusus ? `toko buka <b>${esc(R.jam_khusus.buka)}–${esc(R.jam_khusus.tutup)}</b> (jam kerja semua karyawan hari ini)` : `jam toko biasa ${esc(R.jam_buka || "")}–${esc(R.jam_tutup || "")}, shift biasa`}${(R.libur || []).length ? ` · 🏖️ Libur: <b>${R.libur.map(x => esc(x.nama)).join(", ")}</b>` : ""}</div>` : ""}
+    <p class="small muted" style="margin:0 0 12px">${(R.shifts || []).map(x => `${esc(x.nama)} ${esc(x.masuk)}–${esc(x.pulang)}`).join(" · ")}${Object.entries(R.jam_hari || {}).map(([h, x]) => ` · ${["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"][+h]} ${esc(x.buka)}–${esc(x.tutup)}`).join("")}. Masuk = absen masuk pertama, pulang = absen pulang terakhir. Datang sebelum jam masuk shift & pulang setelah jam pulang shift dihitung <b>lembur</b>${R.lembur_bulat > 1 ? ` (dibulatkan per ${R.lembur_bulat} menit)` : ""}.</p>
     ${R.takDikenal.length ? `<p class="note" style="margin:0 0 12px">Ada scan dari PIN mesin yang belum dihubungkan ke karyawan: <b>${R.takDikenal.map(t => esc(t.pin) + " (" + t.jumlah + "×)").join(", ")}</b>. Hubungkan di Pengaturan → Absensi sidik jari.</p>` : ""}
     ${!satuHari ? `<section class="panel" style="margin-bottom:12px"><h3 style="font-size:16px;margin:0 0 8px">Ringkasan ${esc(tglID(aDari))} – ${esc(tglID(aSampai))}</h3>
       ${R.ringkas.length ? `<div class="list">${R.ringkas.map(r => `<div class="li"><div class="main"><div class="t">${esc(r.nama)}</div><div class="small muted">${r.tanpaPulang ? r.tanpaPulang + " hari tanpa absen pulang" : "Lengkap"}${r.lembur ? ` · lembur <b>${jamMenit(r.lembur)}</b>${r.lembur_rp ? " = " + rp(r.lembur_rp) : ""}` : ""}</div></div>
-        <div style="text-align:right"><div class="num" style="font-weight:700">${r.hadir} hari</div>${r.terlambat ? `<span class="pill warn">${r.terlambat}× terlambat</span>` : `<span class="pill ok">tepat waktu</span>`}</div></div>`).join("")}</div>` : `<div class="empty">Belum ada data.</div>`}</section>` : ""}
+        <div style="text-align:right"><div class="num" style="font-weight:700">${r.hadir} hari</div>${r.terlambat ? `<span class="pill warn">${r.terlambat}× terlambat</span>` : `<span class="pill ok">tepat waktu</span>`}${r.masukLibur ? ` <span class="pill">${r.masukLibur}× masuk hari libur</span>` : ""}</div></div>`).join("")}</div>` : `<div class="empty">Belum ada data.</div>`}</section>` : ""}
     <div class="row" style="margin-bottom:8px"><h3 style="font-size:16px;margin:0;flex:1">${satuHari ? "Kehadiran " + esc(tglID(aDari)) : "Per hari"}</h3>
       ${LOKAL && B.me ? "" : `<button class="btn sm" id="aManual" type="button">+ Absen oleh admin</button>`}<button class="btn sm" id="aCsv" type="button">Unduh CSV</button></div>
     ${R.harian.length ? `<div class="list">${R.harian.map(h => `<div class="li click" data-k="${h.tgl}|${h.user_id}">
       <div class="main"><div class="t">${esc(h.nama)}${satuHari ? "" : ` <span class="small muted">${tglPendek(h.tgl)}</span>`}</div>
-        <div class="small muted">${esc(h.shift || "")}${h.shift ? " · " : ""}${h.scan.length} scan${h.scan.some(x => x.sumber === "pin") ? " · 📷 selfie" : ""}${h.scan.some(x => x.sumber === "manual") ? " · ada manual" : ""}</div></div>
+        <div class="small muted">${esc(h.shift || "")}${h.shift ? " · " : ""}${h.scan.length} scan${h.scan.some(x => x.sumber === "pin") ? " · 📷 selfie" : ""}${h.scan.some(x => x.sumber === "manual") ? " · ada manual" : ""}${h.hari_libur ? ` · <b style="color:var(--warn)">masuk di hari libur</b>` : ""}</div></div>
       <div style="text-align:right"><div class="num" style="font-weight:700">${h.masuk} – ${h.pulang || "…"}</div>
         ${h.terlambat ? `<span class="pill warn">terlambat</span>` : `<span class="pill ok">tepat</span>`}${h.pulangCepat ? ` <span class="pill mut">pulang cepat</span>` : ""}${h.lembur ? ` <span class="pill">lembur ${jamMenit(h.lembur)}</span>` : ""}</div></div>`).join("")}</div>`
       : `<div class="list"><div class="empty">Belum ada scan pada ${satuHari ? "tanggal" : "periode"} ini.</div></div>`}`;
@@ -2353,7 +2354,9 @@ function panelAbsen(K, ringkas = false){
       <li><span class="n">3</span><div>Hadap kamera, tekan <b>Ambil foto</b></div></li>
       <li><span class="n">4</span><div>Tekan <b>Simpan</b> — selesai ✅</div></li>
     </ol>
-    ${shifts.length ? `<div class="absen-shift">${shifts.map(x => `<span><b>${esc(x.nama)}</b> ${esc(x.masuk)}–${esc(x.pulang)}</span>`).join("")}</div>` : ""}
+    ${(() => { const h = new Date(today() + "T00:00:00Z").getUTCDay(), k = B && B.toko && B.toko.jam_hari && B.toko.jam_hari[h];
+      return k ? `<div class="absen-shift"><span><b>Hari ini (${["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"][h]})</b> ${esc(k.buka)}–${esc(k.tutup)}</span></div>`
+        : shifts.length ? `<div class="absen-shift">${shifts.map(x => `<span><b>${esc(x.nama)}</b> ${esc(x.masuk)}–${esc(x.pulang)}</span>`).join("")}</div>` : ""; })()}
     <p class="small muted" style="margin:0;text-align:center">Jam absen tercatat otomatis. Absen hanya bisa di toko, dari perangkat ini.</p>`}
   </div>`;
 }
@@ -3331,10 +3334,19 @@ async function aturJam(){
     <div class="row" style="flex-wrap:nowrap;align-items:center"><input type="text" class="jN" value="${esc(x.nama)}" maxlength="30" aria-label="Nama shift" style="flex:1;min-width:0;font-weight:700" ${dis}>
       ${pusat ? "" : `<button class="btn sm ghost" data-hapus-shift="${i}" type="button" aria-label="Hapus shift">✕</button>`}</div>
     <div class="row" style="flex-wrap:nowrap"><label class="f" style="flex:1;min-width:0">Masuk<input type="time" class="jM" value="${esc(x.masuk)}" style="padding-left:8px;padding-right:4px" ${dis}></label><label class="f" style="flex:1;min-width:0">Pulang<input type="time" class="jP" value="${esc(x.pulang)}" style="padding-left:8px;padding-right:4px" ${dis}></label></div></div>`;
+  const URUT_HARI = [1, 2, 3, 4, 5, 6, 0], NM_HARI = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+  const jh = J.jam_hari || {};
+  const opsiLibur = v => `<option value="">Tidak tetap</option>${URUT_HARI.map(h => `<option value="${h}" ${String(v ?? "") === String(h) ? "selected" : ""}>Libur ${NM_HARI[h]}</option>`).join("")}`;
   const opsiShift = v => `<option value="">Otomatis</option>${J.shifts.map((x, i) => `<option value="${i + 1}" ${String(v) === String(i + 1) ? "selected" : ""}>${esc(x.nama)} (${x.masuk}–${x.pulang})</option>`).join("")}`;
   el.innerHTML = `<h3 style="font-size:17px">⏱️ Jam kerja, lembur & insentif lain</h3>
     ${pusat ? `<p class="note" style="margin:0">Diatur di server (browser) → Pengaturan, lalu otomatis ikut ke perangkat ini.</p>` : ""}
-    <div class="row"><label class="f grow">Toko buka<input type="time" id="jBuka" value="${esc(J.jam_buka)}" ${dis}></label><label class="f grow">Toko tutup<input type="time" id="jTutup" value="${esc(J.jam_tutup)}" ${dis}></label></div>
+    <div class="row"><label class="f grow">Toko buka (hari biasa)<input type="time" id="jBuka" value="${esc(J.jam_buka)}" ${dis}></label><label class="f grow">Toko tutup<input type="time" id="jTutup" value="${esc(J.jam_tutup)}" ${dis}></label></div>
+    <h4 style="margin:4px 0 0">Jam toko per hari</h4>
+    <p class="small muted" style="margin:0">Centang hari yang jamnya berbeda. Di hari itu semua karyawan memakai jam toko hari itu (terlambat & lembur dihitung dari situ). Hari lain memakai shift biasa.</p>
+    <div class="stack" id="jHari" style="gap:6px">${URUT_HARI.map(h => { const x = jh[h]; return `<div class="row jhari" data-h="${h}" style="flex-wrap:nowrap;align-items:center;gap:8px">
+      <label class="row" style="width:112px;flex:none;flex-wrap:nowrap;gap:6px"><input type="checkbox" class="jhK" ${x ? "checked" : ""} ${dis}> <b>${NM_HARI[h]}</b></label>
+      <input type="time" class="jhB" value="${esc(x ? x.buka : J.jam_buka)}" ${x ? "" : "disabled"} ${dis} style="flex:1;min-width:0;padding-left:8px;padding-right:4px" aria-label="Buka ${NM_HARI[h]}">
+      <span class="muted">–</span><input type="time" class="jhT" value="${esc(x ? x.tutup : J.jam_tutup)}" ${x ? "" : "disabled"} ${dis} style="flex:1;min-width:0;padding-left:8px;padding-right:4px" aria-label="Tutup ${NM_HARI[h]}"></div>`; }).join("")}</div>
     <h4 style="margin:4px 0 0">Shift karyawan</h4>
     <div class="stack" id="jShifts">${J.shifts.map(barisShift).join("")}</div>
     ${pusat ? "" : `<button class="btn sm" id="jAddShift" type="button" style="align-self:flex-start">+ Tambah shift</button>`}
@@ -3349,9 +3361,9 @@ async function aturJam(){
       <label class="f grow">Buat konten<input type="number" id="jKonten" value="${J.ins_konten}" min="0" step="500" inputmode="numeric" ${dis}></label>
       <label class="f grow">Dekorasi (per orang)<input type="number" id="jDekor" value="${J.ins_dekorasi ?? 100000}" min="0" step="5000" inputmode="numeric" ${dis}></label></div>
     <p class="small muted" style="margin:0">Dicatat di menu <b>Produksi</b> → Insentif lain. Nominal bisa disesuaikan saat mencatat.</p>
-    <h4 style="margin:4px 0 0">Shift tiap karyawan</h4>
-    <p class="small muted" style="margin:0">"Otomatis" memilih shift yang jam masuknya paling dekat dengan jam datang. Pilih shift tetap supaya lembur datang awal terhitung tepat.</p>
-    <div class="stack" id="jKary">${J.karyawan.filter(k => k.aktif).map(k => `<div class="row" style="align-items:center"><span style="flex:1">${esc(k.nama)} <span class="small muted">${k.peran}</span></span><select data-uid="${k.id}" style="width:auto;max-width:60%" ${dis}>${opsiShift(k.shift)}</select></div>`).join("")}</div>
+    <h4 style="margin:4px 0 0">Shift & hari libur tiap karyawan</h4>
+    <p class="small muted" style="margin:0">"Otomatis" memilih shift yang jam masuknya paling dekat dengan jam datang. Libur 1 hari per minggu: pilih harinya — di Rekap Absen tampil siapa yang libur, dan absen di hari libur diberi tanda.</p>
+    <div class="stack" id="jKary">${J.karyawan.filter(k => k.aktif).map(k => `<div class="stack" style="gap:4px;border-bottom:1px solid var(--line);padding-bottom:8px"><b>${esc(k.nama)} <span class="small muted" style="font-weight:400">${k.peran}</span></b><div class="row" style="flex-wrap:nowrap;gap:6px"><select data-uid="${k.id}" class="jkS" style="flex:1;min-width:0" aria-label="Shift ${esc(k.nama)}" ${dis}>${opsiShift(k.shift)}</select><select data-uid="${k.id}" class="jkL" style="flex:1;min-width:0" aria-label="Hari libur ${esc(k.nama)}" ${dis}>${opsiLibur(k.libur)}</select></div></div>`).join("")}</div>
     ${pusat ? "" : `<button class="btn pri" id="jSimpan" type="button">Simpan jam kerja & insentif</button>`}`;
   if (pusat) return;
   const ambilShift = () => $$("#jShifts .jShift").map(r => ({ nama: $(".jN", r).value.trim(), masuk: $(".jM", r).value, pulang: $(".jP", r).value }));
@@ -3361,11 +3373,13 @@ async function aturJam(){
     J.shifts.splice(+b.dataset.hapusShift, 1); $("#jShifts").innerHTML = J.shifts.map(barisShift).join(""); pasangHapus();
   });
   pasangHapus();
+  $$("#jHari .jhari").forEach(r => $(".jhK", r).onchange = e => { $(".jhB", r).disabled = $(".jhT", r).disabled = !e.target.checked; });
   $("#jSimpan").onclick = e => coba(async () => {
+    const jam_hari = {}; $$("#jHari .jhari").forEach(r => { if ($(".jhK", r).checked) jam_hari[r.dataset.h] = { buka: $(".jhB", r).value, tutup: $(".jhT", r).value }; });
     await api("PUT", "/api/jam-kerja", { jam_buka: $("#jBuka").value, jam_tutup: $("#jTutup").value, shifts: ambilShift(),
       lembur_per_jam: num($("#jUpah").value), lembur_bulat: +$("#jBulat").value,
       ins_kurir: num($("#jKurir").value), ins_lapangan: num($("#jLap").value), ins_konten: num($("#jKonten").value), ins_dekorasi: num($("#jDekor").value),
-      shift_karyawan: $$("#jKary select").map(x => ({ user_id: +x.dataset.uid, shift: x.value })) });
+      jam_hari, shift_karyawan: $$("#jKary .jkS").map(x => ({ user_id: +x.dataset.uid, shift: x.value })), libur_karyawan: $$("#jKary .jkL").map(x => ({ user_id: +x.dataset.uid, libur: x.value })) });
     await muatUlang(); toast("Jam kerja & insentif tersimpan"); aturJam();
   }, e.target);
 }

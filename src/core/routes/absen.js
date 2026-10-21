@@ -159,18 +159,31 @@ const menit = j => { const [h, m] = String(j || "0:0").split(":").map(Number); r
 /** Kabari HP admin: karyawan absen masuk / pulang, lengkap dengan shift & terlambat / lembur. */
 function notifAbsen({ userId, tgl, jam, jenis, tempat }){
   try {
-    const u = one("SELECT nama, shift FROM users WHERE id = ?", [userId]); if (!u) return;
+    const u = one("SELECT nama, shift, libur FROM users WHERE id = ?", [userId]); if (!u) return;
     if (tgl !== sekarang().tgl) return; // absen lama yang baru terkirim tidak perlu dikabarkan
     const j = String(jam).slice(0, 5), nm = String(u.nama).toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
     const masukHariIni = one("SELECT MIN(jam) j FROM absen WHERE user_id = ? AND tgl = ? AND (jenis = 'masuk' OR jenis IS NULL)", [userId, tgl])?.j;
-    const sh = pilihShift(daftarShift(), u.shift, jenis === "masuk" ? j : (masukHariIni || j).slice(0, 5));
+    const sh = shiftHari(tgl, daftarShift(), u.shift, jenis === "masuk" ? j : (masukHariIni || j).slice(0, 5));
     let ket = "";
     if (jenis === "masuk") { const d = menit(j) - menit(sh.masuk); ket = d > 0 ? `terlambat ${d} menit` : d < 0 ? `datang ${-d} menit lebih awal` : "tepat waktu"; }
     else if (jenis === "pulang") { const d = menit(j) - menit(sh.pulang); ket = d > 0 ? `lewat ${d} menit dari jam pulang` : d < 0 ? `pulang ${-d} menit lebih awal` : "tepat jam pulang"; }
     const judul = jenis === "masuk" ? `☀️ ${nm} absen masuk · ${j}` : jenis === "pulang" ? `🌙 ${nm} absen pulang · ${j}` : `🖐️ ${nm} scan absen · ${j}`;
-    antreNotif(judul, [`${sh.nama} (${sh.masuk}–${sh.pulang})`, ket, tempat].filter(Boolean).join(" · "), `/#absen?tgl=${tgl}&u=${userId}`); // ketuk → Rekap Absen tanggal itu
+    antreNotif(judul, [`${sh.nama} (${sh.masuk}–${sh.pulang})`, ket, liburPada(u, tgl) ? `⚠️ hari libur ${nm}` : "", tempat].filter(Boolean).join(" · "), `/#absen?tgl=${tgl}&u=${userId}`); // ketuk → Rekap Absen tanggal itu
   } catch { /* notifikasi tidak boleh menggagalkan absen */ }
 }
+export const NAMA_HARI = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+const hariKe = tgl => new Date(String(tgl) + "T00:00:00Z").getUTCDay();
+/** Jam toko khusus hari itu ({ buka, tutup }) atau null. */
+export function jamKhusus(tgl, s = getSettings()){
+  const x = s.jam_hari && s.jam_hari[String(hariKe(tgl))];
+  return x && JAM.test(x.buka) && JAM.test(x.tutup) && menit(x.tutup) > menit(x.buka) ? x : null;
+}
+/** Shift karyawan pada tanggal itu: di hari berjam khusus (mis. Minggu 09–17, Sabtu 12–21) semua memakai jam toko hari itu. */
+export function shiftHari(tgl, shifts, pilihan, masuk, s = getSettings()){
+  const k = jamKhusus(tgl, s);
+  return k ? { nama: NAMA_HARI[hariKe(tgl)], masuk: k.buka, pulang: k.tutup, no: 0 } : pilihShift(shifts, pilihan, masuk);
+}
+const liburPada = (u, tgl) => u.libur != null && u.libur !== "" && Number(u.libur) === hariKe(tgl);
 export function daftarShift(s = getSettings()){
   const a = Array.isArray(s.shifts) ? s.shifts.filter(x => x && JAM.test(x.masuk) && JAM.test(x.pulang) && menit(x.pulang) > menit(x.masuk)) : [];
   return a.length ? a.map((x, i) => ({ nama: String(x.nama || `Shift ${i + 1}`), masuk: x.masuk, pulang: x.pulang }))
@@ -197,7 +210,7 @@ export const nilaiLembur = (mnt, perJam) => Math.round(mnt / 60 * (Number(perJam
  *  (atau scan terakhir bila lebih dari satu scan). Terlambat, pulang cepat, dan lembur dihitung dari shift karyawan. */
 export function rekapAbsen(dari, sampai){
   const s = getSettings(), shifts = daftarShift(s);
-  const users = all("SELECT id, nama, nama_key, peran, aktif, pin_absen, shift FROM users ORDER BY nama");
+  const users = all("SELECT id, nama, nama_key, peran, aktif, pin_absen, shift, libur FROM users ORDER BY nama");
   const perPin = new Map(users.filter(u => u.pin_absen).map(u => [u.pin_absen, u]));
   const perId = new Map(users.map(u => [u.id, u]));
   const scan = all("SELECT id, tgl, jam, pin, user_id, sumber, ket, oleh, jenis, jarak, mesin, foto IS NOT NULL ada_foto FROM absen WHERE dihapus IS NULL AND tgl BETWEEN ? AND ? ORDER BY tgl, jam", [dari, sampai]);
@@ -206,7 +219,7 @@ export function rekapAbsen(dari, sampai){
     const u = a.user_id ? perId.get(a.user_id) : perPin.get(a.pin);
     if (!u) { const t = takDikenal.get(a.pin) || { pin: a.pin, jumlah: 0, terakhir: "" }; t.jumlah++; t.terakhir = `${a.tgl} ${a.jam}`; takDikenal.set(a.pin, t); continue; }
     const k = `${a.tgl}|${u.id}`;
-    if (!hari.has(k)) hari.set(k, { tgl: a.tgl, user_id: u.id, nama: u.nama, nama_key: u.nama_key, pilihanShift: u.shift, scan: [] });
+    if (!hari.has(k)) hari.set(k, { tgl: a.tgl, user_id: u.id, nama: u.nama, nama_key: u.nama_key, pilihanShift: u.shift, hari_libur: liburPada(u, a.tgl), scan: [] });
     hari.get(k).scan.push({ id: a.id, jam: a.jam.slice(0, 5), sumber: a.sumber, ket: a.ket, oleh: a.oleh, jenis: a.jenis, jarak: a.jarak, perangkat: a.sumber === "pin" ? a.mesin : "", foto: !!a.ada_foto });
   }
   const harian = [...hari.values()].map(({ pilihanShift, ...h }) => {
@@ -215,7 +228,7 @@ export function rekapAbsen(dari, sampai){
     let p = [...sc].reverse().find(x => x.jenis === "pulang") || (sc.length > 1 && akhir !== m && akhir.jenis !== "masuk" ? akhir : null);
     if (p && m && p.jam < m.jam) p = null;
     const masuk = m ? m.jam : "", pulang = p ? p.jam : "";
-    const shift = pilihShift(shifts, pilihanShift, masuk);
+    const shift = shiftHari(h.tgl, shifts, pilihanShift, masuk, s);
     const l = hitungLembur(shift, masuk, pulang, s.lembur_bulat);
     return { ...h, masuk, pulang, shift: shift.nama, shift_masuk: shift.masuk, shift_pulang: shift.pulang,
       terlambat: !!masuk && masuk > shift.masuk, pulangCepat: !!pulang && pulang < shift.pulang,
@@ -223,13 +236,17 @@ export function rekapAbsen(dari, sampai){
   }).sort((a, b) => b.tgl.localeCompare(a.tgl) || a.nama.localeCompare(b.nama));
   const ringkas = new Map();
   for (const h of harian) {
-    const r = ringkas.get(h.user_id) || { user_id: h.user_id, nama: h.nama, nama_key: h.nama_key, hadir: 0, terlambat: 0, tanpaPulang: 0, lembur: 0, lembur_rp: 0 };
-    r.hadir++; if (h.terlambat) r.terlambat++; if (!h.pulang) r.tanpaPulang++; r.lembur += h.lembur;
+    const r = ringkas.get(h.user_id) || { user_id: h.user_id, nama: h.nama, nama_key: h.nama_key, hadir: 0, terlambat: 0, tanpaPulang: 0, lembur: 0, lembur_rp: 0, masukLibur: 0 };
+    r.hadir++; if (h.hari_libur) r.masukLibur++; if (h.terlambat) r.terlambat++; if (!h.pulang) r.tanpaPulang++; r.lembur += h.lembur;
     ringkas.set(h.user_id, r);
   }
   for (const r of ringkas.values()) r.lembur_rp = nilaiLembur(r.lembur, s.lembur_per_jam);
+  // Karyawan yang libur pada tanggal itu (untuk tampilan satu hari) & jam toko khusus hari itu
+  const satuHari = dari === sampai;
+  const libur = satuHari ? users.filter(u => u.aktif && liburPada(u, dari)).map(u => ({ user_id: u.id, nama: u.nama })) : [];
   return {
     dari, sampai, aktif: !!(s.absen_aktif || s.absen_pin_aktif), shifts, jam_buka: s.jam_buka, jam_tutup: s.jam_tutup,
+    libur, jam_hari: s.jam_hari || {}, jam_khusus: satuHari ? jamKhusus(dari, s) : null, hari: satuHari ? NAMA_HARI[hariKe(dari)] : null,
     lembur_per_jam: Number(s.lembur_per_jam) || 0, lembur_bulat: Number(s.lembur_bulat) || 0,
     harian, ringkas: [...ringkas.values()].sort((a, b) => a.nama.localeCompare(b.nama)), takDikenal: [...takDikenal.values()],
   };
@@ -300,7 +317,8 @@ route("GET", "/api/jam-kerja", "admin", () => {
     jam_buka: s.jam_buka, jam_tutup: s.jam_tutup, shifts: daftarShift(s),
     lembur_per_jam: Number(s.lembur_per_jam) || 0, lembur_bulat: Number(s.lembur_bulat) || 0,
     ins_kurir: Number(s.ins_kurir) || 0, ins_lapangan: Number(s.ins_lapangan) || 0, ins_konten: Number(s.ins_konten) || 0, ins_dekorasi: Number(s.ins_dekorasi) || 0,
-    karyawan: all("SELECT id, nama, peran, aktif, shift FROM users ORDER BY aktif DESC, peran DESC, nama"),
+    jam_hari: s.jam_hari || {},
+    karyawan: all("SELECT id, nama, peran, aktif, shift, libur FROM users ORDER BY aktif DESC, peran DESC, nama"),
   };
 });
 route("PUT", "/api/jam-kerja", "admin", ({ body }) => tx(() => {
@@ -318,6 +336,23 @@ route("PUT", "/api/jam-kerja", "admin", ({ body }) => tx(() => {
   const rp = (k, nama) => { if (body[k] != null) { const n = Number(body[k]); if (!(n >= 0 && n <= 1e8)) throw bad(`${nama} tidak valid`); setSetting(k, Math.round(n)); } };
   rp("lembur_per_jam", "Upah lembur per jam"); rp("ins_kurir", "Insentif kurir"); rp("ins_lapangan", "Insentif kerja lapangan"); rp("ins_konten", "Insentif buat konten"); rp("ins_dekorasi", "Insentif dekorasi");
   if (body.lembur_bulat != null) { const b = Number(body.lembur_bulat); if (![1, 15, 30, 60].includes(b)) throw bad("Pembulatan lembur: 1, 15, 30, atau 60 menit"); setSetting("lembur_bulat", b); }
+  if (body.jam_hari != null) {
+    if (typeof body.jam_hari !== "object" || Array.isArray(body.jam_hari)) throw bad("Jam per hari tidak valid");
+    const jh = {};
+    for (const [h, x] of Object.entries(body.jam_hari)) {
+      if (!/^[0-6]$/.test(h) || !x) continue;
+      const buka = jamValid(x.buka, `Jam buka ${NAMA_HARI[+h]}`), tutup = jamValid(x.tutup, `Jam tutup ${NAMA_HARI[+h]}`);
+      if (tutup <= buka) throw bad(`Jam tutup ${NAMA_HARI[+h]} harus setelah jam buka`);
+      jh[h] = { buka, tutup };
+    }
+    setSetting("jam_hari", jh);
+  }
+  if (Array.isArray(body.libur_karyawan)) {
+    for (const x of body.libur_karyawan) {
+      const v = String((x && x.libur) ?? "");
+      run("UPDATE users SET libur = ? WHERE id = ?", [/^[0-6]$/.test(v) ? v : null, +x.user_id]);
+    }
+  }
   if (Array.isArray(body.shift_karyawan)) {
     const n = daftarShift().length;
     for (const x of body.shift_karyawan) {

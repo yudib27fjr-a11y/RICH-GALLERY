@@ -374,6 +374,11 @@ CREATE TABLE notif(
 `ALTER TABLE sales ADD COLUMN jenis TEXT;
 ALTER TABLE sales ADD COLUMN detail TEXT;
 CREATE INDEX sales_jenis ON sales(jenis) WHERE jenis IS NOT NULL;`,
+
+/* 15: hari libur mingguan tiap karyawan (0 = Minggu … 6 = Sabtu). Eva libur Sabtu, Wulan & Savira libur Minggu. */
+`ALTER TABLE users ADD COLUMN libur TEXT;
+UPDATE users SET libur = '6' WHERE nama_key = 'eva';
+UPDATE users SET libur = '0' WHERE nama_key IN ('wulan', 'savira');`,
 ];
 
 export const DEFAULT_SETTINGS = {
@@ -441,6 +446,9 @@ export const DEFAULT_SETTINGS = {
     { kategori: "Distributor bunga", nama: "Distributor bunga Bandung", hp: "", kota: "Bandung", catatan: "", admin_saja: true },
   ],
   ins_dekorasi: 100000,
+  // Jam toko khusus per hari (0 = Minggu … 6 = Sabtu). Hari lain memakai jam_buka–jam_tutup & shift biasa.
+  // Di hari khusus semua karyawan memakai jam toko hari itu sebagai jam kerja (terlambat & lembur dihitung dari situ).
+  jam_hari: { "0": { buka: "09:00", tutup: "17:00" }, "6": { buka: "12:00", tutup: "21:00" } },
   // Daftar harga jasa (dari price list toko); admin bisa ubah di menu Jasa → Kelola paket & harga
   paket_jasa: {
     dekorasi: [

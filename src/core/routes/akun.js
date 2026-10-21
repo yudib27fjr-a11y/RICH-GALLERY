@@ -67,7 +67,7 @@ route("GET", "/api/bootstrap", "semua", ({ user }) => {
       kartu_lebar: s.kartu_lebar, kartu_tinggi: s.kartu_tinggi, kartu_huruf: s.kartu_huruf, kartu_warna: s.kartu_warna, kartu_area: s.kartu_area, kartu_latar_kode: s.kartu_latar_kode, kartu_font_kode: s.kartu_font_kode,
       inv_tagline: s.inv_tagline, inv_bank: s.inv_bank, inv_ttd: s.inv_ttd, inv_ttd_nama: s.inv_ttd_nama, inv_ttd_jabatan: s.inv_ttd_jabatan,
       jam_buka: s.jam_buka, jam_tutup: s.jam_tutup, shifts: Array.isArray(s.shifts) ? s.shifts : [], lembur_per_jam: Number(s.lembur_per_jam) || 0,
-      ins_kurir: Number(s.ins_kurir) || 0, ins_lapangan: Number(s.ins_lapangan) || 0, ins_konten: Number(s.ins_konten) || 0, kurir_offline: Array.isArray(s.kurir_offline) ? s.kurir_offline : [], mitra: mitraUntuk(s.mitra, user), ins_dekorasi: Number(s.ins_dekorasi) || 0, paket_jasa: s.paket_jasa || {} },
+      ins_kurir: Number(s.ins_kurir) || 0, ins_lapangan: Number(s.ins_lapangan) || 0, ins_konten: Number(s.ins_konten) || 0, kurir_offline: Array.isArray(s.kurir_offline) ? s.kurir_offline : [], mitra: mitraUntuk(s.mitra, user), ins_dekorasi: Number(s.ins_dekorasi) || 0, paket_jasa: s.paket_jasa || {}, jam_hari: s.jam_hari || {} },
     cabang: cabangAktif(),
     kategori: KATEGORI, katBahan: KAT_BAHAN, katPengeluaran: KAT_PENGELUARAN, metode: METODE,
     produk: all(`SELECT ${produkKolom} FROM products WHERE dihapus IS NULL ORDER BY kode`),
