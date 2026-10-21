@@ -29,7 +29,7 @@ const bacaDetail = d => { if (!d) return null; try { const o = JSON.parse(d); re
 /* Jenis pesanan khusus. Rinciannya (detail) disimpan sebagai JSON:
    dekorasi { macam, lokasi, tema, tim[] }, sewa { barang, kembali_tgl, jaminan, kembali_at, denda, jaminan_kembali },
    mahar { isi, acara }, parcel { musim, isi } — semua opsional & bisa ditambah. */
-export const JENIS_PESANAN = { dekorasi: "Dekorasi", sewa: "Penyewaan", mahar: "Hias mahar", parcel: "Parcel" };
+export const JENIS_PESANAN = { dekorasi: "Dekorasi", sewa: "Penyewaan", seserahan: "Hantaran / seserahan", mahar: "Hias mahar", parcel: "Parcel" };
 export function rapikanDetail(d){
   if (d == null || d === "") return {};
   if (typeof d !== "object" || Array.isArray(d)) throw bad("Rincian pesanan tidak valid");

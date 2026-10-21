@@ -437,7 +437,7 @@ test("pesanan khusus: dekorasi (tim & insentif), sewa (jaminan, kembali, denda),
   assert.ok(!(await ps()).some(x => x.id === sw.id), "sudah kembali → tidak aktif lagi");
   const sw2 = (await admin("GET", `/api/penjualan/${sw.id}`)).data;
   assert.equal(sw2.detail.barang, "Standing ucapan"); assert.equal(sw2.detail.denda, 50000);
-  for (const [jenis, detail] of [["mahar", { isi: "Uang mahar bentuk masjid", acara: "Dimas & Sinta" }], ["parcel", { musim: "Lebaran", isi: "Kue kering 3 toples" }]]) {
+  for (const [jenis, detail] of [["mahar", { isi: "Uang mahar bentuk masjid", acara: "Dimas & Sinta" }], ["parcel", { musim: "Lebaran", isi: "Kue kering 3 toples" }], ["seserahan", { jumlah_tray: 7, isi: "Alat sholat, sepatu, tas", acara: "Lamaran Dimas & Sinta" }]]) {
     const r = await kasir("POST", "/api/penjualan", { items: [{ nama: jenis, harga: 300000, qty: 1 }], pesanan: { tgl: hari }, jenis, detail });
     assert.equal(r.status, 200); assert.equal(r.data.jenis, jenis);
   }
