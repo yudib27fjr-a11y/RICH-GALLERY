@@ -244,12 +244,14 @@ function lihatStruk(s, setelahBatal){
       <button class="btn bk b-nota" id="notaBtn" type="button">${ikon("nota", 18)}Nota</button>
       <button class="btn bk b-pdf" id="pdfStrukBtn" type="button">${ikon("pdf", 18)}PDF struk</button>
       <a class="btn bk b-wa" href="${waLink(s)}" target="_blank" rel="noopener">${ikon("wa", 18)}Kirim WA</a>
+      ${perluStiker(s) ? `<button class="btn" id="stikerBtn" type="button">✂️ Pesan stiker</button>` : ""}
       <button class="btn" data-close type="button">Tutup</button>
       <button class="btn bk b-struk" id="printBtn" type="button">${ikon("struk", 18)}Cetak struk</button>
     </div>`, m => {
       $("#printBtn", m).onclick = () => cetak(s);
       $("#notaBtn", m).onclick = () => bukaNota(s);
       $("#pdfStrukBtn", m).onclick = () => pdfStruk(s);
+      const sb = $("#stikerBtn", m); if (sb) sb.onclick = () => pesanStiker(s);
       if (s.kartu) pasangTombolKartu(m, s.kartu);
       const hb = $("#hapusBtn", m);
       if (hb) hb.onclick = () => konfirmasi(`Hapus ${s.no}?`, `Transaksi dihapus sepenuhnya dari daftar & laporan${s.batal_at ? "" : ", stok produk READY dikembalikan"}. Pakai untuk salah input atau data uji coba. Tidak bisa dibatalkan.`, "Hapus transaksi", () => coba(async () => {
@@ -2075,6 +2077,70 @@ function belanjaManual(){
   });
 }
 
+/* ================= PESAN CUTTING STIKER ke mitra (hot balon, standing / papan ucapan) =================
+   Ucapan, nama, dan pengirim diambil dari pesanan (kartu ucapan / tulisan papan) → format pesan otomatis, tidak mengetik ulang. */
+const perluStiker = s => !s.batal_at && (s.jenis === "standing" || (s.items || []).some(i => ["HOT BALON", "STANDING UCAPAN", "STANDING FLOWER", "SEWA STANDING UCAPAN"].includes(i.kategori) || /balon|balloon|standing|papan|acrylic|akrilik/i.test(i.nama)));
+const mitraStiker = () => daftarMitra().filter(m => m.hp && /cutting|stiker|sticker/i.test(`${m.kategori} ${m.nama}`));
+/** Pecah teks ucapan jadi judul / nama / isi / pengirim. Baris "From:" / "Dari:" (atau sesudahnya) = pengirim. */
+function pecahUcapan(teks){
+  const L = String(teks || "").replace(/\r/g, "").split("\n").map(x => x.trim());
+  let dari = "", isi = [];
+  for (let i = 0; i < L.length; i++) {
+    const m = L[i].match(/^(from|dari)\s*:?\s*(.*)$/i);
+    if (m) { dari = (m[2] || L.slice(i + 1).filter(Boolean).join(" ")).trim(); break; }
+    isi.push(L[i]);
+  }
+  while (isi.length && !isi[isi.length - 1]) isi.pop();
+  return { tulisan: isi.join("\n").trim(), dari };
+}
+function pesanStiker(s){
+  const ada = s.detail || {}, untukBalon = (s.items || []).some(i => i.kategori === "HOT BALON" || /balon|balloon/i.test(i.nama));
+  const sumber = s.jenis === "standing" ? { tulisan: ada.tulisan || "", dari: ada.dari || "" } : pecahUcapan(s.kartu || s.request || "");
+  const ingat = (() => { try { return JSON.parse(localStorage.getItem("rg_stiker_akhir") || "{}"); } catch { return {}; } })();
+  const papan = (s.items || []).map(i => i.nama).find(n => /papan|acrylic|akrilik|standing/i.test(n)) || "";
+  const ukuranPapan = (ada.rincian || "").match(/(\d+\s*[x×]\s*\d+)/) || papan.match(/(\d+\s*[x×]\s*\d+)/);
+  const d = { untuk: untukBalon ? "Hot balon" : papan ? toTitle(papan) : "Standing / papan ucapan",
+    ukuran: untukBalon ? (ingat.balon || "d 24 cm") : ukuranPapan ? ukuranPapan[1].replace(/\s*[x×]\s*/, " x ") + " cm" : (ingat.papan || ""),
+    warna: ingat.warna || "Hitam", jumlah: 1, judul: "", nama: "", tulisan: sumber.tulisan, dari: sumber.dari,
+    tgl: s.ambil_tgl || today(), jam: s.ambil_jam || "", catatan: "" };
+  // Baris pertama sering judul ("Happy Graduation"), baris kedua nama penerima — dipisah supaya rapi di pesan
+  const bar = d.tulisan.split("\n").filter(Boolean);
+  if (bar.length >= 2 && bar[0].length <= 40) { d.judul = bar[0]; if (bar[1].length <= 40) { d.nama = bar[1]; d.tulisan = bar.slice(2).join("\n"); } else d.tulisan = bar.slice(1).join("\n"); }
+  const teksPesan = () => {
+    const t = B.toko, L = [`*PESAN CUTTING STIKER — ${toTitle(t.nama_toko)}*`, `Untuk: ${d.untuk}`];
+    if (d.ukuran) L.push(`Ukuran: ${d.ukuran}`); L.push(`Warna: ${d.warna || "-"}`, `Jumlah: ${d.jumlah || 1}`, "", "*Tulisan:*");
+    if (d.judul) L.push(d.judul); if (d.nama) L.push(d.nama); if (d.tulisan) L.push(d.tulisan);
+    if (d.dari) L.push("", "From:", d.dari);
+    L.push("", `Dibutuhkan: ${tglHari(d.tgl)}${d.jam ? " jam " + d.jam : ""}`, `No. order: ${s.no}`);
+    if (d.catatan) L.push(`Catatan: ${d.catatan}`);
+    L.push("", "Contoh desain / font menyusul (foto). Terima kasih 🙏");
+    return L.join("\n");
+  };
+  const mitra = mitraStiker();
+  modal(`<h3>✂️ Pesan cutting stiker</h3>
+    <p class="small muted" style="margin:0">Ucapan & nama diambil dari pesanan ${esc(s.no)} · ${esc(s.pelanggan)}. Ubah bila perlu.</p>
+    <div class="row"><label class="f grow">Untuk<input id="ckU" value="${esc(d.untuk)}"></label><label class="f grow">Ukuran<input id="ckZ" value="${esc(d.ukuran)}" placeholder="Mis. d 24 cm / 70 x 60 cm"></label></div>
+    <div class="row"><label class="f grow">Warna stiker<input id="ckW" value="${esc(d.warna)}" list="ckWL"><datalist id="ckWL">${["Hitam", "Putih", "Gold", "Silver", "Rose gold", "Pink", "Merah", "Maroon"].map(x => `<option value="${x}">`).join("")}</datalist></label><label class="f" style="width:90px">Jumlah<input id="ckJ" type="number" min="1" value="1" inputmode="numeric"></label></div>
+    <label class="f">Judul<input id="ckT" value="${esc(d.judul)}" placeholder="Mis. Happy Graduation"></label>
+    <label class="f">Nama (penerima)<input id="ckN" value="${esc(d.nama)}" placeholder="Mis. Suwanti, S.Sos"></label>
+    <label class="f">Ucapan<textarea id="ckI" rows="3">${esc(d.tulisan)}</textarea></label>
+    <label class="f">From (pengirim)<input id="ckD" value="${esc(d.dari)}" placeholder="Mis. ♥ Lovina ♥"></label>
+    <div class="row"><label class="f grow">Dibutuhkan<input id="ckTg" type="date" value="${esc(d.tgl)}"></label><label class="f grow">Jam<input id="ckJm" type="time" value="${esc(d.jam)}"></label></div>
+    <label class="f">Catatan<input id="ckC" placeholder="Mis. font sambung seperti contoh"></label>
+    <pre class="kr-pesan" id="ckP"></pre>
+    ${mitra.length ? `<div class="small muted">Kirim ke mitra cutting stiker:</div><div class="stack" style="gap:6px">${mitra.map((m, i) => `<button class="k-kartu" data-ck="${i}" type="button">${ikonMitra(m.kategori)}<span><b>${esc(m.nama)}</b><small>Kirim WA · ${esc(String(m.hp).replace(/^62/, "0"))}</small></span></button>`).join("")}</div>`
+      : `<p class="note small" style="margin:0">Belum ada mitra cutting stiker dengan nomor WA. ${isAdmin() ? "Tambahkan di menu <b>Mitra</b> (kategori Cutting stiker)." : "Minta admin menambahkannya di menu Mitra."}</p>`}
+    <div class="actions"><button class="btn" data-close>Tutup</button><button class="btn" id="ckSalin" type="button">Salin pesan</button></div>`, m => {
+    const baca = () => { Object.assign(d, { untuk: $("#ckU", m).value.trim(), ukuran: $("#ckZ", m).value.trim(), warna: $("#ckW", m).value.trim(), jumlah: num($("#ckJ", m).value) || 1,
+      judul: $("#ckT", m).value.trim(), nama: $("#ckN", m).value.trim(), tulisan: $("#ckI", m).value.trim(), dari: $("#ckD", m).value.trim(), tgl: $("#ckTg", m).value, jam: $("#ckJm", m).value, catatan: $("#ckC", m).value.trim() });
+      $("#ckP", m).textContent = teksPesan(); };
+    const simpanIngat = () => { try { localStorage.setItem("rg_stiker_akhir", JSON.stringify({ ...ingat, warna: d.warna, [untukBalon ? "balon" : "papan"]: d.ukuran })); } catch {} };
+    $$("input, textarea", m).forEach(x => x.oninput = baca); baca();
+    $("#ckSalin", m).onclick = () => { baca(); simpanIngat(); salinTeks(teksPesan(), "Pesan cutting stiker disalin"); };
+    $$("[data-ck]", m).forEach(b => b.onclick = () => { baca(); if (!d.judul && !d.nama && !d.tulisan) return toast("Isi tulisan stiker dulu"); simpanIngat(); closeModal(); bukaWA(mitra[+b.dataset.ck].hp, teksPesan()); });
+  });
+}
+
 async function vPesanan(){
   $("#main").innerHTML = `
     <div class="view-head"><h2>Pesanan</h2><span class="sp"></span>
@@ -2142,6 +2208,7 @@ function detailPesanan(s, setelah = () => render()){
       <button class="btn" data-close>Tutup</button>
       <button class="btn" id="psStruk" type="button">Struk</button>
       ${!s.diambil_at ? `<button class="btn" id="psKurir" type="button">🛵 Kirim kurir</button>` : ""}
+      ${perluStiker(s) && !s.diambil_at ? `<button class="btn" id="psStiker" type="button">✂️ Pesan stiker</button>` : ""}
       ${sewaJalan && s.diambil_at ? `<button class="btn pri" id="psKembali" type="button">🔑 ${s.jenis === "seserahan" ? "Box / tray sudah kembali" : "Barang sewaan kembali"}</button>` : ""}
       ${nomorWA(s.hp) && !s.diambil_at ? `<a class="btn" id="psWa" href="https://wa.me/${nomorWA(s.hp)}?text=${encodeURIComponent(`Halo ${toTitle(s.pelanggan)}, pesanan Anda di ${toTitle(B.toko.nama_toko)} (${s.no}) ${s.ambil_cara === "antar" ? "akan diantar" : "siap diambil"} ${tglID(s.ambil_tgl)}${s.ambil_jam ? " jam " + s.ambil_jam : ""}.${sisa ? ` Sisa pembayaran ${rp(sisa)}.` : ""} Terima kasih 🌸`)}" target="_blank" rel="noopener">WA pengingat</a>` : ""}
       ${s.diambil_at ? `<button class="btn" id="psBuka" type="button">Kembalikan ke belum diambil</button>`
@@ -2151,6 +2218,7 @@ function detailPesanan(s, setelah = () => render()){
     let metode = "Tunai";
     $$("#lsM button", m).forEach(b => b.onclick = () => { metode = b.dataset.m; $$("#lsM button", m).forEach(x => x.classList.toggle("on", x === b)); });
     $("#psStruk", m).onclick = () => lihatStruk(s, () => setelah());
+    const pst = $("#psStiker", m); if (pst) pst.onclick = () => pesanStiker(s);
     const pk = $("#psKurir", m); if (pk) pk.onclick = () => { krSaleId = s.id; krData = null; closeModal(); pindah("kurir"); };
     if (s.kartu) pasangTombolKartu(m, s.kartu);
     const lunasi = () => api("POST", `/api/penjualan/${s.id}/lunasi`, { metode });
