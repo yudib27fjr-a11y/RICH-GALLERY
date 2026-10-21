@@ -693,6 +693,19 @@ test("perangkat baru yang sudah punya penjualan: sambung dengan kirim transaksi 
   assert.equal(prodP("RG002").stok, stok0 - 1, "stok server berkurang");
 });
 
+test("pesanan sewa dari perangkat: jenis & rincian sampai di server, barang kembali ikut tersinkron", async () => {
+  await sinkron(); await segarkan();
+  const hari = BC.hariIni;
+  const j = await cabang("POST", "/api/penjualan", { items: [{ nama: "sewa hand buket", harga: 100000, qty: 1 }], pesanan: { tgl: hari, cara: "ambil" }, jenis: "sewa", detail: { barang: "Hand buket", kembali_tgl: hari, jaminan: 50000 } });
+  assert.equal(j.status, 200, JSON.stringify(j.data));
+  await sinkron();
+  const p = (await pusat("GET", `/api/penjualan?dari=${hari}&sampai=${hari}`)).data.find(x => x.no === j.data.no);
+  assert.ok(p, "sampai di server"); assert.equal(p.jenis, "sewa"); assert.equal(p.detail.jaminan, 50000);
+  assert.equal((await cabang("POST", `/api/penjualan/${j.data.id}/detail`, { detail: { kembali_at: hari + " 17:00", denda: 0 } })).status, 200);
+  await sinkron();
+  assert.equal((await pusat("GET", `/api/penjualan/${p.id}`)).data.detail.kembali_at, hari + " 17:00");
+});
+
 test("kurir offline diubah admin di perangkat → tersimpan di server & ikut ke perangkat", async () => {
   const r = await cabang("PUT", "/api/kurir", { daftar: [{ nama: "Pak Udin", hp: "081299998888" }] });
   assert.equal(r.status, 200, JSON.stringify(r.data));

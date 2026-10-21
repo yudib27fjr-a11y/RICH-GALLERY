@@ -117,7 +117,7 @@ route("PUT", "/api/produksi/:id", "semua", ({ params, body, user }) => tx(() => 
 /* ================= Insentif lain =================
    Selain insentif produksi: jasa kurir non online, kerja lapangan, dan buat konten.
    Nominal bawaan per kegiatan diatur admin (Pengaturan → Jam kerja, lembur & insentif lain) dan bisa diubah saat dicatat. */
-export const JENIS_LAIN = { kurir: "Jasa kurir non online", lapangan: "Kerja lapangan", konten: "Buat konten" };
+export const JENIS_LAIN = { kurir: "Jasa kurir non online", lapangan: "Kerja lapangan", konten: "Buat konten", dekorasi: "Dekorasi" };
 
 route("GET", "/api/insentif-lain", "semua", ({ query, user }) => {
   const dari = tanggal(query.dari), sampai = tanggal(query.sampai);

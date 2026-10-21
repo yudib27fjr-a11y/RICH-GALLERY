@@ -21,7 +21,28 @@ function muatPenjualan(where, params, limit = 500){
   const items = all(`SELECT * FROM sale_items WHERE sale_id IN (${sales.map(s => s.id).join(",")}) ORDER BY id`);
   const per = new Map(sales.map(s => [s.id, (s.items = [], s)]));
   for (const it of items) per.get(it.sale_id).items.push(it);
+  for (const s of sales) s.detail = bacaDetail(s.detail);
   return sales;
+}
+const bacaDetail = d => { if (!d) return null; try { const o = JSON.parse(d); return o && typeof o === "object" ? o : null; } catch { return null; } };
+
+/* Jenis pesanan khusus. Rinciannya (detail) disimpan sebagai JSON:
+   dekorasi { macam, lokasi, tema, tim[] }, sewa { barang, kembali_tgl, jaminan, kembali_at, denda, jaminan_kembali },
+   mahar { isi, acara }, parcel { musim, isi } — semua opsional & bisa ditambah. */
+export const JENIS_PESANAN = { dekorasi: "Dekorasi", sewa: "Penyewaan", mahar: "Hias mahar", parcel: "Parcel" };
+export function rapikanDetail(d){
+  if (d == null || d === "") return {};
+  if (typeof d !== "object" || Array.isArray(d)) throw bad("Rincian pesanan tidak valid");
+  const out = {};
+  for (const [k, v] of Object.entries(d).slice(0, 20)) {
+    if (!/^[a-z_]{1,30}$/.test(k) || v == null || v === "") continue;
+    if (typeof v === "number") { if (isFinite(v) && Math.abs(v) <= 1e11) out[k] = Math.round(v * 100) / 100; }
+    else if (typeof v === "boolean") out[k] = v;
+    else if (Array.isArray(v)) out[k] = v.slice(0, 20).map(x => String(x).slice(0, 60));
+    else out[k] = String(v).slice(0, 500);
+  }
+  if (JSON.stringify(out).length > 4000) throw bad("Rincian pesanan terlalu panjang");
+  return out;
 }
 const sembunyikanHpp = (s, user) => { if (user.peran !== "admin") s.items.forEach(i => delete i.hpp); return s; };
 
@@ -82,10 +103,14 @@ route("POST", "/api/penjualan", "semua", ({ body, user, ctx }) => tx(() => {
     request: teks(ps.request, { max: 1000, nama: "Catatan pesanan" }),
   } : null;
 
+  const jenis = JENIS_PESANAN[body.jenis] ? body.jenis : null;
+  const detail = jenis ? rapikanDetail(body.detail) : null;
+  if (jenis && !pesanan && !ctx?.replay) throw bad(`Isi tanggal ${jenis === "dekorasi" ? "acara" : "ambil / acara"} untuk pesanan ${JENIS_PESANAN[jenis].toLowerCase()}`);
+
   const no = kiriman && kiriman.no ? nomorKiriman(kiriman.no) : nomorBerikutnya(s);
   const jam = kiriman && kiriman.jam ? kiriman.jam : now.jam;
-  const saleId = Number(run(`INSERT INTO sales(no, tgl, jam, user_id, kasir, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan, kartu, ambil_tgl, ambil_jam, ambil_cara, request) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [no, tgl, jam, user.id, user.nama, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan, kartu, pesanan?.tgl ?? null, pesanan?.jam ?? null, pesanan?.cara ?? null, pesanan?.request ?? null]).lastInsertRowid);
+  const saleId = Number(run(`INSERT INTO sales(no, tgl, jam, user_id, kasir, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan, kartu, ambil_tgl, ambil_jam, ambil_cara, request, jenis, detail) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [no, tgl, jam, user.id, user.nama, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan, kartu, pesanan?.tgl ?? null, pesanan?.jam ?? null, pesanan?.cara ?? null, pesanan?.request ?? null, jenis, detail ? JSON.stringify(detail) : null]).lastInsertRowid);
   const prodRows = [];
   items.forEach((it, idx) => {
     run(`INSERT INTO sale_items(sale_id, product_id, kode, nama, kategori, harga, qty, hpp, ready, pembuat) VALUES (?,?,?,?,?,?,?,?,?,?)`,
@@ -105,11 +130,12 @@ route("POST", "/api/penjualan", "semua", ({ body, user, ctx }) => tx(() => {
   antre("penjualan", items.map(it => { const bagian = subtotal ? it.harga * it.qty / subtotal : 0;
     return [String(saleId), tgl, jam, no, it.kode, it.nama, it.kategori, it.harga, it.qty, Math.round(it.harga * it.qty), it.ready ? "READY STOK" : "PRODUKSI", pelanggan, hp, user.nama, metode, Math.round(diskon * bagian), Math.round(ongkir * bagian), Math.round(it.hpp * it.qty), catatan]; }));
   // Kabari HP admin (transaksi / pesanan baru). Transaksi lama yang baru dipindahkan dari perangkat tidak dikabarkan.
-  if (!(kiriman && kiriman.lama)) antreNotifPenjualan({ id: saleId, total, bayar, metode, pelanggan, items, pesanan, kasir: user.nama });
+  if (!(kiriman && kiriman.lama)) antreNotifPenjualan({ id: saleId, jenis, total, bayar, metode, pelanggan, items, pesanan, kasir: user.nama });
   return sembunyikanHpp(muatPenjualan("id = ?", [saleId])[0], user);
 }), { cabang: ({ hasil: x }) => ({ aksi: "jual", data: {
   no: x.no, tgl: x.tgl, jam: x.jam, pelanggan: x.pelanggan, hp: x.hp, diskon: x.diskon, ongkir: x.ongkir, metode: x.metode, bayar: x.bayar, catatan: x.catatan, kartu: x.kartu,
   pesanan: x.ambil_tgl ? { tgl: x.ambil_tgl, jam: x.ambil_jam, cara: x.ambil_cara, request: x.request } : null,
+  jenis: x.jenis || null, detail: x.detail || null,
   items: x.items.map(i => ({ kode: i.kode, nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty, ready: i.ready, pembuat: i.pembuat || "" })),
 } }) });
 
@@ -210,12 +236,24 @@ route("POST", "/api/penjualan/:id/diambil", "semua", ({ params, body, user }) =>
   return { ok: true };
 }), { cabang: ({ params, body }) => ({ aksi: "diambil", data: { no: one("SELECT no FROM sales WHERE id = ?", [+params.id]).no, batal: !!body.batal } }) });
 
+/* ---- Ubah rincian pesanan khusus (mis. barang sewaan kembali: denda & jaminan dikembalikan). Digabung dengan rincian lama. ---- */
+route("POST", "/api/penjualan/:id/detail", "semua", ({ params, body }) => tx(() => {
+  const s = one("SELECT id, jenis, detail, batal_at FROM sales WHERE id = ?", [+params.id]);
+  if (!s) throw notFound("Transaksi tidak ditemukan");
+  if (!s.jenis) throw bad("Bukan pesanan khusus");
+  const baru = { ...(bacaDetail(s.detail) || {}), ...rapikanDetail(body.detail) };
+  for (const [k, v] of Object.entries(body.detail || {})) if (v === null) delete baru[k]; // null = hapus isian
+  run("UPDATE sales SET detail = ? WHERE id = ?", [JSON.stringify(rapikanDetail(baru)), s.id]);
+  return { ok: true, detail: baru };
+}), { cabang: ({ params, body }) => ({ aksi: "detail_jual", data: { no: one("SELECT no FROM sales WHERE id = ?", [+params.id]).no, detail: body.detail } }) });
+
 /** Daftar pesanan: yang belum diambil (urut tanggal ambil), atau yang sudah selesai (terbaru dulu). */
 route("GET", "/api/pesanan", "semua", ({ query, user }) => {
   const selesai = query.status === "selesai";
   const rows = selesai
     ? muatPenjualan("ambil_tgl IS NOT NULL AND batal_at IS NULL AND diambil_at IS NOT NULL", [], 300)
-    : muatPenjualan("ambil_tgl IS NOT NULL AND batal_at IS NULL AND diambil_at IS NULL", [], 1000)
+    : muatPenjualan(`ambil_tgl IS NOT NULL AND batal_at IS NULL AND (diambil_at IS NULL
+        OR (jenis = 'sewa' AND json_extract(detail, '$.kembali_at') IS NULL))`, [], 1000) // barang sewaan: aktif sampai kembali
         .sort((a, b) => (a.ambil_tgl + (a.ambil_jam || "99")).localeCompare(b.ambil_tgl + (b.ambil_jam || "99")));
   return rows.map(s => sembunyikanHpp(s, user));
 });

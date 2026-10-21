@@ -369,6 +369,11 @@ CREATE TABLE notif(
   url TEXT NOT NULL DEFAULT '/',
   terkirim TEXT
 );`,
+
+/* 14: jenis pesanan khusus (dekorasi, penyewaan, hias mahar, parcel) dengan rincian sendiri (JSON). */
+`ALTER TABLE sales ADD COLUMN jenis TEXT;
+ALTER TABLE sales ADD COLUMN detail TEXT;
+CREATE INDEX sales_jenis ON sales(jenis) WHERE jenis IS NOT NULL;`,
 ];
 
 export const DEFAULT_SETTINGS = {
@@ -430,6 +435,12 @@ export const DEFAULT_SETTINGS = {
   ins_lapangan: 0,
   ins_konten: 0,
   kurir_offline: [],
+  mitra: [ // contoh awal; nomor WA diisi admin di menu Mitra
+    { kategori: "Toko mitra", nama: "You n Me", hp: "", kota: "", catatan: "" },
+    { kategori: "Distributor bunga", nama: "Distributor bunga Jakarta", hp: "", kota: "Jakarta", catatan: "" },
+    { kategori: "Distributor bunga", nama: "Distributor bunga Bandung", hp: "", kota: "Bandung", catatan: "" },
+  ],
+  ins_dekorasi: 100000,
   // Absen PIN + selfie di perangkat kasir
   absen_pin_aktif: false,
   absen_lat: "-6.3377069", // Rich Gallery, Jl. Olahraga No.27 Sport Center - Indramayu (Google Maps)

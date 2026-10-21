@@ -299,7 +299,7 @@ route("GET", "/api/jam-kerja", "admin", () => {
   return {
     jam_buka: s.jam_buka, jam_tutup: s.jam_tutup, shifts: daftarShift(s),
     lembur_per_jam: Number(s.lembur_per_jam) || 0, lembur_bulat: Number(s.lembur_bulat) || 0,
-    ins_kurir: Number(s.ins_kurir) || 0, ins_lapangan: Number(s.ins_lapangan) || 0, ins_konten: Number(s.ins_konten) || 0,
+    ins_kurir: Number(s.ins_kurir) || 0, ins_lapangan: Number(s.ins_lapangan) || 0, ins_konten: Number(s.ins_konten) || 0, ins_dekorasi: Number(s.ins_dekorasi) || 0,
     karyawan: all("SELECT id, nama, peran, aktif, shift FROM users ORDER BY aktif DESC, peran DESC, nama"),
   };
 });
@@ -316,7 +316,7 @@ route("PUT", "/api/jam-kerja", "admin", ({ body }) => tx(() => {
     }));
   }
   const rp = (k, nama) => { if (body[k] != null) { const n = Number(body[k]); if (!(n >= 0 && n <= 1e8)) throw bad(`${nama} tidak valid`); setSetting(k, Math.round(n)); } };
-  rp("lembur_per_jam", "Upah lembur per jam"); rp("ins_kurir", "Insentif kurir"); rp("ins_lapangan", "Insentif kerja lapangan"); rp("ins_konten", "Insentif buat konten");
+  rp("lembur_per_jam", "Upah lembur per jam"); rp("ins_kurir", "Insentif kurir"); rp("ins_lapangan", "Insentif kerja lapangan"); rp("ins_konten", "Insentif buat konten"); rp("ins_dekorasi", "Insentif dekorasi");
   if (body.lembur_bulat != null) { const b = Number(body.lembur_bulat); if (![1, 15, 30, 60].includes(b)) throw bad("Pembulatan lembur: 1, 15, 30, atau 60 menit"); setSetting("lembur_bulat", b); }
   if (Array.isArray(body.shift_karyawan)) {
     const n = daftarShift().length;

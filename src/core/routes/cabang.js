@@ -10,7 +10,7 @@ import { cekPassword, cekBatasLogin, catatGagal, resetGagal } from "../auth.js";
 import { muatPenjualan, hapusPenjualan } from "./penjualan.js";
 import { rekapAbsen, terimaAbsen, fotoAbsen, cekLokasi, lemburPeriode } from "./absen.js";
 import { rekapGaji, daftarKasbon } from "./gaji.js";
-import { simpanKurir } from "./kurir.js";
+import { simpanKurir, simpanMitra } from "./kurir.js";
 import { statusCabang, sinkronCabang, sambungCabang, sambungUlangCabang, putusCabang, gantiNamaPerangkat, kirimUlangDitolak, cabangAktif, mintaPusat } from "../cabang-perangkat.js";
 
 /* ================= di perangkat ================= */
@@ -147,7 +147,7 @@ function terapkan(p, d, alat, aman = false){
         return b ? { product_id: b.id, harga: i.harga, qty: i.qty, ready: i.ready, pembuat: i.pembuat } : { nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty, pembuat: i.pembuat };
       });
       const waktuJual = { tgl: x.tgl || w?.tgl, jam: x.jam || w?.jam }, replay = { no: x.no, tgl: x.tgl, jam: x.jam, lama: !!x.lama };
-      const body = { items, diskon: x.diskon, ongkir: x.ongkir, metode: x.metode, bayar: x.bayar, pelanggan: x.pelanggan, hp: x.hp, catatan: x.catatan, kartu: x.kartu, pesanan: x.pesanan || null };
+      const body = { items, diskon: x.diskon, ongkir: x.ongkir, metode: x.metode, bayar: x.bayar, pelanggan: x.pelanggan, hp: x.hp, catatan: x.catatan, kartu: x.kartu, pesanan: x.pesanan || null, jenis: x.jenis || null, detail: x.detail || null };
       if (!aman) return panggil("POST", "/api/penjualan", body, user, waktuJual, replay);
       {
         // Versi aman (dipakai bila versi biasa ditolak): penjualan yang sudah terjadi di toko jangan sampai hilang,
@@ -179,6 +179,12 @@ function terapkan(p, d, alat, aman = false){
       if (!s) throw bad(`Transaksi ${x.no} tidak ada di server`);
       if (s.batal_at) return { ok: true };
       return panggil("POST", `/api/penjualan/${s.id}/diambil`, { batal: !!x.batal }, user, w);
+    }
+    case "detail_jual": {
+      const s = one("SELECT id, jenis FROM sales WHERE no = ?", [String(x.no || "")]);
+      if (!s) throw bad(`Transaksi ${x.no} tidak ada di server`);
+      if (!s.jenis) return { ok: true };
+      return panggil("POST", `/api/penjualan/${s.id}/detail`, { detail: x.detail || {} }, user, w);
     }
     case "absen": return terimaAbsen(x, alat);
     case "hapus_jual": {
@@ -277,7 +283,7 @@ const BATAS_JUAL = 5000;
 function penjualanTerbaru(sejak){
   // Termasuk pesanan lama yang belum diambil, supaya pengingatnya tetap ada di perangkat.
   const sales = all(`SELECT id, no, tgl, jam, kasir, pelanggan, hp, subtotal, diskon, ongkir, total, metode, bayar, catatan, batal_at, batal_oleh, batal_alasan,
-    kartu, ambil_tgl, ambil_jam, ambil_cara, request, diambil_at, diambil_oleh, lunas_at, lunas_metode, lunas_oleh
+    kartu, ambil_tgl, ambil_jam, ambil_cara, request, diambil_at, diambil_oleh, lunas_at, lunas_metode, lunas_oleh, jenis, detail
     FROM sales WHERE tgl >= ? OR (ambil_tgl IS NOT NULL AND diambil_at IS NULL AND batal_at IS NULL) ORDER BY id DESC LIMIT ${BATAS_JUAL}`, [sejak]);
   if (!sales.length) return [];
   const per = new Map(sales.map(x => [x.id, (x.items = [], x)]));
@@ -308,7 +314,7 @@ route("POST", "/api/cabang/tarik", false, ({ body }) => {
   const versi = versiData() || "awal";
   if (body.versi && body.versi === versi) return { tetap: true, versi, perangkat: alat.nama, perangkat_absen: !!alat.absen };
   const sejak = one("SELECT date('now', '+7 hours', '-40 days') d").d;
-  const s = Object.fromEntries(all("SELECT kunci, nilai FROM settings WHERE kunci IN ('nama_toko','alamat','telp','footer','prefix','hpp_persen','insentif','periode_mulai','absen_aktif','absen_jam_masuk','absen_jam_pulang','wa_otomatis','wa_template','canva_url','canva_email','wa_nomor','absen_pin_aktif','absen_lat','absen_lng','absen_radius','kartu_lebar','kartu_tinggi','kartu_huruf','kartu_warna','kartu_area','kartu_latar_kode','kartu_font_kode','inv_tagline','inv_bank','inv_ttd','inv_ttd_nama','inv_ttd_jabatan','jam_buka','jam_tutup','shifts','lembur_per_jam','lembur_bulat','ins_kurir','ins_lapangan','ins_konten','kurir_offline')").map(r => [r.kunci, JSON.parse(r.nilai)]));
+  const s = Object.fromEntries(all("SELECT kunci, nilai FROM settings WHERE kunci IN ('nama_toko','alamat','telp','footer','prefix','hpp_persen','insentif','periode_mulai','absen_aktif','absen_jam_masuk','absen_jam_pulang','wa_otomatis','wa_template','canva_url','canva_email','wa_nomor','absen_pin_aktif','absen_lat','absen_lng','absen_radius','kartu_lebar','kartu_tinggi','kartu_huruf','kartu_warna','kartu_area','kartu_latar_kode','kartu_font_kode','inv_tagline','inv_bank','inv_ttd','inv_ttd_nama','inv_ttd_jabatan','jam_buka','jam_tutup','shifts','lembur_per_jam','lembur_bulat','ins_kurir','ins_lapangan','ins_konten','kurir_offline','mitra','ins_dekorasi')").map(r => [r.kunci, JSON.parse(r.nilai)]));
   return {
     produk: all("SELECT kode, nama, kategori, harga, hpp, stok, stok_min, barcode, insentif, aktif FROM products WHERE dihapus IS NULL ORDER BY id"),
     bahan: all("SELECT kode, nama, kategori, harga, satuan, stok, stok_min, barcode FROM materials WHERE dihapus IS NULL ORDER BY id"),
@@ -380,6 +386,7 @@ route("DELETE", "/api/cabang/perangkat/:id", "admin", ({ params }) => cabangAkti
 /* Diteruskan dari aplikasi di perangkat (admin di perangkat itu). */
 /* Admin di perangkat kasir mengubah daftar kurir offline (disimpan di server). */
 route("POST", "/api/cabang/kurir", false, ({ body }) => { perangkatDariToken(body.token); return simpanKurir(body.daftar); });
+route("POST", "/api/cabang/mitra", false, ({ body }) => { perangkatDariToken(body.token); return simpanMitra(body.daftar); });
 route("POST", "/api/cabang/kelola-perangkat", false, ({ body }) => {
   perangkatDariToken(body.token);
   if (body.aksi === "daftar") return daftarPerangkat();

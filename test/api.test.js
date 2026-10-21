@@ -415,3 +415,38 @@ test("kurir offline: admin menambah nama & nomor WA, semua bisa melihat, nomor d
   assert.deepEqual(d, [{ nama: "JOKO KURIR".replace(/.*/, "Joko Kurir"), hp: "6281234567890" }, { nama: "Andi", hp: "6285711112222" }]);
   assert.deepEqual((await kasir("GET", "/api/bootstrap")).data.toko.kurir_offline.map(k => k.nama), ["Joko Kurir", "Andi"]);
 });
+
+test("pesanan khusus: dekorasi (tim & insentif), sewa (jaminan, kembali, denda), mahar, parcel; mitra bisnis", async () => {
+  const b = (await admin("GET", "/api/bootstrap")).data, hari = b.hariIni;
+  assert.ok(b.toko.ins_dekorasi === 100000, "insentif dekorasi bawaan 100.000");
+  assert.ok(b.toko.mitra.some(m => m.nama === "You n Me"), "contoh mitra awal");
+  // jenis khusus wajib bertanggal
+  assert.equal((await kasir("POST", "/api/penjualan", { items: [{ nama: "dekorasi balon", harga: 1500000, qty: 1 }], jenis: "dekorasi", detail: { macam: "Dekorasi balon" } })).status, 400);
+  const d = await kasir("POST", "/api/penjualan", { items: [{ nama: "dekorasi balon ulang tahun", harga: 1500000, qty: 1 }], bayar: 500000, metode: "Transfer",
+    pesanan: { tgl: hari, jam: "16:00", cara: "antar" }, jenis: "dekorasi", detail: { macam: "Balon ulang tahun", lokasi: "Gedung Serbaguna", tim: ["IZA"], insentif: 100000, aneh: { x: 1 } } });
+  assert.equal(d.status, 200, JSON.stringify(d.data));
+  assert.equal(d.data.jenis, "dekorasi"); assert.equal(d.data.detail.lokasi, "Gedung Serbaguna"); assert.ok(!("aneh" in d.data.detail) || typeof d.data.detail.aneh === "string");
+  const sw = (await kasir("POST", "/api/penjualan", { items: [{ nama: "sewa standing ucapan", harga: 150000, qty: 1 }], pesanan: { tgl: hari, cara: "ambil" }, jenis: "sewa",
+    detail: { barang: "Standing ucapan", kembali_tgl: hari, jaminan: 200000 } })).data;
+  assert.equal(sw.detail.jaminan, 200000);
+  const ps = async () => (await admin("GET", "/api/pesanan")).data;
+  assert.ok((await ps()).some(x => x.id === sw.id));
+  assert.equal((await kasir("POST", `/api/penjualan/${sw.id}/diambil`, {})).status, 200);
+  assert.ok((await ps()).some(x => x.id === sw.id), "sewa tetap aktif sampai barang kembali");
+  assert.equal((await kasir("POST", `/api/penjualan/${sw.id}/detail`, { detail: { kembali_at: `${hari} 18:00`, denda: 50000, jaminan_kembali: 150000 } })).status, 200);
+  assert.ok(!(await ps()).some(x => x.id === sw.id), "sudah kembali → tidak aktif lagi");
+  const sw2 = (await admin("GET", `/api/penjualan/${sw.id}`)).data;
+  assert.equal(sw2.detail.barang, "Standing ucapan"); assert.equal(sw2.detail.denda, 50000);
+  for (const [jenis, detail] of [["mahar", { isi: "Uang mahar bentuk masjid", acara: "Dimas & Sinta" }], ["parcel", { musim: "Lebaran", isi: "Kue kering 3 toples" }]]) {
+    const r = await kasir("POST", "/api/penjualan", { items: [{ nama: jenis, harga: 300000, qty: 1 }], pesanan: { tgl: hari }, jenis, detail });
+    assert.equal(r.status, 200); assert.equal(r.data.jenis, jenis);
+  }
+  // insentif dekorasi untuk karyawan
+  const iza = b.staf.find(u => u.peran !== "admin");
+  assert.equal((await admin("POST", "/api/insentif-lain", { user_id: iza.id, jenis: "dekorasi", nominal: 120000, ket: "Dekorasi " + d.data.no })).status, 200);
+  // mitra bisnis
+  assert.equal((await kasir("PUT", "/api/mitra", { daftar: [] })).status, 403);
+  const m = await admin("PUT", "/api/mitra", { daftar: [{ kategori: "Cutting stiker", nama: "Stiker Jaya", hp: "0812 3333 4444", kota: "Indramayu" }, { kategori: "Toko mitra", nama: "You n Me" }] });
+  assert.equal(m.status, 200, JSON.stringify(m.data));
+  assert.deepEqual((await kasir("GET", "/api/mitra")).data.daftar.map(x => [x.nama, x.hp]), [["Stiker Jaya", "6281233334444"], ["You n Me", ""]]);
+});
