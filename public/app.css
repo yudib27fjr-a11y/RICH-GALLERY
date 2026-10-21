@@ -383,3 +383,10 @@ input.sIn.berubah{background:#fff4c2;border-color:#d9a400;color:#1c2420}
 .paket-kartu small{color:var(--muted);font-size:12px;line-height:1.4}
 .paket-pilih button.on{background:var(--accent);border-color:var(--accent)}
 .paket-ubah{background:var(--surface-2)}
+
+/* ===== Belanja online ===== */
+.bl-shopee{background:#fff1ec;color:#d73211}
+.bl-item{border-left:3px solid var(--ok);padding-left:8px}
+.bl-item.bukan{border-left-color:var(--line);opacity:.7}
+.ok-teks{color:var(--ok)}
+.danger-teks{color:var(--bad)}

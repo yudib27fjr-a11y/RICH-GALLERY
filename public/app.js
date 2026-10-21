@@ -693,6 +693,7 @@ const ICON = {
   kasir: '<path d="M4 7h16l-1.5 9a2 2 0 0 1-2 1.7H7.5a2 2 0 0 1-2-1.7L4 7z"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/>',
   riwayat: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   jasa: '<ellipse cx="9" cy="8" rx="4" ry="5"/><path d="M9 13l-.8 1.4h1.6zM9 14.4c0 2.2 1.6 2.8 1.6 6.1"/><path d="M15 21l1.5-6h4L22 21z"/><path d="M16.5 15c0-1.6 1.1-2.6 2.5-2.6s2.5 1 2.5 2.6"/>',
+  belanja: '<path d="M3 4h2l2.2 11h10.6L20 7H6.2"/><circle cx="9" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/><path d="M11 10.5l2 2 3.5-3.5"/>',
   mitra: '<path d="M2.5 12.5l4-4 3 1 2.5-2 2.5 1 4-1.5 3 4"/><path d="M6.5 8.5l5 5.5c.8.8 2 .8 2.6 0l2.4-2.6"/><path d="M9.5 15.5l1.5 1.5c.7.7 1.8.7 2.4 0"/><path d="M2.5 12.5l3 3M21.5 13l-3 3"/>',
   kurir: '<circle cx="6" cy="16.5" r="2.8"/><circle cx="18" cy="16.5" r="2.8"/><path d="M8.8 16.5h5.4l2.3-5H12l-2 3"/><path d="M14.5 7.5h2.2l1.3 4"/><path d="M5 11.5h4"/>',
   produksi: '<circle cx="12" cy="8" r="3"/><path d="M12 5V3M15 8h2M9 8H7M12 11v10M12 17c-3 0-5-2-5-4 3 0 5 2 5 4zM12 15c3 0 5-2 5-4-3 0-5 2-5 4z"/>',
@@ -707,7 +708,7 @@ const ICON = {
   gaji: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/><path d="M16 3.5l-4 2.5-4-2.5"/>',
   atur: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
 };
-const SEMUA_VIEW = [["kasir", "Kasir"], ["absenku", "Absen"], ["pesanan", "Pesanan"], ["jasa", "Jasa"], ["kurir", "Kurir"], ["mitra", "Mitra"], ["riwayat", "Transaksi"], ["produksi", "Produksi"], ["stok", "Stok"], ["mutasi", "Masuk/Keluar"], ["opname", "Opname"], ["biaya", "Pengeluaran", 1], ["laporan", "Laporan", 1], ["absen", "Rekap Absen", 1], ["gaji", "Gaji", 1], ["atur", "Pengaturan"]];
+const SEMUA_VIEW = [["kasir", "Kasir"], ["absenku", "Absen"], ["pesanan", "Pesanan"], ["jasa", "Jasa"], ["kurir", "Kurir"], ["mitra", "Mitra"], ["belanja", "Belanja"], ["riwayat", "Transaksi"], ["produksi", "Produksi"], ["stok", "Stok"], ["mutasi", "Masuk/Keluar"], ["opname", "Opname"], ["biaya", "Pengeluaran", 1], ["laporan", "Laporan", 1], ["absen", "Rekap Absen", 1], ["gaji", "Gaji", 1], ["atur", "Pengaturan"]];
 const daftarView = () => SEMUA_VIEW.filter(v => (!v[2] || isAdmin()) && (v[0] !== "absen" || (B && B.toko.absen_aktif))
   && (v[0] !== "absenku" || (kioskInfo && kioskInfo.aktif)));
 let view = "kasir";
@@ -771,7 +772,7 @@ function render(){
   if (!daftarView().some(v => v[0] === view)) view = "kasir";
   renderNav();
   $("#cartbar").hidden = view !== "kasir";
-  return ({ kasir: vKasir, pesanan: vPesanan, riwayat: vRiwayat, produksi: vProduksi, stok: vStok, mutasi: vMutasi, opname: vOpname, biaya: vBiaya, laporan: vLaporan, absen: vAbsen, absenku: vAbsenku, gaji: vGaji, atur: vAtur, kurir: vKurir, mitra: vMitra, jasa: vJasa })[view]();
+  return ({ kasir: vKasir, pesanan: vPesanan, riwayat: vRiwayat, produksi: vProduksi, stok: vStok, mutasi: vMutasi, opname: vOpname, biaya: vBiaya, laporan: vLaporan, absen: vAbsen, absenku: vAbsenku, gaji: vGaji, atur: vAtur, kurir: vKurir, mitra: vMitra, jasa: vJasa, belanja: vBelanja })[view]();
 }
 
 /* ================= KASIR ================= */
@@ -1974,6 +1975,102 @@ function formJasa(jenis, paketAwal){
       if (jenis === "dekorasi") ingatMacam("dekor", d.macam); if (jenis === "mahar") ingatMacam("mahar", d.isi);
       closeModal(); toast(`Tersimpan: ${s.no}${timIds.length ? ` · insentif dekorasi ${rp(insentif)} × ${timIds.length} orang` : ""}`);
       await muatUlang(); vJasa(); setTimeout(() => pilihCetak(s), 250);
+    }, e.target);
+  });
+}
+
+/* ================= BELANJA ONLINE: Shopee (otomatis dari email) & catatan manual → konfirmasi barang datang ================= */
+let blStatus = "kirim";
+const ALAMAT_BELANJA = "belanja@richgallery.my.id";
+async function vBelanja(){
+  const st = blStatus;
+  $("#main").innerHTML = `<div class="view-head"><h2>Belanja online</h2><span class="sp"></span>
+      <button class="btn sm" id="blManual" type="button">+ Catat belanja</button>${isAdmin() ? `<button class="btn sm" id="blTempel" type="button">📋 Tempel email Shopee</button>` : ""}</div>
+    <div class="seg" id="blS" style="display:flex;margin-bottom:10px">${[["kirim", "🚚 Dikirim"], ["datang", "📦 Datang"], ...(isAdmin() ? [["abaikan", "Diabaikan"], ["batal", "Batal"]] : [])]
+      .map(([k, l]) => `<button type="button" data-s="${k}" style="flex:1" class="${st === k ? "on" : ""}">${l}</button>`).join("")}</div>
+    <div id="blL"><div class="empty">Memuat…</div></div>
+    ${isAdmin() ? `<details class="panel" style="margin-top:14px"><summary><b>⚙️ Otomatis dari email Shopee</b></summary><div class="stack small" style="margin-top:8px">
+      <p style="margin:0">Email pesanan Shopee yang masuk ke <b>${ALAMAT_BELANJA}</b> langsung tercatat di sini sebagai <b>Dalam pengiriman</b>. Hanya barang yang berhubungan dengan barang toko (bunga, kertas, pita, balon, boneka, akrilik, box, dll.) yang dicatat — email lain diabaikan.</p>
+      <ol style="margin:0;padding-left:18px"><li>Cloudflare → domain richgallery.my.id → <b>Email → Email Routing</b> → aktifkan → <b>Routing rules</b> → Custom address <b>belanja</b> → Action <b>Send to a Worker</b> → <b>rich-gallery-pos</b>.</li>
+        <li>Gmail akun Shopee → Setelan → <b>Penerusan dan POP/IMAP</b> → Tambahkan alamat penerusan <b>${ALAMAT_BELANJA}</b>. Kode konfirmasi Gmail akan muncul di bawah ini.</li>
+        <li>Gmail → buat <b>filter</b>: Dari <b>info@mail.shopee.co.id</b> → Teruskan ke ${ALAMAT_BELANJA}.</li></ol>
+      <button class="btn sm" id="blSurat" type="button" style="align-self:flex-start">📧 Lihat email masuk lain (kode konfirmasi Gmail)</button><div id="blSuratL"></div></div></details>` : ""}`;
+  $$("#blS button").forEach(b => b.onclick = () => { blStatus = b.dataset.s; vBelanja(); });
+  $("#blManual").onclick = belanjaManual;
+  const tp = $("#blTempel"); if (tp) tp.onclick = tempelEmail;
+  const su = $("#blSurat"); if (su) su.onclick = e => coba(async () => {
+    const S = await api("GET", "/api/belanja/surat");
+    $("#blSuratL").innerHTML = S.length ? S.map(x => `<div class="panel stack" style="gap:4px;margin-top:6px"><b>${esc(x.subjek || "(tanpa judul)")}</b><span class="muted">${esc(x.dari)} · ${esc(waktuLokal(x.waktu.replace(" ", "T") + "Z"))}</span><div style="white-space:pre-wrap;max-height:200px;overflow:auto">${esc(x.isi.slice(0, 3000)).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')}</div></div>`).join("") : `<p class="muted" style="margin:6px 0 0">Belum ada email lain.</p>`;
+  }, e.target);
+  const L = await api("GET", `/api/belanja?status=${st}`).catch(e => { toast(e.message); return null; });
+  if (view !== "belanja" || blStatus !== st || !$("#blL")) return;
+  if (!L) { $("#blL").innerHTML = `<div class="empty">Belum bisa dimuat${LOKAL ? " (butuh internet)" : ""}.</div>`; return; }
+  $("#blL").innerHTML = L.length ? `<div class="stack">${L.map(b => {
+    const lama = st === "kirim" && (Date.parse(today()) - Date.parse(b.tgl)) / 864e5;
+    return `<div class="panel stack bl-kartu" style="gap:6px">
+      <div class="row" style="align-items:center;gap:6px"><span class="pill ${b.sumber === "shopee" ? "bl-shopee" : "mut"}">${b.sumber === "shopee" ? "🛒 Shopee" : "✍️ Manual"}</span><b style="flex:1">${esc(b.toko)}</b>${b.total != null ? `<b class="num">${rp(b.total)}</b>` : ""}</div>
+      <div class="small muted">${b.no_pesanan && b.sumber !== "manual" ? "#" + esc(b.no_pesanan) + " · " : ""}dipesan ${esc(tglID(b.tgl))}${b.metode ? " · " + esc(b.metode) : ""}${lama >= 5 ? ` · <b style="color:var(--warn)">sudah ${Math.round(lama)} hari</b>` : ""}${b.alasan ? " · " + esc(b.alasan) : ""}</div>
+      <div class="stack" style="gap:4px">${b.items.map(i => `<div class="small bl-item ${i.toko ? "" : "bukan"}"><b>${esc(i.nama)}</b>${i.variasi ? ` <span class="pill mut">${esc(i.variasi)}</span>` : ""} ×${fq(i.qty)}${i.harga != null && i.harga ? ` · ${rp(i.harga)}` : ""}
+        ${i.masuk ? `<div class="ok-teks">✅ masuk stok: ${esc(i.masuk.nama)} +${fq(i.masuk.qty)}${i.datang !== i.qty ? ` (datang ${fq(i.datang)} dari ${fq(i.qty)})` : ""}</div>` : st === "datang" ? `<div class="muted">tidak masuk stok${i.datang != null && i.datang !== i.qty ? ` · datang ${fq(i.datang)} dari ${fq(i.qty)}` : ""}</div>`
+          : i.barang ? `<div class="muted">↔ ${esc(i.barang.nama)} (${esc(i.barang.kode)})</div>` : i.toko ? `<div class="muted">barang toko${i.kata ? " (" + esc(i.kata.toLowerCase()) + ")" : ""} · pilih barangnya saat datang</div>` : `<div class="muted">bukan barang toko</div>`}</div>`).join("")}</div>
+      ${b.catatan ? `<div class="small">📝 ${esc(b.catatan)}</div>` : ""}${b.datang_at ? `<div class="small muted">Datang ${esc(b.datang_at)} · dicek ${esc(b.datang_oleh || "")}${b.nominal_bayar ? " · pengeluaran " + rp(b.nominal_bayar) : ""}</div>` : ""}
+      <div class="row" style="gap:6px;flex-wrap:wrap">${st === "kirim" ? `<button class="btn pri" data-datang="${b.id}" type="button">📦 Barang datang</button>` : ""}
+        ${isAdmin() && st !== "datang" ? `${st !== "kirim" ? `<button class="btn sm" data-st="${b.id}" data-v="kirim" type="button">Pindah ke dalam pengiriman</button>` : `<button class="btn sm ghost" data-st="${b.id}" data-v="abaikan" type="button">Abaikan</button><button class="btn sm ghost" data-st="${b.id}" data-v="batal" type="button">Batal</button>`}<button class="btn sm ghost danger-teks" data-hapus="${b.id}" type="button">Hapus</button>` : ""}</div></div>`; }).join("")}</div>`
+    : `<div class="list"><div class="empty">${st === "kirim" ? "Tidak ada belanja yang sedang dikirim." : "Belum ada."}</div></div>`;
+  $$("[data-datang]").forEach(x => x.onclick = () => barangDatang(L.find(b => b.id === +x.dataset.datang)));
+  $$("[data-st]").forEach(x => x.onclick = () => coba(async () => { await api("POST", `/api/belanja/${x.dataset.st}/status`, { status: x.dataset.v }); vBelanja(); }, x));
+  $$("[data-hapus]").forEach(x => x.onclick = () => konfirmasi("Hapus catatan belanja ini?", "Hanya catatannya yang dihapus.", "Hapus", async () => { await api("DELETE", `/api/belanja/${x.dataset.hapus}`); vBelanja(); }));
+}
+/** Konfirmasi ulang saat paket datang: jumlah yang datang, masuk ke stok barang apa & berapa (mis. 5 ikat × 7 tangkai = 35). */
+function barangDatang(b){
+  const semua = [...B.bahan.map(x => ({ ...x, jenis: "bahan" })), ...B.produk.map(x => ({ ...x, jenis: "produk" }))];
+  const opsi = it => `<option value="">— tidak masuk stok —</option>${["bahan", "produk"].map(j => `<optgroup label="${j === "bahan" ? "Bahan baku" : "Produk jadi"}">${semua.filter(x => x.jenis === j).map(x => `<option value="${j}|${esc(x.kode)}" ${it.barang && it.barang.kode === x.kode && it.barang.jenis === j ? "selected" : ""}>${esc(x.nama)} (${esc(x.kode)})${x.satuan ? " · " + esc(x.satuan) : ""}</option>`).join("")}</optgroup>`).join("")}`;
+  modal(`<h3>📦 Barang datang · ${esc(b.toko)}</h3>
+    <p class="small muted" style="margin:0">Cek paketnya. Isi jumlah yang <b>benar-benar datang</b>, lalu pilih masuk ke stok barang apa. Bila satuannya beda (mis. 1 ikat = 7 tangkai), ubah jumlah masuk stok.</p>
+    <div class="stack">${b.items.map((it, i) => `<div class="panel stack bl-cek" data-i="${i}" style="gap:6px">
+      <b class="small">${esc(it.nama)}${it.variasi ? " · " + esc(it.variasi) : ""}</b>
+      <div class="row" style="flex-wrap:nowrap;gap:8px"><label class="f" style="flex:1">Dipesan<input value="${fq(it.qty)}" disabled></label><label class="f" style="flex:1">Datang<input type="number" class="bcD" value="${it.qty}" min="0" step="1" inputmode="decimal"></label><label class="f" style="flex:1">Masuk stok<input type="number" class="bcS" value="${it.qty}" min="0" step="1" inputmode="decimal"></label></div>
+      <label class="f">Masuk ke stok<select class="bcB">${opsi(it)}</select></label></div>`).join("")}</div>
+    ${isAdmin() ? `<label class="row"><input type="checkbox" id="bcBiaya" checked> Catat pengeluaran "Belanja Bahan"</label><label class="f">Nominal<input type="number" id="bcN" value="${b.total || 0}" min="0" step="1000" inputmode="numeric"></label>` : `<p class="small muted" style="margin:0">Pengeluaran belanja dicatat otomatis sesuai total pesanan.</p>`}
+    <label class="f">Catatan (rusak / kurang / lebih)<input type="text" id="bcC" maxlength="300" placeholder="Opsional"></label>
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="bcOk" type="button">Konfirmasi barang datang</button></div>`, m => {
+    $$(".bl-cek", m).forEach(r => { const d = $(".bcD", r), s = $(".bcS", r); let ubah = false; s.oninput = () => { ubah = true; }; d.oninput = () => { if (!ubah) s.value = d.value; }; });
+    $("#bcOk", m).onclick = e => coba(async () => {
+      const items = $$(".bl-cek", m).map(r => { const [jenis, kode] = ($(".bcB", r).value || "|").split("|"); return { i: +r.dataset.i, datang: num($(".bcD", r).value) || 0, stok: num($(".bcS", r).value) || 0, jenis: jenis || undefined, kode: kode || undefined }; });
+      if (items.some(x => x.kode && !(x.stok > 0) && x.datang > 0)) throw new Error("Isi jumlah masuk stok");
+      const biaya = $("#bcBiaya", m);
+      const r = await api("POST", `/api/belanja/${b.id}/datang`, { items, catatan: $("#bcC", m).value.trim(), catat_biaya: biaya ? biaya.checked : true, nominal: $("#bcN", m) ? num($("#bcN", m).value) : undefined });
+      closeModal(); await muatUlang(); toast(`Dikonfirmasi: ${r.masuk} barang masuk stok${r.nominal ? " · pengeluaran " + rp(r.nominal) : ""}`); vBelanja();
+    }, e.target);
+  });
+}
+/** Admin: tempel isi email / rincian pesanan Shopee. */
+function tempelEmail(){
+  modal(`<h3>📋 Tempel email Shopee</h3>
+    <p class="small muted" style="margin:0">Buka email pesanan Shopee, salin seluruh isinya (dari "No. Pesanan" sampai "Total Pembayaran"), lalu tempel di sini.</p>
+    <textarea id="teI" rows="10" placeholder="Tempel di sini…"></textarea>
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="teOk" type="button">Baca</button></div>`, m => {
+    $("#teOk", m).onclick = e => coba(async () => {
+      const r = await api("POST", "/api/belanja/tempel", { isi: $("#teI", m).value });
+      closeModal(); toast(!r.baru ? `Pesanan #${r.no} sudah tercatat sebelumnya` : r.status === "kirim" ? `Tercatat: ${r.toko} #${r.no} (${r.barang} barang) · dalam pengiriman` : `Pesanan #${r.no} diabaikan: tidak ada barang toko`);
+      blStatus = r.status === "abaikan" ? "abaikan" : "kirim"; vBelanja();
+    }, e.target);
+  });
+}
+/** Catat belanja online manual (Tokopedia, Lazada, WA, dll.). */
+function belanjaManual(){
+  const baris = () => `<div class="row bm-b" style="flex-wrap:nowrap;gap:6px;align-items:flex-end"><label class="f" style="flex:2;min-width:0">Barang<input class="bmN" list="bmL" placeholder="Nama barang"></label><label class="f" style="width:70px">Jml<input class="bmQ" type="number" min="1" value="1" inputmode="decimal"></label>${isAdmin() ? `<label class="f" style="width:100px">Harga<input class="bmH" type="number" min="0" step="1000" inputmode="numeric"></label>` : ""}</div>`;
+  modal(`<h3>+ Catat belanja online</h3>
+    <div class="row"><label class="f grow">Toko / marketplace<input id="bmT" placeholder="Mis. Tokopedia · Toko Pita Jaya"></label><label class="f grow">No. pesanan<input id="bmNo" placeholder="Opsional"></label></div>
+    <datalist id="bmL">${[...B.bahan, ...B.produk].map(x => `<option value="${esc(x.nama)}">`).join("")}</datalist>
+    <div class="stack" id="bmI">${baris()}</div><button class="btn sm" id="bmTambah" type="button">+ Barang</button>
+    ${isAdmin() ? `<label class="f">Ongkir<input id="bmO" type="number" min="0" step="1000" inputmode="numeric"></label>` : ""}
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="bmOk" type="button">Simpan</button></div>`, m => {
+    $("#bmTambah", m).onclick = () => $("#bmI", m).insertAdjacentHTML("beforeend", baris());
+    $("#bmOk", m).onclick = e => coba(async () => {
+      const items = $$(".bm-b", m).map(r => ({ nama: $(".bmN", r).value.trim(), qty: num($(".bmQ", r).value) || 1, harga: $(".bmH", r) ? num($(".bmH", r).value) || 0 : 0 })).filter(x => x.nama);
+      await api("POST", "/api/belanja", { toko: $("#bmT", m).value.trim(), no: $("#bmNo", m).value.trim(), ongkir: $("#bmO", m) ? num($("#bmO", m).value) : 0, items });
+      closeModal(); toast("Belanja dicatat · dalam pengiriman"); blStatus = "kirim"; vBelanja();
     }, e.target);
   });
 }

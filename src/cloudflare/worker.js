@@ -3,7 +3,8 @@
    - Semua /api/* diteruskan ke SATU Durable Object "toko" yang memegang database SQLite toko.
      Satu objek = satu database = semua permintaan berurutan, jadi aturan stok & nomor nota tetap aman.
    - Cron tiap 5 menit membangunkan objek untuk mengirim antrean ke Google Sheet. */
-import { pasangDriver, migrasi, seedJikaKosong, jalankan, cariRoute, kirimOutbox, kirimNotif, bersihkanSesiKadaluarsa, hapusFotoAbsenLama } from "../core/semua.js";
+import { pasangDriver, migrasi, seedJikaKosong, jalankan, cariRoute, kirimOutbox, kirimNotif, bersihkanSesiKadaluarsa, hapusFotoAbsenLama, terimaEmail } from "../core/semua.js";
+import { mimeKeTeks } from "./email.js";
 import { buatDriverDO } from "./driver.js";
 import { pasangPlatformCF } from "./platform.js";
 
@@ -41,6 +42,10 @@ export class Toko {
   async fetch(req){
     this.siapkan();
     const url = new URL(req.url);
+    if (url.pathname === "/__email") { // dari Email Worker (bukan dari internet: hanya /api/* yang diteruskan ke objek ini)
+      try { const r = terimaEmail(await req.json()); this.state.waitUntil?.(kirimNotif().catch(() => {})); return json(200, r); }
+      catch (e) { console.error("email", e.message); return json(500, { error: e.message }); }
+    }
     if (url.pathname === "/__tugas") { // dari cron
       bersihkanSesiKadaluarsa();
       try { hapusFotoAbsenLama(); } catch (e) { console.error("hapus foto absen", e.message); }
@@ -89,6 +94,14 @@ export default {
     const url = new URL(req.url);
     if (url.pathname.startsWith("/api/")) return objekToko(env).fetch(req);
     return env.ASSETS.fetch(req);
+  },
+  /** Email ke belanja@richgallery.my.id (Cloudflare Email Routing → Worker ini): pesanan Shopee dicatat sebagai belanja. */
+  async email(message, env, ctx){
+    try {
+      const raw = await new Response(message.raw).text();
+      const isi = mimeKeTeks(raw);
+      await objekToko(env).fetch("https://toko/__email", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...isi, dari: isi.dari || message.from }) });
+    } catch (e) { console.error("email masuk", e.message); }
   },
   async scheduled(_event, env, ctx){
     ctx.waitUntil(objekToko(env).fetch("https://toko/__tugas"));

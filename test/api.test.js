@@ -492,3 +492,38 @@ test("jam toko per hari (Minggu 09–17, Sabtu 12–21) & hari libur karyawan", 
   const R2 = (await admin("GET", "/api/absen?dari=2026-10-21&sampai=2026-10-21")).data;
   assert.equal(R2.hari, "Rabu"); assert.equal(R2.jam_khusus, null);
 });
+
+test("belanja Shopee: email dibaca, hanya barang toko dicatat, konfirmasi datang → stok & pengeluaran", async () => {
+  const { readFileSync } = await import("node:fs");
+  const email = readFileSync(new URL("./contoh-email-shopee.txt", import.meta.url), "utf8");
+  // bahan toko yang cocok
+  const bb = await admin("POST", "/api/bahan", { nama: "BUNGA MAWAR ARTIFICIAL", kategori: "BUNGA", satuan: "tangkai", harga: 8000, stok: 0 });
+  assert.equal(bb.status, 200, JSON.stringify(bb.data));
+  assert.equal((await kasir("POST", "/api/belanja/tempel", { isi: email })).status, 403, "tempel hanya admin");
+  const r = await admin("POST", "/api/belanja/tempel", { isi: email });
+  assert.equal(r.status, 200, JSON.stringify(r.data)); assert.equal(r.data.status, "kirim"); assert.equal(r.data.no, "2610204XQR3TQ2");
+  assert.equal((await admin("POST", "/api/belanja/tempel", { isi: email })).data.baru, false, "email kedua pesanan sama tidak dobel");
+  // email tanpa barang toko → diabaikan
+  const lain = email.replace(/Bunga Artificial Premium Mawar Classic 7 Cabang Bunga Dekorasi Estetik/g, "Casing HP iPhone 13 Anti Crack").replace("2610204XQR3TQ2", "2610209ABCDEF1").replace("2610204XQR3TQ2", "2610209ABCDEF1");
+  assert.equal((await admin("POST", "/api/belanja/tempel", { isi: lain })).data.status, "abaikan");
+  const L = (await admin("GET", "/api/belanja?status=kirim")).data;
+  assert.equal(L.length, 1); const b = L[0];
+  assert.equal(b.total, 403990); assert.equal(b.items.length, 2);
+  assert.ok(b.items.every(i => i.toko), "barang dikenali sebagai barang toko");
+  assert.equal(b.items[0].barang && b.items[0].barang.kode, bb.data.kode, "dicocokkan dengan bahan toko");
+  const kL = (await kasir("GET", "/api/belanja?status=kirim")).data;
+  assert.ok(!("total" in kL[0]) && !("harga" in kL[0].items[0]), "karyawan tidak melihat harga belanja");
+  assert.equal((await admin("GET", "/api/belanja?status=abaikan")).data.length, 1);
+  // barang datang: putih 5 ikat x 7 tangkai = 35 tangkai masuk stok, pink datang 4 saja → 28
+  const d = await kasir("POST", `/api/belanja/${b.id}/datang`, { items: [{ i: 0, datang: 5, jenis: "bahan", kode: bb.data.kode, stok: 35 }, { i: 1, datang: 4, jenis: "bahan", kode: bb.data.kode, stok: 28 }], catatan: "pink kurang 1" });
+  assert.equal(d.status, 200, JSON.stringify(d.data)); assert.equal(d.data.masuk, 2); assert.equal(d.data.nominal, 403990);
+  const stok = (await admin("GET", "/api/bootstrap")).data.bahan.find(x => x.kode === bb.data.kode).stok;
+  assert.equal(stok, 63);
+  const hari = (await admin("GET", "/api/bootstrap")).data.hariIni;
+  assert.ok((await admin("GET", `/api/pengeluaran?dari=${hari}&sampai=${hari}`)).data.some(e => e.kategori === "Belanja Bahan" && e.nominal === 403990 && /2610204XQR3TQ2/.test(e.ket)));
+  assert.equal((await kasir("POST", `/api/belanja/${b.id}/datang`, {})).status, 400, "tidak bisa dikonfirmasi dua kali");
+  assert.equal((await admin("GET", "/api/belanja?status=datang")).data[0].catatan, "pink kurang 1");
+  // belanja manual
+  const m = await kasir("POST", "/api/belanja", { toko: "Toko Pita Jaya", items: [{ nama: "Pita satin 2 cm", qty: 3 }] });
+  assert.equal(m.status, 200, JSON.stringify(m.data));
+});

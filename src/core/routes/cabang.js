@@ -11,6 +11,7 @@ import { muatPenjualan, hapusPenjualan } from "./penjualan.js";
 import { rekapAbsen, terimaAbsen, fotoAbsen, cekLokasi, lemburPeriode } from "./absen.js";
 import { rekapGaji, daftarKasbon } from "./gaji.js";
 import { simpanKurir, simpanMitra, simpanPaket } from "./kurir.js";
+import { aksiBelanjaDariPerangkat } from "./belanja.js";
 import { statusCabang, sinkronCabang, sambungCabang, sambungUlangCabang, putusCabang, gantiNamaPerangkat, kirimUlangDitolak, cabangAktif, mintaPusat } from "../cabang-perangkat.js";
 
 /* ================= di perangkat ================= */
@@ -386,6 +387,7 @@ route("DELETE", "/api/cabang/perangkat/:id", "admin", ({ params }) => cabangAkti
 /* Diteruskan dari aplikasi di perangkat (admin di perangkat itu). */
 /* Admin di perangkat kasir mengubah daftar kurir offline (disimpan di server). */
 route("POST", "/api/cabang/kurir", false, ({ body }) => { perangkatDariToken(body.token); return simpanKurir(body.daftar); });
+route("POST", "/api/cabang/belanja", false, ({ body }) => { perangkatDariToken(body.token); return aksiBelanjaDariPerangkat(body.aksi, body.data, body.user); }, { batas: 300_000 });
 route("POST", "/api/cabang/paket-jasa", false, ({ body }) => { perangkatDariToken(body.token); return simpanPaket(body.paket); });
 route("POST", "/api/cabang/mitra", false, ({ body }) => { perangkatDariToken(body.token); return simpanMitra(body.daftar); });
 route("POST", "/api/cabang/kelola-perangkat", false, ({ body }) => {

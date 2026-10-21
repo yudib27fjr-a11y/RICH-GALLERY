@@ -379,6 +379,38 @@ CREATE INDEX sales_jenis ON sales(jenis) WHERE jenis IS NOT NULL;`,
 `ALTER TABLE users ADD COLUMN libur TEXT;
 UPDATE users SET libur = '6' WHERE nama_key = 'eva';
 UPDATE users SET libur = '0' WHERE nama_key IN ('wulan', 'savira');`,
+
+/* 16: belanja online (email Shopee / catatan manual) sampai barang datang, & email masuk lain. */
+`CREATE TABLE belanja(
+  id INTEGER PRIMARY KEY,
+  sumber TEXT NOT NULL DEFAULT 'shopee',
+  no_pesanan TEXT,
+  toko TEXT NOT NULL DEFAULT '',
+  tgl TEXT NOT NULL,
+  items TEXT NOT NULL DEFAULT '[]',
+  subtotal INTEGER NOT NULL DEFAULT 0,
+  ongkir INTEGER NOT NULL DEFAULT 0,
+  biaya INTEGER NOT NULL DEFAULT 0,
+  total INTEGER NOT NULL DEFAULT 0,
+  metode TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'kirim',
+  alasan TEXT,
+  oleh TEXT NOT NULL DEFAULT '',
+  datang_at TEXT,
+  datang_oleh TEXT,
+  expense_id INTEGER,
+  nominal_bayar INTEGER,
+  catatan TEXT,
+  dibuat TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX belanja_no ON belanja(sumber, no_pesanan) WHERE no_pesanan IS NOT NULL;
+CREATE TABLE surat(
+  id INTEGER PRIMARY KEY,
+  dari TEXT NOT NULL DEFAULT '',
+  subjek TEXT NOT NULL DEFAULT '',
+  isi TEXT NOT NULL DEFAULT '',
+  waktu TEXT NOT NULL DEFAULT (datetime('now'))
+);`,
 ];
 
 export const DEFAULT_SETTINGS = {

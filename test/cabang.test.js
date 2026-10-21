@@ -706,6 +706,22 @@ test("pesanan sewa dari perangkat: jenis & rincian sampai di server, barang kemb
   assert.equal((await pusat("GET", `/api/penjualan/${p.id}`)).data.detail.kembali_at, hari + " 17:00");
 });
 
+test("belanja Shopee: dibaca di server, barang datang dikonfirmasi dari perangkat → stok server bertambah & ikut ke perangkat", async () => {
+  const { readFileSync } = await import("node:fs");
+  const email = readFileSync(new URL("./contoh-email-shopee.txt", import.meta.url), "utf8").replace(/2610204XQR3TQ2/g, "2610204CABANG1");
+  const p = BC.bahan[0] || (await segarkan(), BC.bahan[0]);
+  const r = await pusat("POST", "/api/belanja/tempel", { isi: email });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const L = (await cabang("GET", "/api/belanja?status=kirim")).data;
+  const b = L.find(x => x.no_pesanan === "2610204CABANG1"); assert.ok(b, "perangkat melihat belanja dari server");
+  const sebelum = (await pusat("GET", "/api/bootstrap")).data.bahan.find(x => x.kode === p.kode).stok;
+  const d = await cabang("POST", `/api/belanja/${b.id}/datang`, { items: [{ i: 0, datang: 5, jenis: "bahan", kode: p.kode, stok: 10 }, { i: 1, datang: 5 }] });
+  assert.equal(d.status, 200, JSON.stringify(d.data));
+  assert.equal((await pusat("GET", "/api/bootstrap")).data.bahan.find(x => x.kode === p.kode).stok, sebelum + 10);
+  await segarkan();
+  assert.equal(BC.bahan.find(x => x.kode === p.kode).stok, sebelum + 10, "stok di perangkat ikut");
+});
+
 test("kurir offline diubah admin di perangkat → tersimpan di server & ikut ke perangkat", async () => {
   const r = await cabang("PUT", "/api/kurir", { daftar: [{ nama: "Pak Udin", hp: "081299998888" }] });
   assert.equal(r.status, 200, JSON.stringify(r.data));
