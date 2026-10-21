@@ -1773,6 +1773,10 @@ function pesanMitra(m, d){
   return L.join("\n");
 }
 function pesanKeMitra(m){
+  if (/cutting|stiker|sticker/i.test(`${m.kategori} ${m.nama}`)) return pilihPesananStiker(m);
+  return pesanKeMitraManual(m);
+}
+function pesanKeMitraManual(m){
   const d = { barang: "", jumlah: "", ukuran: "", tgl: today(), jam: "", kirim: "toko", alamat: "", catatan: "" };
   modal(`<h3>${ikonMitra(m.kategori)} Pesan ke ${esc(m.nama)}</h3>
     <div class="stack">
@@ -2093,7 +2097,30 @@ function pecahUcapan(teks){
   while (isi.length && !isi[isi.length - 1]) isi.pop();
   return { tulisan: isi.join("\n").trim(), dari };
 }
-function pesanStiker(s){
+/** Dari menu Mitra (mitra cutting stiker): pilih pesanan dulu → ucapan & nama terisi otomatis. */
+async function pilihPesananStiker(m){
+  const hari = today(), dari = new Date(Date.parse(hari) - 7 * 864e5).toISOString().slice(0, 10);
+  const [ps, tr] = await Promise.all([api("GET", "/api/pesanan").catch(() => []), api("GET", `/api/penjualan?dari=${dari}&sampai=${hari}`).catch(() => [])]);
+  const peta = new Map(); [...ps, ...tr].forEach(x => { if (perluStiker(x)) peta.set(x.id, x); });
+  const L = [...peta.values()].sort((a, b) => (a.ambil_tgl || a.tgl).localeCompare(b.ambil_tgl || b.tgl));
+  modal(`<h3>✂️ Pesan stiker ke ${esc(m.nama)}</h3>
+    <p class="small muted" style="margin:0">Pilih pesanannya — ucapan, nama & pengirim langsung terisi. Hanya pesanan hot balon & standing / papan ucapan.</p>
+    <input type="search" id="ppQ" placeholder="Cari nama pelanggan / nomor order…">
+    <div class="list" id="ppL" style="max-height:52vh;overflow:auto"></div>
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn" id="ppManual" type="button">Pesan manual (tanpa pesanan)</button></div>`, x => {
+    const gambar = () => { const q = $("#ppQ", x).value.trim().toLowerCase();
+      const C = L.filter(s => !q || `${s.pelanggan} ${s.no} ${s.kartu || ""} ${(s.detail && s.detail.tulisan) || ""}`.toLowerCase().includes(q));
+      $("#ppL", x).innerHTML = C.length ? C.map(s => `<div class="li click" data-id="${s.id}"><div class="main"><div class="t">${esc(s.pelanggan)} <span class="code">${esc(s.no)}</span></div>
+        <div class="small muted">${esc(s.items.map(i => i.nama).join(", ").slice(0, 70))} · ${s.ambil_tgl ? tglPendek(s.ambil_tgl) + (s.ambil_jam ? " " + s.ambil_jam : "") : tglPendek(s.tgl)}</div>
+        <div class="small">${esc(String(s.kartu || (s.detail && s.detail.tulisan) || "— belum ada ucapan —").split("\n").filter(Boolean).slice(0, 2).join(" · ").slice(0, 80))}</div></div></div>`).join("")
+        : `<div class="empty">Tidak ada pesanan hot balon / standing ${q ? "yang cocok" : "minggu ini"}.</div>`;
+      $$("#ppL .li", x).forEach(r => r.onclick = () => { const s = peta.get(+r.dataset.id); closeModal(); pesanStiker(s, m); });
+    };
+    $("#ppQ", x).oninput = gambar; gambar();
+    $("#ppManual", x).onclick = () => { closeModal(); pesanKeMitraManual(m); };
+  });
+}
+function pesanStiker(s, mitraTujuan){
   const ada = s.detail || {}, untukBalon = (s.items || []).some(i => i.kategori === "HOT BALON" || /balon|balloon/i.test(i.nama));
   const sumber = s.jenis === "standing" ? { tulisan: ada.tulisan || "", dari: ada.dari || "" } : pecahUcapan(s.kartu || s.request || "");
   const ingat = (() => { try { return JSON.parse(localStorage.getItem("rg_stiker_akhir") || "{}"); } catch { return {}; } })();
@@ -2116,7 +2143,7 @@ function pesanStiker(s){
     L.push("", "Contoh desain / font menyusul (foto). Terima kasih 🙏");
     return L.join("\n");
   };
-  const mitra = mitraStiker();
+  const mitra = mitraTujuan && mitraTujuan.hp ? [mitraTujuan] : mitraStiker();
   modal(`<h3>✂️ Pesan cutting stiker</h3>
     <p class="small muted" style="margin:0">Ucapan & nama diambil dari pesanan ${esc(s.no)} · ${esc(s.pelanggan)}. Ubah bila perlu.</p>
     <div class="row"><label class="f grow">Untuk<input id="ckU" value="${esc(d.untuk)}"></label><label class="f grow">Ukuran<input id="ckZ" value="${esc(d.ukuran)}" placeholder="Mis. d 24 cm / 70 x 60 cm"></label></div>
