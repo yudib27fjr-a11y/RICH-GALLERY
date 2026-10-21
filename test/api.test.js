@@ -455,3 +455,10 @@ test("pesanan khusus: dekorasi (tim & insentif), sewa (jaminan, kembali, denda),
   assert.deepEqual((await kasir("GET", "/api/bootstrap")).data.toko.mitra.map(x => x.nama), ["You n Me"]);
   assert.deepEqual((await admin("GET", "/api/mitra")).data.daftar.map(x => [x.nama, x.admin_saja]), [["You n Me", false], ["Distributor Jakarta", true], ["Rahasia", true]]);
 });
+
+test("kode inti tidak memakai fungsi JSON SQLite (database aplikasi Android/iMin tidak mendukungnya)", async () => {
+  const { readdirSync, readFileSync } = await import("node:fs");
+  const cek = dir => readdirSync(dir, { withFileTypes: true }).flatMap(f => f.isDirectory() ? cek(`${dir}/${f.name}`) : f.name.endsWith(".js") ? [`${dir}/${f.name}`] : []);
+  const pelanggar = cek("src/core").filter(f => /\bjson_(extract|each|object|array|set|insert|tree|group_array|valid|type)\s*\(/i.test(readFileSync(f, "utf8").replace(/\/\/.*$/gm, "")));
+  assert.deepEqual(pelanggar, []);
+});

@@ -253,7 +253,8 @@ route("GET", "/api/pesanan", "semua", ({ query, user }) => {
   const rows = selesai
     ? muatPenjualan("ambil_tgl IS NOT NULL AND batal_at IS NULL AND diambil_at IS NOT NULL", [], 300)
     : muatPenjualan(`ambil_tgl IS NOT NULL AND batal_at IS NULL AND (diambil_at IS NULL
-        OR (jenis = 'sewa' AND json_extract(detail, '$.kembali_at') IS NULL))`, [], 1000) // barang sewaan: aktif sampai kembali
+        OR (jenis = 'sewa' AND (detail IS NULL OR detail NOT LIKE '%"kembali_at"%')))`, [], 1000)
+        // barang sewaan: aktif sampai kembali. Tanpa fungsi JSON SQLite (database di iMin tidak punya json_extract).
         .sort((a, b) => (a.ambil_tgl + (a.ambil_jam || "99")).localeCompare(b.ambil_tgl + (b.ambil_jam || "99")));
   return rows.map(s => sembunyikanHpp(s, user));
 });
