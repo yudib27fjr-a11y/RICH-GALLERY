@@ -405,3 +405,13 @@ test("notifikasi HP admin: langganan, transaksi & pesanan baru tercatat, kunci V
   assert.equal((await admin("DELETE", "/api/notif/langganan", { id: l[0].id })).status, 200);
   assert.equal((await admin("GET", "/api/notif/langganan")).data.length, 0);
 });
+
+test("kurir offline: admin menambah nama & nomor WA, semua bisa melihat, nomor dirapikan", async () => {
+  assert.equal((await kasir("PUT", "/api/kurir", { daftar: [{ nama: "Joko", hp: "0812" }] })).status, 403, "hanya admin");
+  assert.equal((await admin("PUT", "/api/kurir", { daftar: [{ nama: "Joko", hp: "123" }] })).status, 400, "nomor salah ditolak");
+  const r = await admin("PUT", "/api/kurir", { daftar: [{ nama: "Joko Kurir", hp: "0812-3456-7890" }, { nama: "Andi", hp: "+62 857 1111 2222" }] });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const d = (await kasir("GET", "/api/kurir")).data.daftar;
+  assert.deepEqual(d, [{ nama: "JOKO KURIR".replace(/.*/, "Joko Kurir"), hp: "6281234567890" }, { nama: "Andi", hp: "6285711112222" }]);
+  assert.deepEqual((await kasir("GET", "/api/bootstrap")).data.toko.kurir_offline.map(k => k.nama), ["Joko Kurir", "Andi"]);
+});

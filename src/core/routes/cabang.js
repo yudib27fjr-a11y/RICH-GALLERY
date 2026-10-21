@@ -10,6 +10,7 @@ import { cekPassword, cekBatasLogin, catatGagal, resetGagal } from "../auth.js";
 import { muatPenjualan, hapusPenjualan } from "./penjualan.js";
 import { rekapAbsen, terimaAbsen, fotoAbsen, cekLokasi, lemburPeriode } from "./absen.js";
 import { rekapGaji, daftarKasbon } from "./gaji.js";
+import { simpanKurir } from "./kurir.js";
 import { statusCabang, sinkronCabang, sambungCabang, sambungUlangCabang, putusCabang, gantiNamaPerangkat, kirimUlangDitolak, cabangAktif, mintaPusat } from "../cabang-perangkat.js";
 
 /* ================= di perangkat ================= */
@@ -307,7 +308,7 @@ route("POST", "/api/cabang/tarik", false, ({ body }) => {
   const versi = versiData() || "awal";
   if (body.versi && body.versi === versi) return { tetap: true, versi, perangkat: alat.nama, perangkat_absen: !!alat.absen };
   const sejak = one("SELECT date('now', '+7 hours', '-40 days') d").d;
-  const s = Object.fromEntries(all("SELECT kunci, nilai FROM settings WHERE kunci IN ('nama_toko','alamat','telp','footer','prefix','hpp_persen','insentif','periode_mulai','absen_aktif','absen_jam_masuk','absen_jam_pulang','wa_otomatis','wa_template','canva_url','canva_email','wa_nomor','absen_pin_aktif','absen_lat','absen_lng','absen_radius','kartu_lebar','kartu_tinggi','kartu_huruf','kartu_warna','kartu_area','kartu_latar_kode','kartu_font_kode','inv_tagline','inv_bank','inv_ttd','inv_ttd_nama','inv_ttd_jabatan','jam_buka','jam_tutup','shifts','lembur_per_jam','lembur_bulat','ins_kurir','ins_lapangan','ins_konten')").map(r => [r.kunci, JSON.parse(r.nilai)]));
+  const s = Object.fromEntries(all("SELECT kunci, nilai FROM settings WHERE kunci IN ('nama_toko','alamat','telp','footer','prefix','hpp_persen','insentif','periode_mulai','absen_aktif','absen_jam_masuk','absen_jam_pulang','wa_otomatis','wa_template','canva_url','canva_email','wa_nomor','absen_pin_aktif','absen_lat','absen_lng','absen_radius','kartu_lebar','kartu_tinggi','kartu_huruf','kartu_warna','kartu_area','kartu_latar_kode','kartu_font_kode','inv_tagline','inv_bank','inv_ttd','inv_ttd_nama','inv_ttd_jabatan','jam_buka','jam_tutup','shifts','lembur_per_jam','lembur_bulat','ins_kurir','ins_lapangan','ins_konten','kurir_offline')").map(r => [r.kunci, JSON.parse(r.nilai)]));
   return {
     produk: all("SELECT kode, nama, kategori, harga, hpp, stok, stok_min, barcode, insentif, aktif FROM products WHERE dihapus IS NULL ORDER BY id"),
     bahan: all("SELECT kode, nama, kategori, harga, satuan, stok, stok_min, barcode FROM materials WHERE dihapus IS NULL ORDER BY id"),
@@ -377,6 +378,8 @@ route("GET", "/api/cabang/perangkat", "admin", () => cabangAktif() ? kelolaDiPus
 route("PUT", "/api/cabang/perangkat/:id", "admin", ({ params, body }) => cabangAktif() ? kelolaDiPusat("ubah", +params.id, body) : ubahPerangkat(params.id, body));
 route("DELETE", "/api/cabang/perangkat/:id", "admin", ({ params }) => cabangAktif() ? kelolaDiPusat("cabut", +params.id) : cabutPerangkat(params.id));
 /* Diteruskan dari aplikasi di perangkat (admin di perangkat itu). */
+/* Admin di perangkat kasir mengubah daftar kurir offline (disimpan di server). */
+route("POST", "/api/cabang/kurir", false, ({ body }) => { perangkatDariToken(body.token); return simpanKurir(body.daftar); });
 route("POST", "/api/cabang/kelola-perangkat", false, ({ body }) => {
   perangkatDariToken(body.token);
   if (body.aksi === "daftar") return daftarPerangkat();

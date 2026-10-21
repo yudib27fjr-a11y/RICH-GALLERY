@@ -693,6 +693,13 @@ test("perangkat baru yang sudah punya penjualan: sambung dengan kirim transaksi 
   assert.equal(prodP("RG002").stok, stok0 - 1, "stok server berkurang");
 });
 
+test("kurir offline diubah admin di perangkat → tersimpan di server & ikut ke perangkat", async () => {
+  const r = await cabang("PUT", "/api/kurir", { daftar: [{ nama: "Pak Udin", hp: "081299998888" }] });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.deepEqual((await pusat("GET", "/api/kurir")).data.daftar, [{ nama: "Pak Udin", hp: "6281299998888" }]);
+  assert.deepEqual((await cabang("GET", "/api/kurir")).data.daftar, [{ nama: "Pak Udin", hp: "6281299998888" }], "langsung ada di perangkat");
+});
+
 test("putuskan: ditolak bila masih ada antrean, lalu berhasil", async () => {
   assert.equal((await cabang("POST", "/api/cabang/putus", {})).status, 200);
   const st = (await cabang("GET", "/api/cabang")).data;

@@ -221,6 +221,14 @@ public class MainActivity extends Activity {
         }
     }
 
+    void bukaAplikasi(String paket) {
+        Intent i = paket == null ? null : getPackageManager().getLaunchIntentForPackage(paket);
+        if (i != null) { i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); return; }
+        toast("Aplikasinya belum terpasang. Membuka Play Store…");
+        try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + paket)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
+        catch (ActivityNotFoundException e) { bukaLuar(Uri.parse("https://play.google.com/store/apps/details?id=" + paket)); }
+    }
+
     private void bukaLuar(Uri u) {
         try { startActivity(new Intent(Intent.ACTION_VIEW, u)); }
         catch (ActivityNotFoundException e) {

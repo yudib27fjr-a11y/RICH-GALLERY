@@ -24,6 +24,9 @@
         <package android:name="com.whatsapp" />
         <package android:name="com.whatsapp.w4b" />
         <package android:name="com.imin.printerservice" />
+        <package android:name="com.gojek.app" />
+        <package android:name="com.grabtaxi.passenger" />
+        <package android:name="com.taxsee.taxsee" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.APP_BROWSER" />

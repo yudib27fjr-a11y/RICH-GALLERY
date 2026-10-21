@@ -691,6 +691,7 @@ function tampilSetup(sendiri = false){
 const ICON = {
   kasir: '<path d="M4 7h16l-1.5 9a2 2 0 0 1-2 1.7H7.5a2 2 0 0 1-2-1.7L4 7z"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/>',
   riwayat: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  kurir: '<circle cx="6" cy="16.5" r="2.8"/><circle cx="18" cy="16.5" r="2.8"/><path d="M8.8 16.5h5.4l2.3-5H12l-2 3"/><path d="M14.5 7.5h2.2l1.3 4"/><path d="M5 11.5h4"/>',
   produksi: '<circle cx="12" cy="8" r="3"/><path d="M12 5V3M15 8h2M9 8H7M12 11v10M12 17c-3 0-5-2-5-4 3 0 5 2 5 4zM12 15c3 0 5-2 5-4-3 0-5 2-5 4z"/>',
   stok: '<path d="M4 8l8-4 8 4-8 4-8-4z"/><path d="M4 8v8l8 4 8-4V8"/><path d="M12 12v8"/>',
   mutasi: '<path d="M7 4v14M7 18l-3-3M7 18l3-3"/><path d="M17 20V6M17 6l-3 3M17 6l3 3"/>',
@@ -703,7 +704,7 @@ const ICON = {
   gaji: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/><path d="M16 3.5l-4 2.5-4-2.5"/>',
   atur: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
 };
-const SEMUA_VIEW = [["kasir", "Kasir"], ["absenku", "Absen"], ["pesanan", "Pesanan"], ["riwayat", "Transaksi"], ["produksi", "Produksi"], ["stok", "Stok"], ["mutasi", "Masuk/Keluar"], ["opname", "Opname"], ["biaya", "Pengeluaran", 1], ["laporan", "Laporan", 1], ["absen", "Rekap Absen", 1], ["gaji", "Gaji", 1], ["atur", "Pengaturan"]];
+const SEMUA_VIEW = [["kasir", "Kasir"], ["absenku", "Absen"], ["pesanan", "Pesanan"], ["kurir", "Kurir"], ["riwayat", "Transaksi"], ["produksi", "Produksi"], ["stok", "Stok"], ["mutasi", "Masuk/Keluar"], ["opname", "Opname"], ["biaya", "Pengeluaran", 1], ["laporan", "Laporan", 1], ["absen", "Rekap Absen", 1], ["gaji", "Gaji", 1], ["atur", "Pengaturan"]];
 const daftarView = () => SEMUA_VIEW.filter(v => (!v[2] || isAdmin()) && (v[0] !== "absen" || (B && B.toko.absen_aktif))
   && (v[0] !== "absenku" || (kioskInfo && kioskInfo.aktif)));
 let view = "kasir";
@@ -767,7 +768,7 @@ function render(){
   if (!daftarView().some(v => v[0] === view)) view = "kasir";
   renderNav();
   $("#cartbar").hidden = view !== "kasir";
-  return ({ kasir: vKasir, pesanan: vPesanan, riwayat: vRiwayat, produksi: vProduksi, stok: vStok, mutasi: vMutasi, opname: vOpname, biaya: vBiaya, laporan: vLaporan, absen: vAbsen, absenku: vAbsenku, gaji: vGaji, atur: vAtur })[view]();
+  return ({ kasir: vKasir, pesanan: vPesanan, riwayat: vRiwayat, produksi: vProduksi, stok: vStok, mutasi: vMutasi, opname: vOpname, biaya: vBiaya, laporan: vLaporan, absen: vAbsen, absenku: vAbsenku, gaji: vGaji, atur: vAtur, kurir: vKurir })[view]();
 }
 
 /* ================= KASIR ================= */
@@ -1490,6 +1491,160 @@ function labelAmbil(s){
   if (s.ambil_tgl === b) return { teks: "Besok", kelas: "ok" };
   return { teks: tglID(s.ambil_tgl), kelas: "mut" };
 }
+/* ================= KURIR: pesan kurir toko / offline (WhatsApp) / online (GoSend, GrabExpress, Maxim) =================
+   Data pesanan → pesan kurir otomatis (alamat ambil = alamat toko). Kurir toko dicatat sebagai insentif kurir karyawan. */
+const IKON_KURIR = {
+  toko: '<path d="M4 10h16l-1.5-5h-13z"/><path d="M5 10v9h14v-9"/><path d="M10 19v-5h4v5"/>',
+  wa: '<path d="M4 20l1.3-3.8A8 8 0 1 1 8 19z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1.2-1.3-1.8-1-1 .8a4 4 0 0 1-2.4-2.4l.8-1-1-1.8z"/>',
+  motor: '<circle cx="6" cy="16.5" r="2.8"/><circle cx="18" cy="16.5" r="2.8"/><path d="M8.8 16.5h5.4l2.3-5H12l-2 3"/><path d="M14.5 7.5h2.2l1.3 4"/><path d="M5 11.5h4"/>',
+  paket: '<path d="M12 3l8 4v10l-8 4-8-4V7z"/><path d="M4 7l8 4 8-4"/><path d="M12 11v10"/><path d="M8 5l8 4"/>',
+  mobil: '<path d="M4 15l1.6-5A2 2 0 0 1 7.5 8.6h9a2 2 0 0 1 1.9 1.4L20 15"/><rect x="3" y="15" width="18" height="3.5" rx="1"/><circle cx="7.5" cy="18.5" r="1.6"/><circle cx="16.5" cy="18.5" r="1.6"/>',
+};
+/* Kurir online: warna & ikon berbeda supaya mudah dibedakan (bukan logo resmi). */
+const KURIR_ONLINE = {
+  gojek: { nama: "GoSend", sub: "Gojek", ikon: "motor", kelas: "k-gojek", paket: "com.gojek.app", ios: "gojek://", web: "https://www.gojek.com/id-id/gosend/" },
+  grab: { nama: "GrabExpress", sub: "Grab", ikon: "paket", kelas: "k-grab", paket: "com.grabtaxi.passenger", ios: "grab://", web: "https://www.grab.com/id/express/" },
+  maxim: { nama: "Maxim", sub: "Pengiriman Maxim", ikon: "mobil", kelas: "k-maxim", paket: "com.taxsee.taxsee", ios: "taximaxim://", web: "https://taximaxim.com/id/" },
+};
+const lencanaKurir = (ikon, kelas, isi = "") => `<span class="k-lencana ${kelas}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${IKON_KURIR[ikon]}</svg>${isi}</span>`;
+const inisial = n => String(n || "?").trim().split(/\s+/).slice(0, 2).map(x => x[0]).join("").toUpperCase();
+
+let krSaleId = null, krData = null;
+const alamatTersimpan = () => { try { return JSON.parse(localStorage.getItem("rg_alamat_kirim") || "{}"); } catch { return {}; } };
+function simpanAlamat(hp, alamat, patokan){
+  const k = String(hp || "").replace(/\D/g, ""); if (k.length < 8 || !alamat) return;
+  try { const a = alamatTersimpan(); a[k] = { alamat, patokan }; localStorage.setItem("rg_alamat_kirim", JSON.stringify(a)); } catch {}
+}
+/** Isi formulir dari transaksi / pesanan. */
+function dariTransaksi(s){
+  const sisa = Math.max(0, s.total - (s.bayar || 0));
+  const lama = alamatTersimpan()[String(s.hp || "").replace(/\D/g, "")] || {};
+  return { no: s.no, penerima: s.pelanggan && s.pelanggan !== "CUSTOMER" ? toTitle(s.pelanggan) : "", hp: s.hp || "",
+    alamat: lama.alamat || "", patokan: lama.patokan || "", tgl: s.ambil_tgl || today(), jam: s.ambil_jam || "",
+    barang: s.items.map(i => `${toTitle(i.nama)}${i.qty != 1 ? " ×" + fq(i.qty) : ""}`).join("\n"), tagih: sisa, ongkir: s.ongkir || 0, ongkirOleh: "toko",
+    catatan: [s.request, s.kartu ? "Ada kartu ucapan" : ""].filter(Boolean).join(" · ") };
+}
+const linkPeta = (lat, lng) => isFinite(parseFloat(lat)) && isFinite(parseFloat(lng)) ? `https://maps.google.com/?q=${parseFloat(lat)},${parseFloat(lng)}` : "";
+/** Pesan kurir dengan format tetap (alamat ambil = toko). */
+function pesanKurir(d){
+  const t = B.toko, petaToko = linkPeta(t.absen_lat, t.absen_lng);
+  const L = [`*ORDER ANTAR — ${toTitle(t.nama_toko)}*`];
+  if (d.no) L.push(`No. order: ${d.no}`);
+  L.push(`Waktu antar: ${d.tgl ? tglHari(d.tgl) : "secepatnya"}${d.jam ? " jam " + d.jam : ""}`);
+  L.push("", `📍 *AMBIL DI*`, toTitle(t.nama_toko), t.alamat || "", t.wa_nomor || t.telp ? `Telp: ${t.wa_nomor || t.telp}` : "", petaToko ? `Peta: ${petaToko}` : "");
+  L.push("", `🏠 *ANTAR KE*`, `${d.penerima || "-"}${d.hp ? " (" + d.hp + ")" : ""}`, d.alamat || "-", d.patokan ? `Patokan/peta: ${d.patokan}` : "");
+  L.push("", `📦 *BARANG*`, d.barang || "-");
+  L.push("", +d.tagih > 0 ? `💰 *Tagih ke penerima (COD): ${rp(+d.tagih)}*` : `💰 Sudah lunas — tidak ada tagihan ke penerima`);
+  if (+d.ongkir > 0) L.push(`🛵 Ongkir: ${rp(+d.ongkir)} (${d.ongkirOleh === "penerima" ? "dibayar penerima" : "dibayar toko"})`);
+  if (d.catatan) L.push(`📝 Catatan: ${d.catatan}`);
+  L.push("", "Mohon kabari bila sudah diambil & sudah sampai. Terima kasih 🙏");
+  return L.filter((x, i, a) => x !== "" || (a[i - 1] !== "" && i > 0)).join("\n").replace(/\n{3,}/g, "\n\n");
+}
+/** Buka aplikasi kurir online. Pesan sudah disalin: tempel di catatan untuk driver. */
+function bukaKurirOnline(k){
+  const j = KURIR_ONLINE[k];
+  if (NATIVE && NATIVE.bukaAplikasi) return NATIVE.bukaAplikasi(j.paket);
+  if (NATIVE) return bukaLink(`https://play.google.com/store/apps/details?id=${j.paket}`);
+  if (/Android/i.test(navigator.userAgent)) { location.href = `intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=${j.paket};S.browser_fallback_url=${encodeURIComponent("https://play.google.com/store/apps/details?id=" + j.paket)};end`; return; }
+  if (apakahIOS()) { location.href = j.ios; setTimeout(() => { if (!document.hidden) location.href = j.web; }, 1600); return; }
+  bukaLink(j.web);
+}
+
+async function vKurir(){
+  $("#main").innerHTML = `<div class="view-head"><h2>Kirim kurir</h2></div><div id="krIsi"><div class="empty">Memuat…</div></div>`;
+  const hari = today();
+  const [ps, tr] = await Promise.all([api("GET", "/api/pesanan").catch(() => []), api("GET", `/api/penjualan?dari=${hari}&sampai=${hari}`).catch(() => [])]);
+  const el = $("#krIsi"); if (view !== "kurir" || !el) return;
+  const semua = new Map(); [...ps, ...tr].forEach(s => { if (!s.batal_at) semua.set(s.id, s); });
+  if (krSaleId && !semua.has(krSaleId)) { const s = await api("GET", `/api/penjualan/${krSaleId}`).catch(() => null); if (s) semua.set(s.id, s); }
+  const antar = ps.filter(s => s.ambil_cara === "antar"), lain = ps.filter(s => s.ambil_cara !== "antar"), trLain = tr.filter(s => !s.ambil_tgl && !s.batal_at);
+  if (krSaleId && semua.has(krSaleId)) krData = dariTransaksi(semua.get(krSaleId));
+  if (!krData) krData = { no: "", penerima: "", hp: "", alamat: "", patokan: "", tgl: hari, jam: "", barang: "", tagih: 0, ongkir: 0, ongkirOleh: "toko", catatan: "" };
+  const opsi = (L, judul) => L.length ? `<optgroup label="${judul}">${L.map(s => `<option value="${s.id}" ${s.id === krSaleId ? "selected" : ""}>${esc(s.pelanggan)} · ${esc(s.no)} · ${s.ambil_tgl ? tglPendek(s.ambil_tgl) + (s.ambil_jam ? " " + s.ambil_jam : "") : s.jam.slice(0, 5)} · ${rp(s.total)}</option>`).join("")}</optgroup>` : "";
+  const d = krData, t = B.toko, kurirWA = Array.isArray(t.kurir_offline) ? t.kurir_offline : [];
+  el.innerHTML = `<div class="kurir-grid">
+    <section class="panel stack">
+      <label class="f">Pesanan / transaksi<select id="krSel"><option value="">— Isi manual —</option>${opsi(antar, "Pesanan diantar")}${opsi(lain, "Pesanan diambil")}${opsi(trLain, "Transaksi hari ini")}</select></label>
+      <div class="kr-ambil small"><b>📍 Ambil di (otomatis):</b> ${esc(toTitle(t.nama_toko))} — ${esc(t.alamat || "alamat toko belum diisi (Pengaturan → Toko)")}${t.wa_nomor || t.telp ? " · " + esc(t.wa_nomor || t.telp) : ""}</div>
+      <div class="row"><label class="f grow">Nama penerima<input type="text" id="krPen" value="${esc(d.penerima)}"></label><label class="f grow">HP penerima<input type="tel" id="krHp" value="${esc(d.hp)}" inputmode="tel"></label></div>
+      <label class="f">Alamat antar<textarea id="krAl" rows="2" placeholder="Jalan, nomor rumah, RT/RW, desa/kelurahan">${esc(d.alamat)}</textarea></label>
+      <label class="f">Patokan / link Google Maps (opsional)<input type="text" id="krPat" value="${esc(d.patokan)}" placeholder="Mis. depan masjid, pagar hijau, atau tempel link peta"></label>
+      <div class="row"><label class="f grow">Tanggal antar<input type="date" id="krTgl" value="${esc(d.tgl)}"></label><label class="f grow">Jam<input type="time" id="krJam" value="${esc(d.jam)}"></label></div>
+      <label class="f">Barang<textarea id="krBrg" rows="2">${esc(d.barang)}</textarea></label>
+      <div class="row"><label class="f grow">Tagih ke penerima (COD)<input type="number" id="krTag" min="0" step="1000" value="${+d.tagih || 0}"></label><label class="f grow">Ongkir<input type="number" id="krOng" min="0" step="1000" value="${+d.ongkir || 0}"></label></div>
+      <div class="seg" id="krOO" style="display:flex"><button type="button" data-o="toko" style="flex:1" class="${d.ongkirOleh !== "penerima" ? "on" : ""}">Ongkir dibayar toko</button><button type="button" data-o="penerima" style="flex:1" class="${d.ongkirOleh === "penerima" ? "on" : ""}">Dibayar penerima</button></div>
+      <label class="f">Catatan untuk kurir<textarea id="krCat" rows="2" placeholder="Mis. hati-hati bunga, jangan ditekuk">${esc(d.catatan)}</textarea></label>
+    </section>
+    <section class="stack">
+      <div class="panel stack"><div class="row" style="align-items:center"><b style="flex:1">Pesan untuk kurir</b><button class="btn sm" id="krSalin" type="button">Salin</button></div><pre class="kr-pesan" id="krPesan"></pre></div>
+      <div class="panel stack">
+        <b>Pilih kurir</b>
+        <button class="k-kartu" id="krToko" type="button">${lencanaKurir("toko", "k-toko")}<span><b>Kurir toko</b><small>Karyawan Rich Gallery · dicatat insentif kurir${t.ins_kurir ? " " + rp(t.ins_kurir) : ""}</small></span></button>
+        <div class="small muted" style="margin-top:4px">Kurir offline (WhatsApp)</div>
+        ${kurirWA.length ? kurirWA.map((k, i) => `<button class="k-kartu" data-wa="${i}" type="button">${lencanaKurir("wa", "k-wa", `<i>${esc(inisial(k.nama))}</i>`)}<span><b>${esc(k.nama)}</b><small>Kirim pesan WA · ${esc(String(k.hp).replace(/^62/, "0"))}</small></span></button>`).join("") : `<p class="small muted" style="margin:0">Belum ada kurir offline.${isAdmin() ? "" : " Minta admin menambahkan."}</p>`}
+        ${isAdmin() ? `<button class="btn sm" id="krKelola" type="button">+ Tambah / ubah kurir offline</button>` : ""}
+        <div class="small muted" style="margin-top:4px">Kurir online — pesan disalin, lalu aplikasinya dibuka</div>
+        <div class="k-online">${Object.entries(KURIR_ONLINE).map(([k, j]) => `<button class="k-kartu k-kecil" data-on="${k}" type="button">${lencanaKurir(j.ikon, j.kelas)}<span><b>${j.nama}</b><small>${j.sub}</small></span></button>`).join("")}</div>
+      </div>
+    </section></div>`;
+  const baca = () => {
+    krData = { ...krData, penerima: $("#krPen").value.trim(), hp: $("#krHp").value.trim(), alamat: $("#krAl").value.trim(), patokan: $("#krPat").value.trim(),
+      tgl: $("#krTgl").value, jam: $("#krJam").value, barang: $("#krBrg").value.trim(), tagih: num($("#krTag").value) || 0, ongkir: num($("#krOng").value) || 0, catatan: $("#krCat").value.trim() };
+    $("#krPesan").textContent = pesanKurir(krData);
+    return krData;
+  };
+  $$("#krIsi input, #krIsi textarea").forEach(i => i.oninput = baca);
+  $$("#krOO button").forEach(b => b.onclick = () => { krData.ongkirOleh = b.dataset.o; $$("#krOO button").forEach(x => x.classList.toggle("on", x === b)); baca(); });
+  $("#krSel").onchange = e => { krSaleId = +e.target.value || null; krData = krSaleId && semua.has(krSaleId) ? dariTransaksi(semua.get(krSaleId)) : null; vKurir(); };
+  baca();
+  const siap = () => { const x = baca(); if (!x.alamat) { toast("Isi alamat antar dulu"); $("#krAl").focus(); return null; } simpanAlamat(x.hp, x.alamat, x.patokan); return pesanKurir(x); };
+  $("#krSalin").onclick = () => salinTeks(pesanKurir(baca()), "Pesan kurir disalin");
+  $$("[data-wa]", el).forEach(b => b.onclick = () => { const p = siap(); if (!p) return; const k = kurirWA[+b.dataset.wa]; bukaWA(k.hp, p); });
+  $$("[data-on]", el).forEach(b => b.onclick = () => {
+    const p = siap(); if (!p) return;
+    const ok = salinSinkron(p), j = KURIR_ONLINE[b.dataset.on];
+    toast(ok ? `Pesan disalin. Di ${j.nama}: isi alamat ambil = toko, alamat antar, lalu tempel pesan di catatan untuk driver.` : "Salin pesan dengan tombol Salin, lalu buka aplikasinya.");
+    bukaKurirOnline(b.dataset.on);
+  });
+  $("#krToko").onclick = () => {
+    const p = siap(); if (!p) return;
+    const staf = (B.staf || []);
+    modal(`<h3>🏪 Kurir toko</h3>
+      <label class="f">Karyawan yang mengantar<select id="ktU"><option value="">— pilih —</option>${staf.map(u => `<option value="${u.id}">${esc(u.nama)}</option>`).join("")}</select></label>
+      <label class="row"><input type="checkbox" id="ktIns" checked> Catat insentif kurir${t.ins_kurir ? " (" + rp(t.ins_kurir) + ")" : ""} untuk karyawan ini</label>
+      <p class="small muted" style="margin:0">Pesan kurir ikut disalin, bisa ditempel ke WA karyawan.</p>
+      <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="ktOk" type="button">Simpan</button></div>`, m => {
+      $("#ktOk", m).onclick = e => coba(async () => {
+        const uid = +$("#ktU", m).value; if (!uid) throw new Error("Pilih karyawan yang mengantar");
+        const ok = salinSinkron(p);
+        if ($("#ktIns", m).checked) await api("POST", "/api/insentif-lain", { user_id: uid, jenis: "kurir", ket: `Antar ${krData.no || ""} ke ${krData.penerima || "-"}`.replace(/\s+/g, " ").slice(0, 200) });
+        const ins = $("#ktIns", m).checked;
+        closeModal(); toast(`${ins ? "Insentif kurir dicatat. " : ""}${ok ? "Pesan kurir disalin — tempel di WA karyawan." : "Salin pesan dengan tombol Salin."}`);
+      }, e.target);
+    });
+  };
+  const kl = $("#krKelola"); if (kl) kl.onclick = kelolaKurir;
+}
+/** Admin: tambah / ubah / hapus kurir offline (nama + nomor WA). */
+function kelolaKurir(){
+  let L = (Array.isArray(B.toko.kurir_offline) ? B.toko.kurir_offline : []).map(k => ({ ...k }));
+  modal(`<h3>Kurir offline (WhatsApp)</h3><div class="stack" id="kkL"></div>
+    <button class="btn sm" id="kkTambah" type="button">+ Tambah kurir</button>
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="kkSimpan" type="button">Simpan</button></div>`, m => {
+    const gambar = () => {
+      $("#kkL", m).innerHTML = L.length ? L.map((k, i) => `<div class="row" style="align-items:flex-end"><label class="f grow">Nama<input type="text" data-i="${i}" data-f="nama" value="${esc(k.nama)}" maxlength="40"></label><label class="f grow">No WA<input type="tel" data-i="${i}" data-f="hp" value="${esc(String(k.hp || "").replace(/^62/, "0"))}" inputmode="tel" placeholder="0812…"></label><button class="btn sm ghost" data-hps="${i}" type="button" aria-label="Hapus">✕</button></div>`).join("") : `<p class="small muted" style="margin:0">Belum ada kurir.</p>`;
+      $$("#kkL input", m).forEach(x => x.oninput = () => { L[+x.dataset.i][x.dataset.f] = x.value; });
+      $$("[data-hps]", m).forEach(b => b.onclick = () => { L.splice(+b.dataset.hps, 1); gambar(); });
+    };
+    gambar();
+    $("#kkTambah", m).onclick = () => { L.push({ nama: "", hp: "" }); gambar(); const ins = $$("#kkL input", m); if (ins.length) ins[ins.length - 2].focus(); };
+    $("#kkSimpan", m).onclick = e => coba(async () => {
+      await api("PUT", "/api/kurir", { daftar: L.filter(k => k.nama.trim() || k.hp.trim()) });
+      await muatUlang(); closeModal(); toast("Daftar kurir disimpan"); if (view === "kurir") vKurir();
+    }, e.target);
+  });
+}
+
 async function vPesanan(){
   $("#main").innerHTML = `
     <div class="view-head"><h2>Pesanan</h2><span class="sp"></span>
@@ -1524,6 +1679,7 @@ function detailPesanan(s){
     <div class="actions" style="flex-wrap:wrap">
       <button class="btn" data-close>Tutup</button>
       <button class="btn" id="psStruk" type="button">Struk</button>
+      ${!s.diambil_at ? `<button class="btn" id="psKurir" type="button">🛵 Kirim kurir</button>` : ""}
       ${nomorWA(s.hp) && !s.diambil_at ? `<a class="btn" id="psWa" href="https://wa.me/${nomorWA(s.hp)}?text=${encodeURIComponent(`Halo ${toTitle(s.pelanggan)}, pesanan Anda di ${toTitle(B.toko.nama_toko)} (${s.no}) ${s.ambil_cara === "antar" ? "akan diantar" : "siap diambil"} ${tglID(s.ambil_tgl)}${s.ambil_jam ? " jam " + s.ambil_jam : ""}.${sisa ? ` Sisa pembayaran ${rp(sisa)}.` : ""} Terima kasih 🌸`)}" target="_blank" rel="noopener">WA pengingat</a>` : ""}
       ${s.diambil_at ? `<button class="btn" id="psBuka" type="button">Kembalikan ke belum diambil</button>`
         : sisa ? `<button class="btn" id="psLunas" type="button">Lunasi ${rp(sisa)}</button><button class="btn pri" id="psSelesai" type="button">Lunasi &amp; ${s.ambil_cara === "antar" ? "sudah diantar" : "sudah diambil"}</button>`
@@ -1532,6 +1688,7 @@ function detailPesanan(s){
     let metode = "Tunai";
     $$("#lsM button", m).forEach(b => b.onclick = () => { metode = b.dataset.m; $$("#lsM button", m).forEach(x => x.classList.toggle("on", x === b)); });
     $("#psStruk", m).onclick = () => lihatStruk(s, () => vPesanan());
+    const pk = $("#psKurir", m); if (pk) pk.onclick = () => { krSaleId = s.id; krData = null; closeModal(); pindah("kurir"); };
     if (s.kartu) pasangTombolKartu(m, s.kartu);
     const lunasi = () => api("POST", `/api/penjualan/${s.id}/lunasi`, { metode });
     const ls = $("#psLunas", m); if (ls) ls.onclick = e => coba(async () => { await lunasi(); closeModal(); toast(`Lunas (${metode})`); vPesanan(); }, e.target);

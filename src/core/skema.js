@@ -429,6 +429,7 @@ export const DEFAULT_SETTINGS = {
   ins_kurir: 0,
   ins_lapangan: 0,
   ins_konten: 0,
+  kurir_offline: [],
   // Absen PIN + selfie di perangkat kasir
   absen_pin_aktif: false,
   absen_lat: "-6.3377069", // Rich Gallery, Jl. Olahraga No.27 Sport Center - Indramayu (Google Maps)

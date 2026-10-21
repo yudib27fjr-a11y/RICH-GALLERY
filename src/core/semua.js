@@ -9,6 +9,7 @@ import "./routes/admin.js";
 import "./routes/absen.js";
 import "./routes/gaji.js";
 import "./routes/cabang.js";
+import "./routes/kurir.js";
 import "./notif.js";
 export { jalankan, cariRoute } from "./router.js";
 export { pasangDriver, migrasi } from "./db.js";

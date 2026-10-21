@@ -304,3 +304,25 @@ input.sIn.berubah{background:#fff4c2;border-color:#d9a400;color:#1c2420}
 /* Baris yang dibuka dari notifikasi: disorot sebentar */
 .li.sorot{animation:sorot 2.4s ease-out}
 @keyframes sorot{0%,35%{background:var(--accent-soft)}100%{background:transparent}}
+
+/* ===== Menu Kurir ===== */
+.kurir-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:14px;align-items:start}
+@media (max-width:860px){.kurir-grid{grid-template-columns:minmax(0,1fr)}}
+.kr-ambil{background:var(--surface-2);border-radius:10px;padding:8px 10px}
+.kr-pesan{margin:0;white-space:pre-wrap;word-break:break-word;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--surface-2);border-radius:10px;padding:10px;max-height:46vh;overflow:auto}
+.k-kartu{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:10px 12px;color:var(--ink);cursor:pointer;font:inherit}
+.k-kartu:hover{border-color:var(--accent)}
+.k-kartu:active{transform:scale(.99)}
+.k-kartu span{display:flex;flex-direction:column;min-width:0}
+.k-kartu small{color:var(--muted);font-size:12px}
+.k-online{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.k-kecil{flex-direction:column;align-items:center;text-align:center;gap:6px;padding:10px 6px}
+.k-kecil span{align-items:center}
+.k-lencana{flex:none;position:relative;width:44px;height:44px;border-radius:12px;display:grid;place-items:center}
+.k-lencana svg{width:26px;height:26px}
+.k-lencana i{position:absolute;right:-6px;bottom:-6px;font-style:normal;font-size:10px;font-weight:800;background:#fff;color:#1d4ed8;border:1.5px solid #1d4ed8;border-radius:999px;padding:1px 4px;line-height:1.2}
+.k-toko{background:var(--accent);color:#fff}
+.k-wa{background:#1d4ed8;color:#fff}
+.k-gojek{background:#00a13a;color:#fff;border-radius:50%}
+.k-grab{background:#fff;color:#00915a;border:2.5px solid #00915a}
+.k-maxim{background:#ffcc00;color:#1a1a1a;transform:rotate(-6deg)}

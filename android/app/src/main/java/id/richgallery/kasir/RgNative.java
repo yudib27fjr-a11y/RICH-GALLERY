@@ -23,7 +23,7 @@ public class RgNative {
     private final MainActivity act;
     private static final int ITERASI = 60000;
     /** Versi kemampuan native. Naikkan bila menambah metode baru yang dipakai halaman; paket web yang butuh versi lebih tinggi tidak akan dipasang di APK lama. */
-    static final int API = 7;
+    static final int API = 8; // 8: bukaAplikasi (Gojek, Grab, Maxim)
     /** Versi native minimum yang dibutuhkan paket tampilan saat ini. Halaman memeriksa sendiri metode baru (mis. cetakLangsung),
      *  jadi angka ini hanya dinaikkan bila halaman benar-benar tidak bisa jalan di APK lama. Dibaca oleh workflow rilis. */
     static final int WEB_BUTUH_API = 2;
@@ -139,6 +139,10 @@ public class RgNative {
      *  Bila aplikasinya belum terpasang, link dibuka dengan cara biasa. */
     @JavascriptInterface
     public void bukaDengan(final String url, final String paket) { act.runOnUiThread(() -> act.bukaDengan(url, paket)); }
+
+    /** Buka aplikasi lain (mis. Gojek, Grab, Maxim). Belum terpasang → halaman Play Store-nya. */
+    @JavascriptInterface
+    public void bukaAplikasi(final String paket) { act.runOnUiThread(() -> act.bukaAplikasi(paket)); }
 
     /** Apakah aplikasi dengan paket ini terpasang (untuk keterangan di Pengaturan). */
     @JavascriptInterface
