@@ -1733,6 +1733,7 @@ const KAT_MITRA = [
 const katMitra = n => KAT_MITRA.find(k => k.nama.toLowerCase() === String(n || "").toLowerCase()) || { ...KAT_MITRA[KAT_MITRA.length - 1], nama: n || "Lainnya" };
 const ikonMitra = n => { const k = katMitra(n); return `<span class="k-lencana ${k.kelas}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${k.ikon}</svg></span>`; };
 const daftarMitra = () => Array.isArray(B.toko.mitra) ? B.toko.mitra : [];
+const mitraKhususAdmin = m => m && (m.admin_saja != null ? !!m.admin_saja : /distributor/i.test(String(m.kategori || "")));
 let mtCari = "", mtKat = "";
 
 function pesanMitra(m, d){
@@ -1776,7 +1777,7 @@ async function vMitra(){
     <input type="search" id="mtQ" placeholder="Cari mitra, kota, atau catatan…" value="${esc(mtCari)}" style="margin-bottom:10px">
     <div class="jenis-saring" id="mtK"><button type="button" data-k="" class="${mtKat ? "" : "on"}">Semua <b>${L.length}</b></button>${kats.map(k => `<button type="button" data-k="${esc(k)}" class="${mtKat === k ? "on" : ""}">${esc(k)} <b>${L.filter(m => m.kategori === k).length}</b></button>`).join("")}</div>
     ${cocok.length ? kats.filter(k => cocok.some(m => m.kategori === k)).map(k => `<h3 class="mt-judul">${ikonMitra(k)} ${esc(k)}</h3><div class="mt-grid">${cocok.filter(m => m.kategori === k).map(m => `<div class="panel mt-kartu">
-        <div class="t"><b>${esc(m.nama)}</b>${m.kota ? ` <span class="pill mut">${esc(m.kota)}</span>` : ""}</div>
+        <div class="t"><b>${esc(m.nama)}</b>${m.kota ? ` <span class="pill mut">${esc(m.kota)}</span>` : ""}${mitraKhususAdmin(m) ? ` <span class="pill warn" title="Tidak terlihat oleh karyawan">🔒 khusus admin</span>` : ""}</div>
         ${m.catatan ? `<div class="small muted">${esc(m.catatan)}</div>` : ""}
         <div class="small">${m.hp ? "📱 " + esc(String(m.hp).replace(/^62/, "0")) : `<span class="muted">Nomor WA belum diisi</span>`}</div>
         <div class="row" style="gap:6px;flex-wrap:wrap">${m.hp ? `<button class="btn sm pri" data-pesan="${m.i}" type="button">💬 Pesan WA</button><a class="btn sm" href="tel:+${esc(m.hp)}">📞 Telepon</a>` : ""}${isAdmin() ? `<button class="btn sm ghost" data-ubah="${m.i}" type="button">Ubah</button>` : ""}</div>
@@ -1797,11 +1798,13 @@ function ubahMitra(i){
       <label class="f">Nama mitra<input type="text" id="umN" value="${esc(m.nama)}" maxlength="60" placeholder="Mis. You n Me"></label>
       <div class="row"><label class="f grow">No WA<input type="tel" id="umH" value="${esc(String(m.hp || "").replace(/^62/, "0"))}" inputmode="tel" placeholder="0812…"></label><label class="f grow">Kota<input type="text" id="umKo" value="${esc(m.kota || "")}" maxlength="40" placeholder="Mis. Jakarta"></label></div>
       <label class="f">Catatan (harga, jam buka, rekening, dll)<textarea id="umC" rows="2" maxlength="300">${esc(m.catatan || "")}</textarea></label>
+      <label class="row" style="flex-wrap:nowrap;align-items:flex-start"><input type="checkbox" id="umA" style="margin-top:4px;flex:none" ${mitraKhususAdmin(m) ? "checked" : ""}> <span><b>🔒 Khusus admin</b><br><span class="small muted">Tidak terlihat & tidak bisa dipakai karyawan (mis. distributor bunga luar kota, harga modal).</span></span></label>
     </div>
     <div class="actions">${i >= 0 ? `<button class="btn danger" id="umHapus" type="button">Hapus</button>` : ""}<button class="btn" data-close>Batal</button><button class="btn pri" id="umOk" type="button">Simpan</button></div>`, x => {
     const simpan = async daftar => { await api("PUT", "/api/mitra", { daftar }); await muatUlang(); closeModal(); vMitra(); };
+    if (i < 0) $("#umK", x).onchange = e => { if (/distributor/i.test(e.target.value)) $("#umA", x).checked = true; };
     $("#umOk", x).onclick = e => coba(async () => {
-      const baru = { kategori: $("#umK", x).value.trim() || "Lainnya", nama: $("#umN", x).value.trim(), hp: $("#umH", x).value.trim(), kota: $("#umKo", x).value.trim(), catatan: $("#umC", x).value.trim() };
+      const baru = { kategori: $("#umK", x).value.trim() || "Lainnya", nama: $("#umN", x).value.trim(), hp: $("#umH", x).value.trim(), kota: $("#umKo", x).value.trim(), catatan: $("#umC", x).value.trim(), admin_saja: $("#umA", x).checked };
       if (!baru.nama) throw new Error("Isi nama mitra");
       if (i >= 0) L[i] = baru; else L.push(baru);
       await simpan(L); toast("Mitra disimpan");

@@ -38,11 +38,15 @@ export function rapikanMitra(daftar){
     let hp = String(m && m.hp || "").replace(/\D/g, "");
     if (hp.startsWith("0")) hp = "62" + hp.slice(1); else if (hp.startsWith("8")) hp = "62" + hp;
     if (hp && (hp.length < 10 || hp.length > 15)) throw bad(`Nomor WA ${nama} belum benar (contoh 0812xxxxxxx)`);
-    return { kategori, nama, hp, kota: teks(m && m.kota, { max: 40, nama: "Kota" }) || "", catatan: teks(m && m.catatan, { max: 300, nama: "Catatan" }) || "" };
+    return { kategori, nama, hp, kota: teks(m && m.kota, { max: 40, nama: "Kota" }) || "", catatan: teks(m && m.catatan, { max: 300, nama: "Catatan" }) || "",
+      admin_saja: m && m.admin_saja != null ? !!m.admin_saja : /distributor/i.test(kategori) };
   });
 }
 export const simpanMitra = daftar => { const d = rapikanMitra(daftar); setSetting("mitra", d); return { daftar: d }; };
-route("GET", "/api/mitra", "semua", () => ({ daftar: Array.isArray(getSettings().mitra) ? getSettings().mitra : [] }));
+/** Mitra khusus admin (mis. distributor bunga luar kota): tidak terlihat oleh karyawan. Tanpa tanda → distributor = khusus admin. */
+export const mitraAdminSaja = m => m && (m.admin_saja != null ? !!m.admin_saja : /distributor/i.test(String(m.kategori || "")));
+export const mitraUntuk = (daftar, user) => (Array.isArray(daftar) ? daftar : []).filter(m => user && user.peran === "admin" || !mitraAdminSaja(m));
+route("GET", "/api/mitra", "semua", ({ user }) => ({ daftar: mitraUntuk(getSettings().mitra, user) }));
 route("PUT", "/api/mitra", "admin", async ({ body }) => {
   if (!cabangAktif()) return simpanMitra(body.daftar);
   const r = await mintaPusat("/api/cabang/mitra", { daftar: body.daftar });

@@ -437,8 +437,8 @@ export const DEFAULT_SETTINGS = {
   kurir_offline: [],
   mitra: [ // contoh awal; nomor WA diisi admin di menu Mitra
     { kategori: "Toko mitra", nama: "You n Me", hp: "", kota: "", catatan: "" },
-    { kategori: "Distributor bunga", nama: "Distributor bunga Jakarta", hp: "", kota: "Jakarta", catatan: "" },
-    { kategori: "Distributor bunga", nama: "Distributor bunga Bandung", hp: "", kota: "Bandung", catatan: "" },
+    { kategori: "Distributor bunga", nama: "Distributor bunga Jakarta", hp: "", kota: "Jakarta", catatan: "", admin_saja: true },
+    { kategori: "Distributor bunga", nama: "Distributor bunga Bandung", hp: "", kota: "Bandung", catatan: "", admin_saja: true },
   ],
   ins_dekorasi: 100000,
   // Absen PIN + selfie di perangkat kasir

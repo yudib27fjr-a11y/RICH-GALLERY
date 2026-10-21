@@ -449,4 +449,9 @@ test("pesanan khusus: dekorasi (tim & insentif), sewa (jaminan, kembali, denda),
   const m = await admin("PUT", "/api/mitra", { daftar: [{ kategori: "Cutting stiker", nama: "Stiker Jaya", hp: "0812 3333 4444", kota: "Indramayu" }, { kategori: "Toko mitra", nama: "You n Me" }] });
   assert.equal(m.status, 200, JSON.stringify(m.data));
   assert.deepEqual((await kasir("GET", "/api/mitra")).data.daftar.map(x => [x.nama, x.hp]), [["Stiker Jaya", "6281233334444"], ["You n Me", ""]]);
+  // Distributor bunga luar kota: khusus admin
+  assert.equal((await admin("PUT", "/api/mitra", { daftar: [{ kategori: "Toko mitra", nama: "You n Me" }, { kategori: "Distributor bunga", nama: "Distributor Jakarta", hp: "081211112222", kota: "Jakarta" }, { kategori: "Cutting stiker", nama: "Rahasia", admin_saja: true }] })).status, 200);
+  assert.deepEqual((await kasir("GET", "/api/mitra")).data.daftar.map(x => x.nama), ["You n Me"], "karyawan tidak melihat mitra khusus admin");
+  assert.deepEqual((await kasir("GET", "/api/bootstrap")).data.toko.mitra.map(x => x.nama), ["You n Me"]);
+  assert.deepEqual((await admin("GET", "/api/mitra")).data.daftar.map(x => [x.nama, x.admin_saja]), [["You n Me", false], ["Distributor Jakarta", true], ["Rahasia", true]]);
 });
