@@ -783,10 +783,11 @@ const JENIS_PS = {
   sewa: { label: "Penyewaan", ikon: "🔑", warna: "j-sewa", tgl: "Tanggal diambil / acara" },
   seserahan: { label: "Hantaran / seserahan", pendek: "Hantaran", ikon: "🧺", warna: "j-seserahan", tgl: "Tanggal acara / antar" },
   mahar: { label: "Hias mahar", ikon: "💍", warna: "j-mahar", tgl: "Tanggal acara" },
+  standing: { label: "Standing & papan ucapan", pendek: "Standing", ikon: "🪧", warna: "j-standing", tgl: "Tanggal kirim / acara" },
   parcel: { label: "Parcel", ikon: "🎁", warna: "j-parcel", tgl: "Tanggal ambil / kirim" },
 };
 /* Urutan di menu Jasa (jasa Rich Gallery sendiri, bukan mitra). */
-const URUT_JASA = ["dekorasi", "seserahan", "mahar", "parcel", "sewa"];
+const URUT_JASA = ["dekorasi", "seserahan", "mahar", "standing", "parcel", "sewa"];
 const ISI_SESERAHAN = ["Seperangkat alat sholat", "Al-Qur'an", "Pakaian & kain", "Sepatu / sandal", "Tas", "Kosmetik & perawatan", "Perhiasan", "Kue / buah", "Jajanan tradisional", "Parfum"];
 const MACAM_DEKOR = ["Dekorasi balon", "Balon ulang tahun", "Balon lamaran", "Balon wisuda", "Dekorasi lamaran", "Dekorasi pernikahan", "Dekorasi kamar pengantin", "Dekorasi mobil pengantin", "Dekorasi bunga", "Backdrop foto"];
 const ISI_MAHAR = ["Uang mahar", "Seperangkat alat sholat", "Emas / perhiasan", "Al-Qur'an", "Seserahan"];
@@ -799,6 +800,9 @@ function ringkasDetail(s){
   if (s.jenis === "dekorasi") { if (d.macam) L.push(d.macam); if (d.lokasi) L.push("📍 " + d.lokasi); if (d.tema) L.push("Tema: " + d.tema); if (d.tim && d.tim.length) L.push("Tim: " + d.tim.join(", ")); }
   if (s.jenis === "sewa") { if (d.barang) L.push(d.barang); if (d.kembali_tgl) L.push("Kembali " + tglID(d.kembali_tgl)); if (d.jaminan) L.push("Jaminan " + rp(d.jaminan)); if (d.kembali_at) L.push(`✅ Sudah kembali${d.denda ? " · denda " + rp(d.denda) : ""}`); }
   if (s.jenis === "mahar") { if (d.isi) L.push(d.isi); if (d.acara) L.push(d.acara); }
+  if (d.paket && !(s.jenis === "dekorasi" && d.macam === d.paket)) L.unshift("📋 " + d.paket);
+  if (s.jenis === "standing") { if (d.tulisan) L.push(`“${String(d.tulisan).split("\n")[0].slice(0, 60)}”`); if (d.dari) L.push("Dari: " + d.dari); if (d.warna) L.push("Bunga: " + d.warna); if (d.lokasi) L.push("📍 " + d.lokasi); }
+  if (s.jenis === "seserahan" && d.kembali_tgl) L.push(d.kembali_at ? "✅ Box sudah kembali" : "Box kembali " + tglID(d.kembali_tgl));
   if (s.jenis === "seserahan") { if (d.jumlah_tray) L.push(d.jumlah_tray + " tray/kotak"); if (d.isi) L.push(d.isi); if (d.acara) L.push(d.acara); if (d.tema) L.push("Tema: " + d.tema); }
   if (s.jenis === "parcel") { if (d.musim) L.push(d.musim); if (d.isi) L.push(d.isi); }
   return L;
@@ -818,7 +822,12 @@ function isianJenis(j = cart.jenis, d = cart.detail || (cart.detail = {})){
       <div class="row"><label class="f grow">Tanggal kembali<input type="date" id="jsKem" value="${esc(d.kembali_tgl || "")}" min="${today()}"></label>
       <label class="f grow">Uang jaminan (Rp)<input type="number" id="jsJam" value="${d.jaminan || ""}" min="0" step="10000" inputmode="numeric" placeholder="0"></label></div>
       <p class="small muted" style="margin:0">Uang jaminan dicatat terpisah (bukan pendapatan) dan dikembalikan saat barang kembali, dikurangi denda bila telat / rusak.</p>`;
-  if (j === "seserahan") return `<div class="row"><label class="f grow">Jumlah tray / kotak<input type="number" id="jhTray" value="${d.jumlah_tray || ""}" min="1" step="1" inputmode="numeric" placeholder="Mis. 7"></label>
+  if (j === "standing") return `<label class="f">Tulisan di papan / pita ucapan<textarea id="jtTul" rows="3" placeholder="Mis. Congratulations for the Grand Opening&#10;Olala Closet">${esc(d.tulisan || "")}</textarea></label>
+      <div class="row"><label class="f grow">Dari (pengirim)<input type="text" id="jtDari" value="${esc(d.dari || "")}" placeholder="Mis. Keluarga Besar PT ABC"></label>
+      <label class="f grow">Warna / tema bunga<input type="text" id="jtWarna" value="${esc(d.warna || "")}" placeholder="Mis. pink-putih"></label></div>
+      <label class="f">Alamat kirim / lokasi acara<textarea id="jtLok" rows="2" placeholder="Kosongkan bila diambil di toko">${esc(d.lokasi || "")}</textarea></label>`;
+  if (j === "seserahan") return `<label class="f">Tanggal box / tray kembali (bila box disewa)<input type="date" id="jhKem" value="${esc(d.kembali_tgl || "")}" min="${today()}"></label>
+      <div class="row"><label class="f grow">Jumlah tray / kotak<input type="number" id="jhTray" value="${d.jumlah_tray || ""}" min="1" step="1" inputmode="numeric" placeholder="Mis. 7"></label>
       <label class="f grow">Tema / warna<input type="text" id="jhTema" value="${esc(d.tema || "")}" placeholder="Mis. sage-putih"></label></div>
       <label class="f">Isi hantaran / seserahan<textarea id="jhIsi" rows="3" placeholder="Mis. seperangkat alat sholat, sepatu, tas, kosmetik, kue">${esc(d.isi || "")}</textarea></label>
       <div class="chip-pilih" id="jhCepat">${[...new Set([...macamTersimpan("seserahan"), ...ISI_SESERAHAN])].slice(0, 14).map(x => `<button type="button" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div>
@@ -835,7 +844,8 @@ function pasangIsianJenis(el, d = cart.detail || (cart.detail = {}), simpan = sa
   on("jdMacam", "macam"); on("jdLok", "lokasi"); on("jdTema", "tema"); on("jdIns", "insentif", num);
   on("jsBrg", "barang"); on("jsKem", "kembali_tgl"); on("jsJam", "jaminan", num);
   on("jmIsi", "isi"); on("jmAcara", "acara"); on("jpIsi", "isi");
-  on("jhTray", "jumlah_tray", num); on("jhTema", "tema"); on("jhIsi", "isi"); on("jhAcara", "acara");
+  on("jhTray", "jumlah_tray", num); on("jhTema", "tema"); on("jhIsi", "isi"); on("jhAcara", "acara"); on("jhKem", "kembali_tgl");
+  on("jtTul", "tulisan"); on("jtDari", "dari"); on("jtWarna", "warna"); on("jtLok", "lokasi");
   $$("#jhCepat button", el).forEach(b => b.onclick = () => { const t = $("#jhIsi", el), v = b.dataset.v; if (!t.value.toLowerCase().includes(v.toLowerCase())) { t.value = t.value.trim() ? t.value.trim().replace(/,?$/, ", ") + v : v; set("isi", t.value); } });
   $$("#jdTim button", el).forEach(b => b.onclick = () => { const id = +b.dataset.u, t = Array.isArray(d.tim_id) ? d.tim_id : []; d.tim_id = t.includes(id) ? t.filter(x => x !== id) : [...t, id]; b.classList.toggle("on"); simpan(); });
   $$("#jpMusim button", el).forEach(b => b.onclick = () => { set("musim", b.dataset.m); $$("#jpMusim button", el).forEach(x => x.classList.toggle("on", x === b)); });
@@ -1827,19 +1837,26 @@ function ubahMitra(i){
 /* ================= JASA RICH GALLERY: dekorasi, hantaran/seserahan, hias mahar, parcel, penyewaan =================
    Satu ruang khusus per jasa: daftar pesanan jasa itu + formulir pesanan baru dengan kolomnya sendiri. */
 let jsJenis = "dekorasi", jsStatus = "aktif";
-const NAMA_JASA_BAWAAN = { dekorasi: "Dekorasi", seserahan: "Hantaran seserahan", mahar: "Hias mahar", parcel: "Parcel", sewa: "Sewa" };
-const KAT_JASA = { dekorasi: "HOT BALON", seserahan: "SEWA SESERAHAN", mahar: "MAHAR", parcel: "HAMPERS", sewa: "SEWA STANDING UCAPAN" };
+const NAMA_JASA_BAWAAN = { dekorasi: "Dekorasi", seserahan: "Hantaran seserahan", mahar: "Hias mahar", standing: "Standing", parcel: "Parcel", sewa: "Sewa" };
+const KAT_JASA = { dekorasi: "HOT BALON", seserahan: "SEWA SESERAHAN", mahar: "MAHAR", standing: "STANDING FLOWER", parcel: "HAMPERS", sewa: "SEWA STANDING UCAPAN" };
+const NAMA_JASA_STANDING = n => /papan|acrylic|ucapan/i.test(n) ? "STANDING UCAPAN" : "STANDING FLOWER";
+const paketJasa = j => (B.toko.paket_jasa && Array.isArray(B.toko.paket_jasa[j])) ? B.toko.paket_jasa[j] : [];
 async function vJasa(){
   const J = JENIS_PS[jsJenis];
   $("#main").innerHTML = `<div class="view-head"><h2>Jasa Rich Gallery</h2></div>
     <div class="jasa-tab" id="jsT">${URUT_JASA.map(k => `<button type="button" data-j="${k}" class="${k === jsJenis ? "on " + JENIS_PS[k].warna : ""}"><span>${JENIS_PS[k].ikon}</span>${esc(JENIS_PS[k].pendek || JENIS_PS[k].label)}</button>`).join("")}</div>
     <div class="row" style="margin:12px 0;align-items:center">
-      <button class="btn pri big" id="jsBaru" type="button" style="flex:1">+ Pesanan ${esc(J.label.toLowerCase())} baru</button></div>
+      <button class="btn pri big" id="jsBaru" type="button" style="flex:1;white-space:normal">+ Pesanan ${esc((J.pendek || J.label).toLowerCase())} baru</button></div>
+    ${paketJasa(jsJenis).length || isAdmin() ? `<details class="panel daftar-harga" open><summary><b>📋 Daftar harga ${esc(J.label.toLowerCase())}</b> <span class="small muted">${paketJasa(jsJenis).length} paket · ketuk paket untuk langsung pesan</span></summary>
+      <div class="stack" style="margin-top:8px">${paketJasa(jsJenis).map((p, i) => `<button type="button" class="paket-kartu" data-pk="${i}"><span class="t"><b>${esc(p.nama)}</b><b class="num" style="white-space:nowrap">${rp(p.harga)}${p.satuan && !["paket", "pcs"].includes(p.satuan) ? ` <small>/${esc(p.satuan)}</small>` : ""}</b></span>${p.rincian ? `<small>${esc(p.rincian)}</small>` : ""}</button>`).join("") || `<p class="small muted" style="margin:0">Belum ada paket.</p>`}
+      ${isAdmin() ? `<button class="btn sm" id="jsPaket" type="button">✏️ Kelola paket & harga</button>` : ""}</div></details>` : ""}
     <div class="seg" id="jsS" style="display:flex;margin-bottom:10px"><button type="button" data-s="aktif" style="flex:1" class="${jsStatus === "aktif" ? "on" : ""}">${jsJenis === "sewa" ? "Belum kembali" : "Berjalan"}</button><button type="button" data-s="selesai" style="flex:1" class="${jsStatus === "selesai" ? "on" : ""}">Selesai</button></div>
     <div id="jsL"><div class="empty">Memuat…</div></div>`;
   $$("#jsT button").forEach(b => b.onclick = () => { jsJenis = b.dataset.j; vJasa(); });
   $$("#jsS button").forEach(b => b.onclick = () => { jsStatus = b.dataset.s; vJasa(); });
   $("#jsBaru").onclick = () => formJasa(jsJenis);
+  $$("[data-pk]").forEach(b => b.onclick = () => formJasa(jsJenis, paketJasa(jsJenis)[+b.dataset.pk]));
+  const kp = $("#jsPaket"); if (kp) kp.onclick = () => kelolaPaket(jsJenis);
   const jenisSaatIni = jsJenis, statusSaatIni = jsStatus;
   const semua = await api("GET", `/api/pesanan?status=${jsStatus}`).catch(() => null);
   if (view !== "jasa" || jsJenis !== jenisSaatIni || jsStatus !== statusSaatIni || !$("#jsL")) return;
@@ -1856,15 +1873,42 @@ async function vJasa(){
       : `<div class="list"><div class="empty">${jsStatus === "aktif" ? `Belum ada pesanan ${esc(J.label.toLowerCase())} berjalan. Tekan <b>+ Pesanan ${esc(J.label.toLowerCase())} baru</b>.` : "Belum ada yang selesai."}</div></div>`);
   $$("#jsL .li").forEach(r => r.onclick = () => { const s = L.find(x => x.id === +r.dataset.id); if (s) detailPesanan(s, () => vJasa()); });
 }
+/** Admin: ubah daftar paket & harga satu jasa (nama, harga, satuan, minimal, rincian). */
+function kelolaPaket(jenis){
+  const J = JENIS_PS[jenis], semua = JSON.parse(JSON.stringify(B.toko.paket_jasa || {}));
+  let L = Array.isArray(semua[jenis]) ? semua[jenis] : [];
+  modal(`<h3>${J.ikon} Paket & harga ${esc(J.label.toLowerCase())}</h3><div class="stack" id="kpL"></div>
+    <button class="btn sm" id="kpTambah" type="button">+ Tambah paket</button>
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="kpOk" type="button">Simpan</button></div>`, m => {
+    const gambar = () => {
+      $("#kpL", m).innerHTML = L.length ? L.map((p, i) => `<div class="panel stack paket-ubah">
+        <div class="row"><label class="f grow">Nama paket<input data-i="${i}" data-f="nama" value="${esc(p.nama || "")}" maxlength="60"></label><button class="btn sm ghost" data-hps="${i}" type="button" aria-label="Hapus">✕</button></div>
+        <div class="row"><label class="f grow">Harga<input data-i="${i}" data-f="harga" type="number" min="0" step="5000" inputmode="numeric" value="${p.harga ?? ""}"></label>
+          <label class="f" style="width:96px">Per<input data-i="${i}" data-f="satuan" value="${esc(p.satuan || "paket")}" maxlength="20"></label>
+          <label class="f" style="width:96px">Minimal<input data-i="${i}" data-f="min" type="number" min="0" step="1" inputmode="numeric" value="${p.min || ""}"></label></div>
+        <label class="f">Rincian / isi paket<textarea data-i="${i}" data-f="rincian" rows="2" maxlength="600">${esc(p.rincian || "")}</textarea></label></div>`).join("") : `<p class="small muted" style="margin:0">Belum ada paket.</p>`;
+      $$("#kpL [data-f]", m).forEach(x => x.oninput = () => { const v = x.value; L[+x.dataset.i][x.dataset.f] = ["harga", "min"].includes(x.dataset.f) ? (v === "" ? undefined : num(v)) : v; });
+      $$("[data-hps]", m).forEach(b => b.onclick = () => { L.splice(+b.dataset.hps, 1); gambar(); });
+    };
+    gambar();
+    $("#kpTambah", m).onclick = () => { L.push({ nama: "", harga: 0, satuan: "paket", rincian: "" }); gambar(); const x = $$("#kpL [data-f=nama]", m); x[x.length - 1].focus(); };
+    $("#kpOk", m).onclick = e => coba(async () => {
+      semua[jenis] = L.filter(p => String(p.nama || "").trim());
+      await api("PUT", "/api/paket-jasa", { paket: semua }); await muatUlang(); closeModal(); toast("Paket & harga disimpan"); vJasa();
+    }, e.target);
+  });
+}
 /** Formulir pesanan jasa baru: pelanggan, jadwal, kolom khusus jasa, harga & pembayaran — langsung tersimpan (tanpa lewat keranjang). */
-function formJasa(jenis){
-  const J = JENIS_PS[jenis], d = { musim: jenis === "parcel" ? (new Date().getMonth() < 6 ? "Ramadan" : "Lebaran") : undefined };
+function formJasa(jenis, paketAwal){
+  const J = JENIS_PS[jenis], d = { musim: jenis === "parcel" ? (new Date().getMonth() < 6 ? "Ramadan" : "Lebaran") : undefined }, PK = paketJasa(jenis);
+  let paket = null;
   let bayarMode = "dp50", metode = "Tunai", cara = jenis === "dekorasi" || jenis === "seserahan" ? "antar" : "ambil";
   modal(`<h3>${J.ikon} Pesanan ${esc(J.label.toLowerCase())} baru</h3>
     <div class="stack form-jasa">
       <div class="row"><label class="f grow">Nama pelanggan *<input type="text" id="fjN" autocomplete="off"></label><label class="f grow">No HP / WA *<input type="tel" id="fjH" inputmode="tel" placeholder="08…"></label></div>
+      ${PK.length ? `<div class="f"><span>Pilih paket (harga otomatis)</span><div class="chip-pilih paket-pilih" id="fjPk">${PK.map((p, i) => `<button type="button" data-i="${i}">${esc(p.nama)} · ${rp(p.harga)}${p.satuan && !["paket", "pcs"].includes(p.satuan) ? "/" + esc(p.satuan) : ""}</button>`).join("")}<button type="button" data-i="-1">Custom</button></div><small class="muted" id="fjPkR"></small></div>` : ""}
       <label class="f">Nama paket / jasa (tercetak di nota)<input type="text" id="fjP" placeholder="${jenis === "dekorasi" ? "Mis. Dekorasi balon ulang tahun paket A" : jenis === "seserahan" ? "Mis. Hias hantaran 7 tray" : jenis === "mahar" ? "Mis. Hias mahar bingkai" : jenis === "parcel" ? "Mis. Parcel Lebaran paket B" : "Mis. Sewa standing ucapan"}"></label>
-      <div class="row"><label class="f grow">Harga *<input type="number" id="fjR" min="0" step="5000" inputmode="numeric" placeholder="0"></label><label class="f" style="width:96px">Jumlah<input type="number" id="fjQ" min="1" step="1" value="1" inputmode="numeric"></label></div>
+      <div class="row"><label class="f grow">Harga<span id="fjSat"></span> *<input type="number" id="fjR" min="0" step="5000" inputmode="numeric" placeholder="0"></label><label class="f" style="width:96px">Jumlah<input type="number" id="fjQ" min="1" step="1" value="1" inputmode="numeric"></label></div>
       <div class="row"><label class="f grow">${esc(J.tgl)} *<input type="date" id="fjT" value="${today()}" min="${today()}"></label><label class="f grow">Jam<input type="time" id="fjJ"></label></div>
       ${jenis === "dekorasi" ? "" : `<div class="seg" id="fjC" style="display:flex"><button type="button" data-c="ambil" style="flex:1" class="${cara === "ambil" ? "on" : ""}">Diambil</button><button type="button" data-c="antar" style="flex:1" class="${cara === "antar" ? "on" : ""}">Diantar</button></div>`}
       <div class="pesanan-isi stack">${isianJenis(jenis, d)}</div>
@@ -1878,12 +1922,31 @@ function formJasa(jenis){
     pasangIsianJenis(m, d, () => {});
     const total = () => Math.round((num($("#fjR", m).value) || 0) * Math.max(1, num($("#fjQ", m).value) || 1));
     const dp = () => bayarMode === "lunas" ? total() : bayarMode === "dp50" ? Math.round(total() / 2) : Math.min(total(), num($("#fjD", m).value) || 0);
-    const ringkas = () => { const t = total(); $("#fjTot", m).innerHTML = t ? `Total <b>${rp(t)}</b> · dibayar sekarang <b>${rp(dp())}</b>${t - dp() > 0 ? ` · sisa <b style="color:var(--warn)">${rp(t - dp())}</b>` : ""}${jenis === "sewa" && d.jaminan ? ` · jaminan ${rp(d.jaminan)} (terpisah)` : ""}` : "Isi harga untuk melihat total."; };
+    const ringkas = () => { const t = total(), q = Math.max(1, num($("#fjQ", m).value) || 1);
+      const bonus = paket && paket.min ? (q >= paket.min ? ` · 🎁 FREE 1 box perhiasan / ring box` : ` · minimal ${paket.min} ${paket.satuan || ""} untuk FREE ring box`) : "";
+      $("#fjTot", m).innerHTML = t ? `Total <b>${rp(t)}</b> · dibayar sekarang <b>${rp(dp())}</b>${t - dp() > 0 ? ` · sisa <b style="color:var(--warn)">${rp(t - dp())}</b>` : ""}${jenis === "sewa" && d.jaminan ? ` · jaminan ${rp(d.jaminan)} (terpisah)` : ""}${bonus}` : "Pilih paket atau isi harga untuk melihat total."; };
+    const pilihPaket = i => {
+      paket = i >= 0 ? PK[i] : null;
+      $$("#fjPk button", m).forEach(b => b.classList.toggle("on", +b.dataset.i === i));
+      $("#fjPkR", m).textContent = paket ? paket.rincian : "";
+      $("#fjSat", m).textContent = paket && paket.satuan && paket.satuan !== "paket" ? ` per ${paket.satuan}` : "";
+      if (paket) {
+        $("#fjP", m).value = paket.nama; $("#fjR", m).value = paket.harga;
+        if (paket.min && (num($("#fjQ", m).value) || 1) < paket.min) $("#fjQ", m).value = paket.min;
+        const x = jenis === "dekorasi" ? $("#jdMacam", m) : jenis === "mahar" ? $("#jmIsi", m) : null;
+        if (x && !x.value.trim()) { x.value = jenis === "mahar" ? paket.rincian : paket.nama; x.dispatchEvent(new Event("input")); }
+        if (jenis === "seserahan") { const t = $("#jhTray", m); t.value = $("#fjQ", m).value; t.dispatchEvent(new Event("input")); }
+      }
+      ringkas();
+    };
+    $$("#fjPk button", m).forEach(b => b.onclick = () => pilihPaket(+b.dataset.i));
+    $("#fjQ", m).addEventListener("input", () => { if (jenis === "seserahan" && paket) { const t = $("#jhTray", m); t.value = $("#fjQ", m).value; t.dispatchEvent(new Event("input")); } });
     $$("input, textarea", m).forEach(i => i.addEventListener("input", ringkas));
     $$("#fjM button", m).forEach(b => b.onclick = () => { metode = b.dataset.m; $$("#fjM button", m).forEach(x => x.classList.toggle("on", x === b)); });
     $$("#fjB button", m).forEach(b => b.onclick = () => { bayarMode = b.dataset.b; $$("#fjB button", m).forEach(x => x.classList.toggle("on", x === b)); $("#fjDw", m).hidden = bayarMode !== "dp"; ringkas(); });
     $$("#fjC button", m).forEach(b => b.onclick = () => { cara = b.dataset.c; $$("#fjC button", m).forEach(x => x.classList.toggle("on", x === b)); });
-    ringkas(); $("#fjN", m).focus();
+    if (paketAwal) { const i = PK.indexOf(paketAwal); if (i >= 0) pilihPaket(i); } else ringkas();
+    $("#fjN", m).focus();
     $("#fjOk", m).onclick = e => coba(async () => {
       const salah = (id, pesan) => { const x = $("#" + id, m); if (x) { x.focus(); x.classList.add("salah"); setTimeout(() => x.classList.remove("salah"), 2500); } throw new Error(pesan); };
       const nama = $("#fjN", m).value.trim(), hp = $("#fjH", m).value.trim(), harga = num($("#fjR", m).value) || 0, qty = Math.max(1, num($("#fjQ", m).value) || 1);
@@ -1897,12 +1960,15 @@ function formJasa(jenis){
       if (bayarMode === "dp" && !(dp() > 0)) salah("fjD", "Isi nominal DP");
       const timIds = jenis === "dekorasi" && Array.isArray(d.tim_id) ? d.tim_id.filter(id => B.staf.some(u => u.id === id)) : [];
       const insentif = timIds.length ? (isAdmin() ? (d.insentif ?? B.toko.ins_dekorasi) : B.toko.ins_dekorasi) : undefined;
-      const paket = $("#fjP", m).value.trim() || [NAMA_JASA_BAWAAN[jenis], d.macam || d.musim || d.barang || ""].filter(Boolean).join(" ");
+      const namaPaket = $("#fjP", m).value.trim() || [NAMA_JASA_BAWAAN[jenis], d.macam || d.musim || d.barang || ""].filter(Boolean).join(" ");
+      if (jenis === "standing" && !String(d.tulisan || "").trim() && /papan|acrylic/i.test(paket ? paket.nama : $("#fjP", m).value)) salah("jtTul", "Isi tulisan untuk papan ucapan");
       const detail = Object.fromEntries(Object.entries({ ...d, tim_id: undefined, tim: timIds.map(id => B.staf.find(u => u.id === id).nama), insentif,
-        barang: jenis === "sewa" ? (String(d.barang || "").trim() || paket) : d.barang }).filter(([, v]) => v !== undefined && v !== "" && !(Array.isArray(v) && !v.length)));
+        paket: paket ? paket.nama : undefined, rincian: paket ? paket.rincian : undefined,
+        bonus: paket && paket.min && qty >= paket.min ? "FREE 1 box perhiasan / ring box" : undefined,
+        barang: jenis === "sewa" ? (String(d.barang || "").trim() || namaPaket) : d.barang }).filter(([, v]) => v !== undefined && v !== "" && !(Array.isArray(v) && !v.length)));
       const s = await api("POST", "/api/penjualan", { pelanggan: nama, hp, metode, bayar: dp(), catatan: "",
         pesanan: { tgl: $("#fjT", m).value, jam: $("#fjJ", m).value || "", cara: jenis === "dekorasi" ? "antar" : cara, request: $("#fjCat", m).value.trim() },
-        jenis, detail, items: [{ nama: paket, kategori: KAT_JASA[jenis], harga, qty }] });
+        jenis, detail, items: [{ nama: namaPaket, kategori: jenis === "standing" ? NAMA_JASA_STANDING(namaPaket) : KAT_JASA[jenis], harga, qty }] });
       for (const id of timIds) await api("POST", "/api/insentif-lain", { user_id: id, jenis: "dekorasi", nominal: isAdmin() ? insentif : undefined, ket: `Dekorasi ${s.no} · ${toTitle(s.pelanggan)}`.slice(0, 200) })
         .catch(er => toast(`Insentif ${B.staf.find(u => u.id === id)?.nama || ""} gagal dicatat: ${er.message}`));
       if (jenis === "dekorasi") ingatMacam("dekor", d.macam); if (jenis === "mahar") ingatMacam("mahar", d.isi);
@@ -1962,7 +2028,7 @@ function sewaKembali(s, setelah = () => render()){
 }
 function detailPesanan(s, setelah = () => render()){
   const sisa = Math.max(0, s.total - s.bayar), lb = labelAmbil(s);
-  const dt = s.detail || {}, sewaJalan = s.jenis === "sewa" && !dt.kembali_at;
+  const dt = s.detail || {}, sewaJalan = (s.jenis === "sewa" || (s.jenis === "seserahan" && dt.kembali_tgl)) && !dt.kembali_at;
   modal(`<h3>${JENIS_PS[s.jenis] ? JENIS_PS[s.jenis].ikon + " " + JENIS_PS[s.jenis].label : "Pesanan"} ${esc(s.pelanggan)}</h3>
     <div class="stack">
       ${s.jenis ? `<div class="pesanan-isi stack" style="gap:4px">${lencanaJenis(s.jenis)}${ringkasDetail(s).map(x => `<div>${esc(x)}</div>`).join("")}${s.jenis === "dekorasi" && dt.insentif && dt.tim?.length ? `<div class="small muted">Insentif ${rp(dt.insentif)} × ${dt.tim.length} orang sudah dicatat</div>` : ""}</div>` : ""}
@@ -1979,7 +2045,7 @@ function detailPesanan(s, setelah = () => render()){
       <button class="btn" data-close>Tutup</button>
       <button class="btn" id="psStruk" type="button">Struk</button>
       ${!s.diambil_at ? `<button class="btn" id="psKurir" type="button">🛵 Kirim kurir</button>` : ""}
-      ${sewaJalan && s.diambil_at ? `<button class="btn pri" id="psKembali" type="button">🔑 Barang sewaan kembali</button>` : ""}
+      ${sewaJalan && s.diambil_at ? `<button class="btn pri" id="psKembali" type="button">🔑 ${s.jenis === "seserahan" ? "Box / tray sudah kembali" : "Barang sewaan kembali"}</button>` : ""}
       ${nomorWA(s.hp) && !s.diambil_at ? `<a class="btn" id="psWa" href="https://wa.me/${nomorWA(s.hp)}?text=${encodeURIComponent(`Halo ${toTitle(s.pelanggan)}, pesanan Anda di ${toTitle(B.toko.nama_toko)} (${s.no}) ${s.ambil_cara === "antar" ? "akan diantar" : "siap diambil"} ${tglID(s.ambil_tgl)}${s.ambil_jam ? " jam " + s.ambil_jam : ""}.${sisa ? ` Sisa pembayaran ${rp(sisa)}.` : ""} Terima kasih 🌸`)}" target="_blank" rel="noopener">WA pengingat</a>` : ""}
       ${s.diambil_at ? `<button class="btn" id="psBuka" type="button">Kembalikan ke belum diambil</button>`
         : sisa ? `<button class="btn" id="psLunas" type="button">Lunasi ${rp(sisa)}</button><button class="btn pri" id="psSelesai" type="button">Lunasi &amp; ${s.ambil_cara === "antar" ? "sudah diantar" : "sudah diambil"}</button>`

@@ -373,3 +373,13 @@ input.sIn.berubah{background:#fff4c2;border-color:#d9a400;color:#1c2420}
 .jasa-tab .j-parcel.on{background:#e3f6ea;color:#15803d;border-color:#15803d}
 .jasa-tab .j-sewa.on{background:#e0edff;color:#1d4ed8;border-color:#1d4ed8}
 @media (max-width:420px){.jasa-tab{gap:5px}.jasa-tab button{font-size:11px;padding:10px 2px}.jasa-tab button span{font-size:22px}}
+.j-standing.pill,.jenis-pilih .j-standing.on,.jenis-saring .j-standing.on,.jasa-tab .j-standing.on{background:#ffedd5;color:#c2410c;border-color:#c2410c}
+.jasa-tab{grid-template-columns:repeat(6,minmax(0,1fr))}
+@media (max-width:560px){.jasa-tab{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.daftar-harga summary{cursor:pointer}
+.paket-kartu{display:flex;flex-direction:column;gap:3px;text-align:left;width:100%;background:var(--surface-2);border:1.5px solid transparent;border-radius:12px;padding:10px 12px;color:var(--ink);font:inherit;cursor:pointer}
+.paket-kartu:hover{border-color:var(--accent)}
+.paket-kartu .t{display:flex;justify-content:space-between;gap:10px}
+.paket-kartu small{color:var(--muted);font-size:12px;line-height:1.4}
+.paket-pilih button.on{background:var(--accent);border-color:var(--accent)}
+.paket-ubah{background:var(--surface-2)}

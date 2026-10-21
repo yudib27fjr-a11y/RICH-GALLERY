@@ -462,3 +462,18 @@ test("kode inti tidak memakai fungsi JSON SQLite (database aplikasi Android/iMin
   const pelanggar = cek("src/core").filter(f => /\bjson_(extract|each|object|array|set|insert|tree|group_array|valid|type)\s*\(/i.test(readFileSync(f, "utf8").replace(/\/\/.*$/gm, "")));
   assert.deepEqual(pelanggar, []);
 });
+
+test("paket & harga jasa: bawaan dari price list, admin bisa ubah, karyawan bisa lihat", async () => {
+  const p = (await kasir("GET", "/api/paket-jasa")).data.paket;
+  assert.deepEqual(p.dekorasi.map(x => [x.nama, x.harga]), [["Dekorasi Oval A", 750000], ["Dekorasi Oval B", 950000]]);
+  assert.deepEqual(p.seserahan.map(x => [x.nama, x.harga, x.satuan, x.min]), [["Terarium Box", 50000, "box", 10], ["Acrylic Series", 50000, "box", 10], ["Crystal Series", 70000, "box", 10]]);
+  assert.deepEqual(p.mahar.map(x => x.harga), [400000, 550000]);
+  assert.equal(p.standing.length, 8);
+  assert.equal((await kasir("PUT", "/api/paket-jasa", { paket: p })).status, 403);
+  const baru = { ...p, parcel: [{ nama: "Parcel Lebaran A", harga: 250000, rincian: "Kue kering 3 toples" }] };
+  assert.equal((await admin("PUT", "/api/paket-jasa", { paket: baru })).status, 200);
+  assert.equal((await kasir("GET", "/api/bootstrap")).data.toko.paket_jasa.parcel[0].nama, "Parcel Lebaran A");
+  const st = await kasir("POST", "/api/penjualan", { pelanggan: "PT ABC", hp: "081234567899", items: [{ nama: "Papan Acrylic C", kategori: "STANDING UCAPAN", harga: 550000, qty: 1 }],
+    pesanan: { tgl: (await kasir("GET", "/api/bootstrap")).data.hariIni, cara: "antar" }, jenis: "standing", detail: { paket: "Papan Acrylic C", tulisan: "Congratulations", dari: "PT XYZ" } });
+  assert.equal(st.status, 200, JSON.stringify(st.data)); assert.equal(st.data.jenis, "standing");
+});

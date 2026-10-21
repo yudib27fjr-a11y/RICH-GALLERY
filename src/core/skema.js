@@ -441,6 +441,34 @@ export const DEFAULT_SETTINGS = {
     { kategori: "Distributor bunga", nama: "Distributor bunga Bandung", hp: "", kota: "Bandung", catatan: "", admin_saja: true },
   ],
   ins_dekorasi: 100000,
+  // Daftar harga jasa (dari price list toko); admin bisa ubah di menu Jasa → Kelola paket & harga
+  paket_jasa: {
+    dekorasi: [
+      { nama: "Dekorasi Oval A", harga: 750000, satuan: "paket", rincian: "Oval 1 × 1,5 m · request tema · backdrop oval · tulisan nama printed · 1 balon angka jumbo · 100–200 balon (request warna) · 1 karakter printed · free maks. 3× revisi desain · 1 pcs table cake" },
+      { nama: "Dekorasi Oval B", harga: 950000, satuan: "paket", rincian: "Oval 2 × 2,5 m · backdrop oval · request tema · tulisan nama printed · 1 angka mozaik 80 cm · 200–300 balon (request warna) · 2 karakter printed · free maks. 3× revisi desain · 1 pcs table cake" },
+    ],
+    seserahan: [
+      { nama: "Terarium Box", harga: 50000, satuan: "box", min: 10, rincian: "Harga sewa & jasa hias · min. 10 box FREE 1 box perhiasan / ring box · ukuran tray menyesuaikan barang · request warna bunga" },
+      { nama: "Acrylic Series", harga: 50000, satuan: "box", min: 10, rincian: "Harga sewa & jasa hias · min. 10 box FREE 1 box perhiasan / ring box · ukuran tray menyesuaikan barang · request warna bunga" },
+      { nama: "Crystal Series", harga: 70000, satuan: "box", min: 10, rincian: "Harga sewa & jasa hias · min. 10 box FREE 1 box perhiasan / ring box · ukuran tray menyesuaikan barang · request warna bunga" },
+    ],
+    mahar: [
+      { nama: "Mahar A", harga: 400000, satuan: "pcs", rincian: "Mahar acrylic size 30 × 25 cm" },
+      { nama: "Mahar B", harga: 550000, satuan: "pcs", rincian: "Mahar acrylic size 30 × 40 cm" },
+    ],
+    standing: [
+      { nama: "Standing Flower 50 cm", harga: 850000, satuan: "pcs", rincian: "All standing + bunga size 50 cm" },
+      { nama: "Standing Flower 100 cm", harga: 950000, satuan: "pcs", rincian: "All standing + bunga size 100 cm" },
+      { nama: "Standing Flower 150 cm", harga: 1050000, satuan: "pcs", rincian: "All standing + bunga size 150 cm" },
+      { nama: "Standing Flower bunga only", harga: 650000, satuan: "pcs", rincian: "Bunga saja (tanpa standing)" },
+      { nama: "Papan Acrylic A", harga: 400000, satuan: "pcs", rincian: "Papan size 50 × 40 · bisa request tema warna bunga" },
+      { nama: "Papan Acrylic B", harga: 400000, satuan: "pcs", rincian: "Papan size 50 × 40 · bisa request tema warna bunga" },
+      { nama: "Papan Acrylic C", harga: 550000, satuan: "pcs", rincian: "Papan size 70 × 50 · bisa request tema warna bunga" },
+      { nama: "Papan Acrylic D", harga: 550000, satuan: "pcs", rincian: "Papan size 70 × 50 · bisa request tema warna bunga" },
+    ],
+    parcel: [],
+    sewa: [],
+  },
   // Absen PIN + selfie di perangkat kasir
   absen_pin_aktif: false,
   absen_lat: "-6.3377069", // Rich Gallery, Jl. Olahraga No.27 Sport Center - Indramayu (Google Maps)

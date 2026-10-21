@@ -41,7 +41,7 @@ export function antreNotif(judul, isi, url = "/"){
   run("INSERT INTO notif(judul, isi, url) VALUES (?,?,?)", [String(judul).slice(0, 120), String(isi).slice(0, 400), url]);
 }
 /** Catat notifikasi penjualan baru (dipanggil di dalam transaksi database penjualan). */
-const LABEL_JENIS = { dekorasi: "🎈 Pesanan dekorasi", sewa: "🔑 Penyewaan", seserahan: "🧺 Pesanan hantaran", mahar: "💍 Pesanan hias mahar", parcel: "🎁 Pesanan parcel" };
+const LABEL_JENIS = { dekorasi: "🎈 Pesanan dekorasi", sewa: "🔑 Penyewaan", seserahan: "🧺 Pesanan hantaran", mahar: "💍 Pesanan hias mahar", standing: "🪧 Pesanan standing", parcel: "🎁 Pesanan parcel" };
 export function antreNotifPenjualan({ id, jenis, total, bayar, metode, pelanggan, items, pesanan, kasir }){
   if (platform.perangkat || !one("SELECT 1 x FROM push_langganan LIMIT 1")) return;
   const barang = items.slice(0, 3).map(i => judulBesar(i.nama) + (i.qty != 1 ? " ×" + i.qty : "")).join(", ") + (items.length > 3 ? `, +${items.length - 3} lagi` : "");

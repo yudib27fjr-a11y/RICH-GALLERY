@@ -53,3 +53,30 @@ route("PUT", "/api/mitra", "admin", async ({ body }) => {
   await sinkronCabang({ paksa: true }).catch(() => {});
   return r;
 });
+
+/* ---- Paket jasa & harga (daftar harga per ruang Jasa: dekorasi, hantaran, mahar, standing, parcel, sewa) ---- */
+const JENIS_PAKET = ["dekorasi", "seserahan", "mahar", "standing", "parcel", "sewa"];
+export function rapikanPaket(p){
+  if (!p || typeof p !== "object" || Array.isArray(p)) throw bad("Daftar paket tidak valid");
+  const out = {};
+  for (const j of JENIS_PAKET) {
+    const L = Array.isArray(p[j]) ? p[j] : [];
+    if (L.length > 40) throw bad("Maksimal 40 paket per jasa");
+    out[j] = L.map((x, i) => {
+      const nama = teks(x && x.nama, { wajib: true, max: 60, nama: `Nama paket ${i + 1}` });
+      const harga = Math.round(Number(x && x.harga));
+      if (!(harga >= 0 && harga <= 1e10)) throw bad(`Harga ${nama} tidak valid`);
+      return { nama, harga, satuan: teks(x && x.satuan, { max: 20, nama: "Satuan" }) || "paket", rincian: teks(x && x.rincian, { max: 600, nama: "Rincian" }) || "",
+        min: Number(x && x.min) > 0 ? Math.round(Number(x.min)) : undefined };
+    });
+  }
+  return out;
+}
+export const simpanPaket = p => { const d = rapikanPaket(p); setSetting("paket_jasa", d); return { paket: d }; };
+route("GET", "/api/paket-jasa", "semua", () => ({ paket: getSettings().paket_jasa || {} }));
+route("PUT", "/api/paket-jasa", "admin", async ({ body }) => {
+  if (!cabangAktif()) return simpanPaket(body.paket);
+  const r = await mintaPusat("/api/cabang/paket-jasa", { paket: body.paket });
+  await sinkronCabang({ paksa: true }).catch(() => {});
+  return r;
+});
