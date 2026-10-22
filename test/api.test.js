@@ -602,3 +602,28 @@ test("konten IG & TikTok: video sama dihitung sekali, maks per minggu, insentif 
   assert.equal((await admin("GET", `/api/insentif-lain?dari=${hari}&sampai=${hari}`)).data.filter(x => x.jenis === "konten").length, 1, "insentif ikut dibatalkan");
   assert.ok(!("konten" in (await admin("GET", "/api/pengaturan")).data), "kunci aplikasi tidak ikut terbaca di pengaturan");
 });
+
+test("promosi & pengingat tugas: PJ promosi, minimal per bulan, dana jadi pengeluaran; wajib konten mingguan", async () => {
+  const b = (await admin("GET", "/api/bootstrap")).data, hari = b.hariIni;
+  const pj = (await kasir("GET", "/api/bootstrap")).data.me;
+  assert.equal((await admin("PUT", "/api/tugas/setelan", { pic_promosi_id: pj.id, min_promosi_bulan: 1, wajib_konten: [{ user_id: pj.id, min: 2 }] })).status, 200);
+  let t = (await kasir("GET", "/api/tugas-saya")).data;
+  assert.ok(t.some(x => x.jenis === "promosi" && !x.selesai), JSON.stringify(t));
+  const k = t.find(x => x.jenis === "konten"); assert.ok(k && k.min === 2);
+  // karyawan PJ bisa membuat promosi
+  const r = await kasir("POST", "/api/promosi", { judul: "Diskon 10% buket wisuda", jenis: "Diskon", mulai: hari, selesai: hari, dana: 150000 });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.ok((await kasir("GET", "/api/tugas-saya")).data.find(x => x.jenis === "promosi").selesai);
+  assert.equal((await kasir("POST", `/api/promosi/${r.data.id}/dana`, {})).status, 403, "dana keluar hanya admin");
+  const d = await admin("POST", `/api/promosi/${r.data.id}/dana`, {});
+  assert.equal(d.status, 200); assert.equal(d.data.nominal, 150000);
+  const peng = (await admin("GET", `/api/pengeluaran?dari=${hari}&sampai=${hari}`)).data;
+  assert.ok(JSON.stringify(peng).includes("Promosi: Diskon 10% buket wisuda"));
+  // klaim konten dari link
+  const kl = await kasir("POST", "/api/konten/klaim", { url: "https://www.instagram.com/reel/KLAIM01/?igsh=abc" });
+  assert.equal(kl.status, 200, JSON.stringify(kl.data));
+  assert.equal((await kasir("GET", "/api/tugas-saya")).data.find(x => x.jenis === "konten").n, 1);
+  // bila PJ dikosongkan, karyawan tidak bisa membuka promosi
+  await admin("PUT", "/api/tugas/setelan", { pic_promosi_id: null });
+  assert.equal((await kasir("GET", "/api/promosi")).status, 403);
+});

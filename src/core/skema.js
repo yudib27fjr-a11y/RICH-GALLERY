@@ -431,6 +431,23 @@ CREATE TABLE surat(
 CREATE UNIQUE INDEX konten_pid ON konten(platform, pid);
 CREATE INDEX konten_tgl ON konten(tgl);
 UPDATE settings SET nilai = '5000' WHERE kunci = 'ins_konten' AND nilai IN ('0', '"0"', 'null');`,
+/* 18: promosi toko (rencana, dana promosi, minimal per bulan). */
+`CREATE TABLE promosi(
+  id INTEGER PRIMARY KEY,
+  judul TEXT NOT NULL,
+  jenis TEXT NOT NULL DEFAULT 'Lainnya',
+  mulai TEXT NOT NULL,
+  selesai TEXT NOT NULL,
+  dana INTEGER NOT NULL DEFAULT 0,
+  dana_keluar INTEGER,
+  expense_id INTEGER,
+  ket TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'rencana',
+  oleh TEXT NOT NULL DEFAULT '',
+  oleh_id INTEGER,
+  dibuat TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX promosi_mulai ON promosi(mulai);`,
 ];
 
 export const DEFAULT_SETTINGS = {

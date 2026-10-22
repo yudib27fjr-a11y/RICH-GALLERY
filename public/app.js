@@ -713,6 +713,7 @@ const ICON = {
   riwayat: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   jasa: '<ellipse cx="9" cy="8" rx="4" ry="5"/><path d="M9 13l-.8 1.4h1.6zM9 14.4c0 2.2 1.6 2.8 1.6 6.1"/><path d="M15 21l1.5-6h4L22 21z"/><path d="M16.5 15c0-1.6 1.1-2.6 2.5-2.6s2.5 1 2.5 2.6"/>',
   buketuang: '<rect x="3" y="6.5" width="13" height="8" rx="1.2"/><circle cx="9.5" cy="10.5" r="2"/><path d="M16 9l3.5-3.5M17.5 12.5L21 9M14 17.5l3 3.5M10 17.5l-3 3.5M8 21h8"/>',
+  promosi: '<path d="M4 10v4h3l6 4V6L7 10H4z"/><path d="M16.5 9a4 4 0 0 1 0 6M19 6.5a7.5 7.5 0 0 1 0 11"/>',
   konten: '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.5v5l4.5-2.5z"/>',
   belanja: '<path d="M3 4h2l2.2 11h10.6L20 7H6.2"/><circle cx="9" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/><path d="M11 10.5l2 2 3.5-3.5"/>',
   mitra: '<path d="M2.5 12.5l4-4 3 1 2.5-2 2.5 1 4-1.5 3 4"/><path d="M6.5 8.5l5 5.5c.8.8 2 .8 2.6 0l2.4-2.6"/><path d="M9.5 15.5l1.5 1.5c.7.7 1.8.7 2.4 0"/><path d="M2.5 12.5l3 3M21.5 13l-3 3"/>',
@@ -729,9 +730,10 @@ const ICON = {
   gaji: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/><path d="M16 3.5l-4 2.5-4-2.5"/>',
   atur: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
 };
-const SEMUA_VIEW = [["kasir", "Kasir"], ["absenku", "Absen"], ["pesanan", "Pesanan"], ["jasa", "Jasa"], ["buketuang", "Buket uang"], ["kurir", "Kurir"], ["mitra", "Mitra"], ["belanja", "Belanja"], ["riwayat", "Transaksi"], ["produksi", "Produksi"], ["stok", "Stok"], ["mutasi", "Masuk/Keluar"], ["opname", "Opname"], ["biaya", "Pengeluaran", 1], ["laporan", "Laporan", 1], ["absen", "Rekap Absen", 1], ["gaji", "Gaji", 1], ["konten", "Konten", 1], ["atur", "Pengaturan"]];
+const SEMUA_VIEW = [["kasir", "Kasir"], ["absenku", "Absen"], ["pesanan", "Pesanan"], ["jasa", "Jasa"], ["buketuang", "Buket uang"], ["kurir", "Kurir"], ["mitra", "Mitra"], ["belanja", "Belanja"], ["riwayat", "Transaksi"], ["produksi", "Produksi"], ["stok", "Stok"], ["mutasi", "Masuk/Keluar"], ["opname", "Opname"], ["biaya", "Pengeluaran", 1], ["laporan", "Laporan", 1], ["absen", "Rekap Absen", 1], ["gaji", "Gaji", 1], ["konten", "Konten", 1], ["promosi", "Promosi"], ["atur", "Pengaturan"]];
 const daftarView = () => SEMUA_VIEW.filter(v => (!v[2] || isAdmin()) && (v[0] !== "absen" || (B && B.toko.absen_aktif))
-  && (v[0] !== "absenku" || (kioskInfo && kioskInfo.aktif)));
+  && (v[0] !== "absenku" || (kioskInfo && kioskInfo.aktif))
+  && (v[0] !== "promosi" || isAdmin() || (B && B.toko.promosi_pic && B.toko.promosi_pic === B.me.id)));
 let view = "kasir";
 function shell(){
   $("#root").innerHTML = `<div class="app">
@@ -793,7 +795,7 @@ function render(){
   if (!daftarView().some(v => v[0] === view)) view = "kasir";
   renderNav();
   $("#cartbar").hidden = view !== "kasir";
-  return ({ kasir: vKasir, pesanan: vPesanan, riwayat: vRiwayat, produksi: vProduksi, stok: vStok, mutasi: vMutasi, opname: vOpname, biaya: vBiaya, laporan: vLaporan, absen: vAbsen, absenku: vAbsenku, gaji: vGaji, atur: vAtur, kurir: vKurir, mitra: vMitra, jasa: vJasa, buketuang: vBuketUang, belanja: vBelanja, konten: vKonten })[view]();
+  return ({ kasir: vKasir, pesanan: vPesanan, riwayat: vRiwayat, produksi: vProduksi, stok: vStok, mutasi: vMutasi, opname: vOpname, biaya: vBiaya, laporan: vLaporan, absen: vAbsen, absenku: vAbsenku, gaji: vGaji, atur: vAtur, kurir: vKurir, mitra: vMitra, jasa: vJasa, buketuang: vBuketUang, belanja: vBelanja, konten: vKonten, promosi: vPromosi })[view]();
 }
 
 /* ================= KASIR ================= */
@@ -1651,7 +1653,7 @@ async function vKonten(){
     <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px"><button class="btn" id="knCek" type="button">🔄 Cek unggahan sekarang</button><button class="btn" id="knManual" type="button">+ Catat dari link</button><button class="btn" id="knAtur" type="button">⚙️ Pengaturan konten</button></div>
     <div class="row" style="align-items:center;gap:6px;margin-bottom:8px"><button class="btn sm" id="knPrev" type="button">‹</button><b style="flex:1;text-align:center">${tglID(a)} – ${tglID(b)}</b><button class="btn sm" id="knNext" type="button" ${b >= today() ? "disabled" : ""}>›</button></div>
     ${D.daftar.length ? `<div class="list">${D.daftar.map(x => `<div class="li"><div class="main"><div class="t">${PF_KONTEN[x.platform]?.ikon || ""} ${esc(String(x.caption || "(tanpa keterangan)").split("\n")[0].slice(0, 90))}</div>
-        <div class="small muted">${esc(tglID(x.tgl))} · ${esc(PF_KONTEN[x.platform]?.nama || x.platform)}${x.nama ? " · " + esc(x.nama) : ""}${x.oleh === "manual" ? " · dicatat manual" : ""}${x.url ? ` · <a href="${esc(x.url)}" target="_blank" rel="noopener">lihat</a>` : ""}</div></div>
+        <div class="small muted">${esc(tglID(x.tgl))} · ${esc(PF_KONTEN[x.platform]?.nama || x.platform)} · <select class="kn-pb" data-kpb="${x.id}" aria-label="Pembuat" style="width:auto;padding:2px 6px;font-size:12px"><option value="">— pembuat —</option>${B.staf.map(u => `<option value="${u.id}" ${x.user_id === u.id ? "selected" : ""}>${esc(u.nama)}</option>`).join("")}</select>${x.oleh === "manual" ? " · dicatat manual" : ""}${x.url ? ` · <a href="${esc(x.url)}" target="_blank" rel="noopener">lihat</a>` : ""}</div></div>
         <div style="text-align:right"><span class="pill ${ST_KONTEN[x.status]?.[0] || "mut"}">${ST_KONTEN[x.status]?.[1] || esc(x.status)}</span>${x.status === "hitung" && x.nominal ? `<div class="num small" style="margin-top:4px">${rp(x.nominal)}</div>` : ""}
           <div style="margin-top:4px">${x.status === "hitung" ? `<button class="btn sm ghost" data-kst="${x.id}" data-v="batal" type="button">Batalkan</button>` : x.status !== "lama" ? `<button class="btn sm ghost" data-kst="${x.id}" data-v="hitung" type="button">Hitung</button>` : ""}</div></div></div>`).join("")}</div>`
       : `<div class="list"><div class="empty">Belum ada video minggu ini.</div></div>`}
@@ -1663,6 +1665,7 @@ async function vKonten(){
   $("#knAtur").onclick = () => aturKonten(D);
   $$("[data-sambung]").forEach(x => x.onclick = () => coba(async () => { const r = await api("POST", "/api/konten/mulai-sambung", { platform: x.dataset.sambung, asal: location.origin }); location.href = r.url; }, x));
   $$("[data-putus]").forEach(x => x.onclick = () => konfirmasi(`Putuskan ${PF_KONTEN[x.dataset.putus].nama}?`, "Unggahan baru tidak akan dicek lagi sampai disambungkan ulang. Catatan lama tetap ada.", "Putuskan", async () => { await api("POST", "/api/konten/putus", { platform: x.dataset.putus }); vKonten(); }));
+  $$("[data-kpb]").forEach(x => x.onchange = () => { if (!x.value) return; coba(async () => { const r = await api("POST", `/api/konten/${x.dataset.kpb}/pembuat`, { user_id: +x.value }); toast(`Pembuat: ${r.nama}`); }); });
   $$("[data-kst]").forEach(x => x.onclick = () => coba(async () => { await api("POST", `/api/konten/${x.dataset.kst}/status`, { status: x.dataset.v }); toast(x.dataset.v === "batal" ? "Dibatalkan, insentifnya dihapus" : "Dihitung sebagai video tersendiri"); vKonten(); }, x));
 }
 function kontenManual(pen){
@@ -1678,10 +1681,14 @@ function kontenManual(pen){
     }, e.target);
   });
 }
-function aturKonten(D){
+async function aturKonten(D){
   const redirect = location.origin + "/";
+  const T = await api("GET", "/api/tugas/setelan").catch(() => ({ wajib_konten: [] }));
+  const wajib = Object.fromEntries((T.wajib_konten || []).map(w => [w.user_id, w.min]));
   modal(`<h3>⚙️ Pengaturan konten</h3><div class="stack">
     <div class="row"><label class="f grow">Penerima insentif (pembuat konten)<select id="akP"><option value="">— pilih —</option>${B.staf.map(u => `<option value="${u.id}" ${D.penerima_id === u.id ? "selected" : ""}>${esc(u.nama)}</option>`).join("")}</select></label></div>
+    <div class="f"><span>Wajib buat konten (diingatkan tiap minggu) — isi minimal video per minggu, kosongkan bila tidak wajib</span>
+      <div class="stack" style="gap:4px">${B.staf.map(u => `<label class="row small" style="align-items:center;gap:8px"><span style="flex:1">${esc(u.nama)}</span><input type="number" data-wk="${u.id}" value="${wajib[u.id] || ""}" min="0" step="1" inputmode="numeric" placeholder="—" style="width:80px"> / minggu</label>`).join("")}</div></div>
     <div class="row"><label class="f grow">Insentif per video<input type="number" id="akN" value="${D.nominal}" min="0" step="500" inputmode="numeric"></label><label class="f grow">Maks. video / minggu<input type="number" id="akM" value="${D.maks_minggu}" min="1" step="1" inputmode="numeric"></label></div>
     <details class="panel"><summary><b>📸 Kunci aplikasi Instagram</b> ${D.ig.app ? `<span class="pill ok">terisi</span>` : ""}</summary><div class="stack small" style="margin-top:8px">
       <ol style="margin:0;padding-left:18px"><li>Akun Instagram toko harus <b>akun profesional</b> (Bisnis / Kreator): Instagram → Pengaturan → Jenis akun.</li>
@@ -1704,8 +1711,94 @@ function aturKonten(D){
       const igId = $("#akIgId", m).value.trim(), igS = $("#akIgS", m).value.trim(), ttK = $("#akTtK", m).value.trim(), ttS = $("#akTtS", m).value.trim();
       if (igId || igS) body.ig_app = { id: igId, secret: igS };
       if (ttK || ttS) body.tt_app = { key: ttK, secret: ttS };
-      await api("PUT", "/api/konten/setelan", body); closeModal(); toast("Pengaturan konten disimpan"); vKonten();
+      await api("PUT", "/api/konten/setelan", body);
+      await api("PUT", "/api/tugas/setelan", { wajib_konten: $$("[data-wk]", m).filter(x => num(x.value) > 0).map(x => ({ user_id: +x.dataset.wk, min: num(x.value) })) });
+      closeModal(); toast("Pengaturan konten disimpan"); vKonten();
     }, e.target);
+  });
+}
+/* ================= PENGINGAT TUGAS: konten mingguan & promosi bulanan ================= */
+async function pengingatTugas(){
+  try { if (sessionStorage.getItem("rg_tugas") === today()) return; } catch {}
+  if ($("#modalRoot .modal")) { setTimeout(pengingatTugas, 3000); return; } // tunggu jendela lain (mis. pengingat pesanan) ditutup
+  let L; try { L = await api("GET", "/api/tugas-saya"); } catch { return; }
+  const belum = (L || []).filter(t => !t.selesai);
+  if ($("#modalRoot .modal")) { setTimeout(pengingatTugas, 3000); return; }
+  try { sessionStorage.setItem("rg_tugas", today()); } catch {}
+  if (!belum.length) return;
+  const baris = t => t.jenis === "konten" ? `<div class="li"><div class="main"><div class="t">🎬 Buat konten minggu ini</div><div class="small muted">Sudah <b>${t.n}</b> dari minimal <b>${t.min}</b> video (Senin–Minggu). Upload di Instagram / TikTok toko.</div></div></div>`
+    : t.jenis === "promosi" ? `<div class="li"><div class="main"><div class="t">📣 Promosi bulan ini</div><div class="small muted">Sudah <b>${t.n}</b> dari minimal <b>${t.min}</b> promosi. Rencanakan promosi & dananya di menu Promosi.</div></div></div>`
+    : `<div class="li"><div class="main"><div class="t">🎬 Konten ${esc(toTitle(t.nama))}</div><div class="small muted">Baru ${t.n} dari minimal ${t.min} video minggu ini</div></div></div>`;
+  modal(`<h3>🔔 Pengingat tugas</h3><div class="list">${belum.map(baris).join("")}</div>
+    <div class="actions" style="flex-wrap:wrap"><button class="btn" data-close>Nanti</button>
+      ${belum.some(t => t.jenis === "konten") ? `<button class="btn" id="tgKonten" type="button">+ Konten saya (tempel link)</button>` : ""}
+      ${belum.some(t => t.jenis === "promosi") ? `<button class="btn pri" id="tgPromo" type="button">Buka Promosi</button>` : ""}</div>`, m => {
+    const k = $("#tgKonten", m); if (k) k.onclick = () => { closeModal(); kontenSaya(); };
+    const p = $("#tgPromo", m); if (p) p.onclick = () => { closeModal(); pindah("promosi"); };
+  });
+}
+/** Karyawan: tempel link video yang ia buat → tercatat sebagai kontennya (bila sudah terdeteksi otomatis, pembuatnya diganti). */
+function kontenSaya(){
+  modal(`<h3>🎬 Konten saya</h3><label class="f">Link video Instagram / TikTok yang kamu buat<input type="url" id="ksU" placeholder="https://www.instagram.com/reel/… atau https://www.tiktok.com/@…/video/…"></label>
+    <p class="small muted" style="margin:0">Video yang sama di Instagram & TikTok cukup dicatat sekali.</p>
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="ksOk" type="button">Catat</button></div>`, m => {
+    $("#ksOk", m).onclick = e => coba(async () => { await api("POST", "/api/konten/klaim", { url: $("#ksU", m).value.trim() }); closeModal(); toast("Konten dicatat atas namamu ✅"); }, e.target);
+  });
+}
+
+/* ================= PROMOSI ================= */
+let prBulan = "";
+const ST_PROMO = { rencana: ["mut", "Rencana"], jalan: ["warn", "Berjalan"], selesai: ["ok", "Selesai"], batal: ["bad", "Batal"] };
+async function vPromosi(){
+  if (!prBulan) prBulan = today().slice(0, 7);
+  $("#main").innerHTML = `<div class="view-head"><h2>📣 Promosi</h2><span class="sp"></span><input type="month" id="prB" value="${prBulan}" style="width:auto" aria-label="Bulan"></div><div id="prIsi"><div class="empty">Memuat…</div></div>`;
+  $("#prB").onchange = e => { prBulan = e.target.value || today().slice(0, 7); vPromosi(); };
+  const D = await api("GET", `/api/promosi?bulan=${prBulan}`).catch(e => { $("#prIsi").innerHTML = `<div class="empty">${esc(e.message)}</div>`; return null; });
+  if (!D || view !== "promosi") return;
+  const aktif = D.daftar.filter(p => p.status !== "batal"), dana = aktif.reduce((a, p) => a + (p.dana || 0), 0), keluar = aktif.reduce((a, p) => a + (p.dana_keluar || 0), 0);
+  $("#prIsi").innerHTML = `
+    <div class="kpis" style="margin-bottom:12px"><div class="kpi"><div class="l">Promosi bulan ini</div><div class="v num" style="${D.jumlah < D.min ? "color:var(--warn)" : ""}">${D.jumlah} / min ${D.min}</div></div>
+      <div class="kpi"><div class="l">Rencana dana</div><div class="v num">${rp(dana)}</div></div>${D.admin ? `<div class="kpi"><div class="l">Dana sudah keluar</div><div class="v num">${rp(keluar)}</div></div>` : ""}</div>
+    ${D.jumlah < D.min ? `<div class="note" style="margin-bottom:10px">⚠️ Bulan ini belum ada promosi${D.pic ? ` — penanggung jawab: <b>${esc(D.pic.nama)}</b>` : ""}. Minimal ${D.min}× per bulan.</div>` : ""}
+    <div class="row" style="gap:6px;margin-bottom:10px;flex-wrap:wrap"><button class="btn pri" id="prBaru" type="button">+ Promosi baru</button>${D.admin ? `<button class="btn" id="prAtur" type="button">⚙️ Penanggung jawab</button>` : ""}</div>
+    ${D.daftar.length ? `<div class="list">${D.daftar.map(p => `<div class="li click" data-pr="${p.id}"><div class="main"><div class="t">${esc(p.judul)} <span class="pill ${ST_PROMO[p.status]?.[0] || "mut"}">${ST_PROMO[p.status]?.[1] || esc(p.status)}</span></div>
+        <div class="small muted">${esc(p.jenis)} · ${esc(tglID(p.mulai))}${p.selesai !== p.mulai ? " – " + esc(tglID(p.selesai)) : ""} · oleh ${esc(p.oleh)}</div>${p.ket ? `<div class="small">${esc(p.ket.slice(0, 120))}</div>` : ""}</div>
+        <div style="text-align:right"><div class="num" style="font-weight:700">${rp(p.dana)}</div>${p.expense_id ? `<span class="pill ok">dana keluar ${rp(p.dana_keluar)}</span>` : p.dana ? `<span class="pill mut">belum dicairkan</span>` : ""}</div></div>`).join("")}</div>`
+      : `<div class="list"><div class="empty">Belum ada promosi di bulan ini. Tekan <b>+ Promosi baru</b>.</div></div>`}`;
+  $("#prBaru").onclick = () => formPromosi(null, D);
+  const at = $("#prAtur"); if (at) at.onclick = aturPromosi;
+  $$("[data-pr]").forEach(x => x.onclick = () => formPromosi(D.daftar.find(p => p.id === +x.dataset.pr), D));
+}
+function formPromosi(p, D){
+  const d = p || { judul: "", jenis: "Diskon", mulai: today(), selesai: today(), dana: 0, ket: "", status: "rencana" };
+  modal(`<h3>${p ? "Ubah promosi" : "📣 Promosi baru"}</h3><div class="stack">
+    <label class="f">Nama promosi *<input type="text" id="fpJ" value="${esc(d.judul)}" placeholder="Mis. Diskon 10% buket wisuda" maxlength="120"></label>
+    <div class="f"><span>Jenis (bisa ketik sendiri)</span><input type="text" id="fpT" list="fpTL" value="${esc(d.jenis)}"><datalist id="fpTL">${D.jenis.map(j => `<option value="${esc(j)}">`).join("")}</datalist></div>
+    <div class="row"><label class="f grow">Mulai<input type="date" id="fpM" value="${d.mulai}"></label><label class="f grow">Selesai<input type="date" id="fpS" value="${d.selesai}"></label></div>
+    <label class="f">Dana promosi (Rp)<input type="number" id="fpD" value="${d.dana || ""}" min="0" step="5000" inputmode="numeric" placeholder="0"></label>
+    <label class="f">Keterangan / target / mekanisme<textarea id="fpK" rows="3" placeholder="Mis. iklan IG 7 hari, target 30 pesanan; giveaway follow & tag 3 teman">${esc(d.ket)}</textarea></label>
+    <div class="seg" id="fpSt" style="display:flex">${Object.entries(ST_PROMO).map(([k, v]) => `<button type="button" data-s="${k}" style="flex:1" class="${d.status === k ? "on" : ""}">${v[1]}</button>`).join("")}</div>
+    ${p && D.admin && !p.expense_id && p.status !== "batal" ? `<button class="btn" id="fpDana" type="button">💸 Catat dana keluar (pengeluaran Promosi)</button>` : ""}
+    ${p && p.expense_id ? `<p class="small muted" style="margin:0">Dana ${rp(p.dana_keluar)} sudah dicatat sebagai pengeluaran Promosi.</p>` : ""}</div>
+    <div class="actions" style="flex-wrap:wrap">${p && !p.expense_id ? `<button class="btn ghost danger-teks" id="fpHapus" type="button">Hapus</button>` : ""}<button class="btn" data-close>Batal</button><button class="btn pri" id="fpOk" type="button">Simpan</button></div>`, m => {
+    let st = d.status;
+    $$("#fpSt button", m).forEach(b => b.onclick = () => { st = b.dataset.s; $$("#fpSt button", m).forEach(x => x.classList.toggle("on", x === b)); });
+    const baca = () => ({ judul: $("#fpJ", m).value.trim(), jenis: $("#fpT", m).value.trim(), mulai: $("#fpM", m).value, selesai: $("#fpS", m).value || $("#fpM", m).value, dana: num($("#fpD", m).value) || 0, ket: $("#fpK", m).value.trim(), status: st });
+    $("#fpOk", m).onclick = e => coba(async () => { await api(p ? "PUT" : "POST", p ? `/api/promosi/${p.id}` : "/api/promosi", baca()); closeModal(); toast("Promosi disimpan"); vPromosi(); }, e.target);
+    const h = $("#fpHapus", m); if (h) h.onclick = () => konfirmasi("Hapus promosi ini?", p.judul, "Hapus", async () => { await api("DELETE", `/api/promosi/${p.id}`); vPromosi(); });
+    const dn = $("#fpDana", m); if (dn) dn.onclick = e => coba(async () => {
+      await api("PUT", `/api/promosi/${p.id}`, baca());
+      const r = await api("POST", `/api/promosi/${p.id}/dana`, { nominal: num($("#fpD", m).value) || p.dana });
+      closeModal(); toast(`Dana promosi ${rp(r.nominal)} dicatat di Pengeluaran`); vPromosi(); }, e.target);
+  });
+}
+async function aturPromosi(){
+  const T = await coba(() => api("GET", "/api/tugas/setelan")); if (!T) return;
+  modal(`<h3>⚙️ Promosi</h3>
+    <label class="f">Penanggung jawab promosi (diingatkan & bisa membuka menu Promosi)<select id="apP"><option value="">— tidak ada —</option>${B.staf.map(u => `<option value="${u.id}" ${T.pic_promosi_id === u.id ? "selected" : ""}>${esc(u.nama)}</option>`).join("")}</select></label>
+    <label class="f">Minimal promosi per bulan<input type="number" id="apM" value="${T.min_promosi_bulan}" min="1" step="1" inputmode="numeric"></label>
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="apOk" type="button">Simpan</button></div>`, m => {
+    $("#apOk", m).onclick = e => coba(async () => { await api("PUT", "/api/tugas/setelan", { pic_promosi_id: $("#apP", m).value ? +$("#apP", m).value : null, min_promosi_bulan: num($("#apM", m).value) || 1 }); await muatUlang(); closeModal(); toast("Disimpan"); vPromosi(); }, e.target);
   });
 }
 /** Laporan penjualan periode yang dipilih, sebagai teks WA — kirim ke WA atau bagikan ke aplikasi lain. */
@@ -4105,7 +4198,7 @@ async function mulai(){
   halamanTampil();
   bukaTautanNotif();
   selesaiSambungSosmed();
-  setTimeout(pengingatPesanan, 800);
+  setTimeout(async () => { await pengingatPesanan(); setTimeout(pengingatTugas, 400); }, 800);
 }
 /** Ketuk notifikasi → langsung ke halamannya: transaksi & pesanan → halaman Transaksi (baris transaksinya disorot),
  *  absen → Rekap Absen tanggal itu (baris karyawannya disorot). */
@@ -4114,11 +4207,11 @@ async function bukaTautanNotif(){
   const [v, q] = location.hash.slice(1).split("?");
   if (!q || !B) return;
   const p = new URLSearchParams(q);
-  const tujuan = v === "absen" ? "absen" : ["produksi", "belanja", "konten"].includes(v) ? v : "riwayat"; // pesanan juga ke halaman Transaksi
+  const tujuan = v === "absen" ? "absen" : ["produksi", "belanja", "konten", "promosi"].includes(v) ? v : "riwayat"; // pesanan juga ke halaman Transaksi
   try { history.replaceState(null, "", "#" + tujuan); } catch {}
   if (!daftarView().some(x => x[0] === tujuan)) return;
   closeModal();
-  if (["produksi", "belanja", "konten"].includes(tujuan)) { view = tujuan; await render(); return; }
+  if (["produksi", "belanja", "konten", "promosi"].includes(tujuan)) { view = tujuan; await render(); return; }
   if (tujuan === "absen") {
     if (/^\d{4}-\d{2}-\d{2}$/.test(p.get("tgl") || "")) aDari = aSampai = p.get("tgl");
     view = "absen"; await render();

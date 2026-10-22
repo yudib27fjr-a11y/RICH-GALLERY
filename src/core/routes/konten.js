@@ -67,10 +67,13 @@ function cariKembaran(platformnya, waktuMs, caption, manual = false){
 }
 
 /* ---------- mencatat satu unggahan ---------- */
+/** Kode video dari link (Instagram: kode setelah /reel/ /p/ /tv/, TikTok: nomor setelah /video/) — untuk mencocokkan link manual dengan hasil otomatis. */
+export const kodeLink = url => ((String(url || "").match(/\/(?:reel|reels|p|tv)\/([\w-]+)/) || String(url || "").match(/\/video\/(\d+)/) || [])[1] || "");
+const cariLink = (pf, url) => { const k = kodeLink(url); return k ? one("SELECT * FROM konten WHERE platform = ? AND (pid = ? OR url LIKE ?)", [pf, k, `%/${k}%`]) : null; };
 /** Catat video baru. Hasil: baris konten (status: hitung | kembar | batas | lama). */
 export function catatKonten({ platform: pf, pid, url = "", caption = "", waktuMs, thumb = "", lama = false, oleh = "otomatis", userId = null }){
   return tx(() => {
-    const ada = one("SELECT * FROM konten WHERE platform = ? AND pid = ?", [pf, String(pid)]);
+    const ada = one("SELECT * FROM konten WHERE platform = ? AND pid = ?", [pf, String(pid)]) || cariLink(pf, url);
     if (ada) return { ...ada, baru: false };
     const { nominal, maks, penerima } = setelan();
     const tgl = tglLokal(waktuMs), cap = String(caption || "").slice(0, 600);
@@ -103,6 +106,30 @@ export function catatKonten({ platform: pf, pid, url = "", caption = "", waktuMs
     return { ...one("SELECT * FROM konten WHERE id = ?", [id]), baru: true };
   });
 }
+
+/** Ganti pembuat konten (insentifnya ikut pindah bila belum dibayar). */
+export function gantiPembuat(id, userId){
+  return tx(() => {
+    const r = one("SELECT * FROM konten WHERE id = ?", [+id]); if (!r) throw notFound("Konten tidak ditemukan");
+    const u = one("SELECT id, nama FROM users WHERE id = ? AND aktif = 1", [+userId]); if (!u) throw bad("Karyawan tidak ditemukan");
+    if (r.insentif_id) {
+      if (one("SELECT 1 x FROM insentif_lain l JOIN insentif_bayar b ON b.pembuat_id = l.user_id AND l.tgl BETWEEN b.periode_dari AND b.periode_sampai WHERE l.id = ?", [r.insentif_id])) throw bad("Insentif konten ini sudah dibayar");
+      run("UPDATE insentif_lain SET user_id = ? WHERE id = ?", [u.id, r.insentif_id]);
+    }
+    run("UPDATE konten SET user_id = ? WHERE id = ?", [u.id, r.id]);
+    return { ok: true, nama: u.nama };
+  });
+}
+/** Karyawan: "Saya yang buat konten ini" — dari link. Bila video sudah tercatat otomatis, pembuatnya diganti; bila belum, dicatat. */
+export function klaimKonten(url, user){
+  url = teks(url, { wajib: true, max: 400, nama: "Link video" });
+  const pf = /instagram\.com/i.test(url) ? "instagram" : /tiktok\.com/i.test(url) ? "tiktok" : null;
+  if (!pf || !kodeLink(url)) throw bad("Tempel link video Instagram (reel/post) atau TikTok (…/video/…)");
+  const ada = cariLink(pf, url);
+  if (ada) { if (ada.user_id !== user.id && ada.status !== "batal") gantiPembuat(ada.id, user.id); return { ...one("SELECT * FROM konten WHERE id = ?", [ada.id]), baru: false }; }
+  return catatKonten({ platform: pf, pid: kodeLink(url), url, waktuMs: Date.parse(sekarang().tgl + "T12:00:00+08:00"), oleh: "manual", userId: user.id });
+}
+route("POST", "/api/konten/:id/pembuat", "admin", ({ params, body }) => gantiPembuat(params.id, body.user_id), { pusatSaja: true });
 
 /* ---------- membaca unggahan dari Instagram & TikTok ---------- */
 const jsonDari = r => { try { return JSON.parse(r.text || "{}"); } catch { return {}; } };
@@ -249,7 +276,7 @@ route("POST", "/api/konten", "admin", ({ body }) => {
   if (!pf) throw bad("Tempel link video Instagram atau TikTok");
   const tgl = /^\d{4}-\d{2}-\d{2}$/.test(body.tgl || "") ? body.tgl : sekarang().tgl;
   const waktuMs = Date.parse(tgl + "T12:00:00+08:00");
-  const pid = (url.match(/\/(?:reel|p|tv)\/([\w-]+)/) || url.match(/\/video\/(\d+)/) || [])[1] || url.replace(/[?#].*$/, "");
+  const pid = kodeLink(url) || url.replace(/[?#].*$/, "");
   const r = catatKonten({ platform: pf, pid, url, caption: teks(body.ket, { max: 300, nama: "Keterangan" }) || "", waktuMs, oleh: "manual", userId: body.user_id ? +body.user_id : null });
   if (!r.baru) throw bad("Video ini sudah tercatat");
   return r;
