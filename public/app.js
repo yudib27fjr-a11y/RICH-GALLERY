@@ -145,6 +145,13 @@ function wrap(text, w){ const out = []; String(text).split("\n").forEach(par => 
 const center = (t, w) => { t = t.slice(0, w); return " ".repeat(Math.floor((w - t.length) / 2)) + t; };
 const lr = (a, b, w) => { const sp = w - a.length - b.length; return sp >= 1 ? a + " ".repeat(sp) + b : a.slice(0, Math.max(0, w - b.length - 1)) + " " + b; };
 const lebar = () => D.kertas == 80 ? 48 : 32;
+/** No HP pelanggan yang sudah tersimpan ditampilkan dengan 3 angka disamarkan (mis. 081234***890).
+ *  Nomor lengkap tetap tersimpan & dipakai untuk tombol WA / telepon. */
+function samarHp(hp){
+  const t = String(hp || ""), pos = [...t].map((c, i) => /\d/.test(c) ? i : -1).filter(i => i >= 0);
+  if (pos.length < 7) return t;
+  const tutup = new Set(pos.slice(-6, -3)); return [...t].map((c, i) => tutup.has(i) ? "*" : c).join("");
+}
 function strukLines(s){
   const t = B.toko, w = lebar(), garis = "-".repeat(w), L = [];
   L.push({ t: center(t.nama_toko, w), b: 1 });
@@ -152,7 +159,7 @@ function strukLines(s){
   if (t.telp) L.push({ t: center("Telp " + t.telp, w) });
   L.push({ t: garis }, { t: lr("No", s.no, w) }, { t: lr("Tanggal", tglPendek(s.tgl) + " " + s.jam, w) }, { t: lr("Kasir", s.kasir || "-", w) });
   if (s.pelanggan) L.push({ t: lr("Pelanggan", s.pelanggan.slice(0, w - 11), w) });
-  if (s.hp) L.push({ t: lr("No HP", s.hp, w) });
+  if (s.hp) L.push({ t: lr("No HP", samarHp(s.hp), w) });
   L.push({ t: garis });
   s.items.forEach(it => { wrap(it.nama, w).forEach(x => L.push({ t: x })); L.push({ t: lr(`  ${fq(it.qty)} x ${angka(it.harga)}`, angka(it.harga * it.qty), w) }); });
   L.push({ t: garis }, { t: lr("Subtotal", angka(s.subtotal), w) });
@@ -322,7 +329,7 @@ async function gambarNota(d){
   teks("From:", 645, 267, { size: 25, bold: true, rata: "center", font: '"Arial Black", ' + SANS });
   teks(d.toko ? toTitle(d.toko) : "", 663, 328, { size: 33, bold: true, rata: "center", maks: 330 });
   teks("Date", 967, 272, { size: 31 }); teks(d.tanggal, 1071, 272, { size: 33, bold: true, maks: 300 });
-  teks("No hp :", 962, 328, { size: 31 }); teks(d.hp, 1080, 328, { size: 31, maks: 300 });
+  teks("No hp :", 962, 328, { size: 31 }); teks(samarHp(d.hp), 1080, 328, { size: 31, maks: 300 });
   // Tabel
   g.fillStyle = PINK; g.fillRect(0, tTop, W, 88);
   teks("Description", 103, tTop + 59, { size: 28, bold: true });
@@ -982,7 +989,7 @@ function drawCart(){
     <div class="cart-body">
     <div class="seg" id="cJenis" role="group" aria-label="Jenis pelanggan"><button type="button" data-j="baru" class="${cart.lama ? "" : "on"}">Pelanggan baru</button><button type="button" data-j="lama" class="${cart.lama ? "on" : ""}">Pelanggan lama</button></div>
     ${cart.lama ? `<div class="cari-pel"><input type="search" id="cCariPel" placeholder="Cari nama / no HP pelanggan…" autocomplete="off" aria-label="Cari pelanggan"><div class="list" id="cPelList"><div class="empty small">Memuat daftar pelanggan…</div></div></div>` : ""}
-    <div class="row"><label class="f grow">Nama pelanggan *<input type="text" id="cCust" value="${esc(cart.pelanggan)}" placeholder="Wajib diisi" autocomplete="off" required></label><label class="f grow">No HP / WA *<input type="tel" id="cHp" value="${esc(cart.hp)}" placeholder="08… (wajib)" autocomplete="off" required></label></div>
+    <div class="row"><label class="f grow">Nama pelanggan *<input type="text" id="cCust" value="${esc(cart.pelanggan)}" placeholder="Wajib diisi" autocomplete="off" required></label><label class="f grow">No HP / WA *<input type="tel" id="cHp" value="${esc(cart.hpSamar ? samarHp(cart.hp) : cart.hp)}" placeholder="08… (wajib)" autocomplete="off" required></label></div>
     <div class="list saran-pel" id="cSaran" hidden></div>
     <div class="cart-lines">${cart.items.length ? cart.items.map((it, i) => `
       <div class="line" data-i="${i}">
@@ -1034,8 +1041,8 @@ function drawCart(){
   $("#cCust", el).onfocus = () => ambilPelanggan().catch(() => {});
   $$("#cJenis button", el).forEach(b => b.onclick = () => { cart.lama = b.dataset.j === "lama"; saveCart(); const sc = $(".cart-body", el).scrollTop; drawCart(); $(".cart-body", el).scrollTop = sc; if (cart.lama) $("#cCariPel")?.focus(); });
   if (cart.lama) pasangCariPelanggan(el);
-  $("#cHp", el).oninput = e => { cart.hp = e.target.value; saveCart(); saranPelanggan(el, e.target.value, "hp"); };
-  $("#cHp", el).onfocus = () => ambilPelanggan().catch(() => {});
+  $("#cHp", el).oninput = e => { if (cart.hpSamar) { cart.hpSamar = false; if (/\*/.test(e.target.value)) e.target.value = ""; } cart.hp = e.target.value; saveCart(); saranPelanggan(el, e.target.value, "hp"); };
+  $("#cHp", el).onfocus = e => { if (cart.hpSamar) setTimeout(() => e.target.select(), 0); ambilPelanggan().catch(() => {}); };
   [$("#cCust", el), $("#cHp", el)].forEach(i => i.addEventListener("blur", () => setTimeout(() => { const s = $("#cSaran", el); if (s && !s.contains(document.activeElement)) s.hidden = true; }, 200)));
   $("#cDisc", el).oninput = e => { cart.diskon = num(e.target.value); upd(); };
   const gambarUlang = () => { const sc = $(".cart-body", el).scrollTop; drawCart(); $(".cart-body", el).scrollTop = sc; };
@@ -1114,13 +1121,13 @@ async function saranPelanggan(el, teks, jenis){
     .sort((a, b) => (jenis === "nama" ? (b.nama.startsWith(q) - a.nama.startsWith(q)) : 0) || b.transaksi - a.transaksi).slice(0, 5);
   if (!cocok.length) { kotak.hidden = true; return; }
   kotak.innerHTML = cocok.map((p, i) => `<button type="button" class="li click" data-i="${i}" style="width:100%;text-align:left;border:0;background:none;font:inherit;color:inherit">
-    <div class="main"><div class="t">${esc(p.nama || "TANPA NAMA")}</div><div class="small muted">${esc(p.hp || "tanpa no HP")} · ${p.transaksi}× belanja</div></div></button>`).join("");
+    <div class="main"><div class="t">${esc(p.nama || "TANPA NAMA")}</div><div class="small muted">${esc(p.hp ? samarHp(p.hp) : "tanpa no HP")} · ${p.transaksi}× belanja</div></div></button>`).join("");
   kotak.hidden = false;
   kotak.onmousedown = e => e.preventDefault(); // kolom ketik tetap fokus, saran tidak tertutup sebelum diketuk
   $$("button", kotak).forEach(b => b.onclick = () => {
     const p = cocok[+b.dataset.i];
-    cart.pelanggan = p.nama === "CUSTOMER" ? "" : p.nama; if (p.hp) cart.hp = p.hp; saveCart();
-    $("#cCust", el).value = cart.pelanggan; $("#cHp", el).value = cart.hp; kotak.hidden = true;
+    cart.pelanggan = p.nama === "CUSTOMER" ? "" : p.nama; if (p.hp) { cart.hp = p.hp; cart.hpSamar = true; } saveCart();
+    $("#cCust", el).value = cart.pelanggan; $("#cHp", el).value = cart.hpSamar ? samarHp(cart.hp) : cart.hp; kotak.hidden = true;
   });
 }
 function pasangCariPelanggan(el){
@@ -1129,13 +1136,13 @@ function pasangCariPelanggan(el){
     const q = cari.value.trim().toUpperCase(), qd = q.replace(/\D/g, "");
     const cocok = (daftarPel || []).filter(p => !q || p.nama.includes(q) || (qd.length >= 3 && String(p.hp).replace(/\D/g, "").replace(/^62/, "0").includes(qd.replace(/^62/, "0")))).slice(0, 8);
     kotak.innerHTML = cocok.length ? cocok.map((p, i) => `<button type="button" class="li click pel" data-i="${i}" style="width:100%;text-align:left;border:0;background:none;font:inherit;color:inherit">
-        <div class="main"><div class="t">${esc(p.nama || "TANPA NAMA")}</div><div class="small muted">${esc(p.hp || "tanpa no HP")} · ${p.transaksi}× belanja · terakhir ${tglPendek(p.terakhir)}</div></div></button>`).join("")
+        <div class="main"><div class="t">${esc(p.nama || "TANPA NAMA")}</div><div class="small muted">${esc(p.hp ? samarHp(p.hp) : "tanpa no HP")} · ${p.transaksi}× belanja · terakhir ${tglPendek(p.terakhir)}</div></div></button>`).join("")
       : `<div class="empty small">${daftarPel && daftarPel.length ? "Tidak ditemukan. Pilih \"Pelanggan baru\" untuk mengisi manual." : "Belum ada data pelanggan. Pelanggan tersimpan otomatis dari transaksi yang memakai nama atau no HP."}</div>`;
     $$(".pel", kotak).forEach(b => b.onclick = () => {
       const p = cocok[+b.dataset.i];
-      cart.pelanggan = p.nama === "CUSTOMER" ? "" : p.nama; cart.hp = p.hp || ""; saveCart();
-      $("#cCust", el).value = cart.pelanggan; $("#cHp", el).value = cart.hp;
-      cari.value = ""; kotak.innerHTML = `<div class="empty small">✓ ${esc(p.nama)}${p.hp ? " · " + esc(p.hp) : ""} dipilih</div>`;
+      cart.pelanggan = p.nama === "CUSTOMER" ? "" : p.nama; cart.hp = p.hp || ""; cart.hpSamar = !!p.hp; saveCart();
+      $("#cCust", el).value = cart.pelanggan; $("#cHp", el).value = cart.hpSamar ? samarHp(cart.hp) : cart.hp;
+      cari.value = ""; kotak.innerHTML = `<div class="empty small">✓ ${esc(p.nama)}${p.hp ? " · " + esc(samarHp(p.hp)) : ""} dipilih</div>`;
     });
   };
   cari.oninput = gambar;
@@ -1607,7 +1614,7 @@ async function dataPelanggan(){
     const gambar = () => {
       const q = $("#dpQ", m).value.trim().toUpperCase(), qd = q.replace(/\D/g, "");
       const c = semua.filter(p => !q || p.nama.includes(q) || (qd.length >= 3 && String(p.hp).replace(/\D/g, "").includes(qd))).slice(0, 300);
-      $("#dpList", m).innerHTML = c.length ? c.map(p => `<div class="li"><div class="main"><div class="t">${esc(p.nama || "TANPA NAMA")}</div><div class="small muted">${esc(p.hp || "tanpa no HP")} · ${p.transaksi}× · terakhir ${tglPendek(p.terakhir)}</div></div>
+      $("#dpList", m).innerHTML = c.length ? c.map(p => `<div class="li"><div class="main"><div class="t">${esc(p.nama || "TANPA NAMA")}</div><div class="small muted">${esc(p.hp ? samarHp(p.hp) : "tanpa no HP")} · ${p.transaksi}× · terakhir ${tglPendek(p.terakhir)}</div></div>
         <div style="text-align:right"><div class="num" style="font-weight:700">${rp(p.total || 0)}</div>${nomorWA(p.hp) ? `<a class="btn sm" href="https://wa.me/${nomorWA(p.hp)}" target="_blank" rel="noopener">WA</a>` : ""}</div></div>`).join("") : `<div class="empty">Tidak ada.</div>`;
     };
     $("#dpQ", m).oninput = gambar; gambar();
@@ -2301,7 +2308,7 @@ function detailPesanan(s, setelah = () => render()){
       <p class="small" style="margin:0">${s.items.map(i => esc(i.nama) + " ×" + fq(i.qty)).join("<br>")}</p>
       ${bu ? `<p class="small" style="margin:0">Jasa ${rp(s.total)} + 💵 uang isian ${rp(dt.isian)}</p>` : ""}
       <p style="margin:0">${bu ? "Total tagihan" : "Total"} <b>${rp(tagihanTotal(s))}</b> · Dibayar ${rp(bu ? dibayarGab(s) : s.bayar)} ${sisa ? `· <b style="color:var(--warn)">${bu ? "Kurang" : "Sisa"} ${rp(sisa)}</b>` : `· <span class="pill ok">Lunas</span>`}</p>
-      ${s.hp ? `<p class="small muted" style="margin:0">${esc(s.hp)}</p>` : ""}
+      ${s.hp ? `<p class="small muted" style="margin:0">📱 ${esc(samarHp(s.hp))}</p>` : ""}
       ${s.diambil_at ? `<p class="small muted" style="margin:0">Selesai ${esc(s.diambil_at)} oleh ${esc(s.diambil_oleh || "-")}</p>` : ""}
       ${bu && sisa && !s.diambil_at ? `<label class="f">Nominal yang dibayar sekarang<input type="number" id="lsNom" value="${sisa}" min="1" max="${sisa}" step="1000" inputmode="numeric"></label>` : ""}
       ${sisa && !s.diambil_at ? `<div class="seg" id="lsM" style="display:flex">${B.metode.map(m => `<button type="button" data-m="${m}" class="${m === "Tunai" ? "on" : ""}" style="flex:1">${m}</button>`).join("")}</div>` : ""}
