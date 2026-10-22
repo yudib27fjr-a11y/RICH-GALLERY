@@ -547,3 +547,24 @@ test("buket uang: uang isian dicatat terpisah (titipan), hanya jasa yang masuk t
   const k = await kasir("POST", "/api/penjualan", { pelanggan: "Sari", hp: "081234567891", items: [{ nama: "buket uang 85k", harga: 85000, qty: 1 }], jenis: "buket_uang", detail: { isian: 500000 } });
   assert.equal(k.status, 200, JSON.stringify(k.data)); assert.equal(k.data.total, 85000); assert.equal(k.data.detail.isian, 500000);
 });
+
+test("belanja Shopee: barang pribadi (tumbler berpita, tas) tidak dicatat; yang pernah diabaikan admin ikut diabaikan; total dari harga barang", async () => {
+  const { readFileSync } = await import("node:fs");
+  const email = readFileSync(new URL("./contoh-email-shopee.txt", import.meta.url), "utf8");
+  const ganti = (nama, no) => email.replace(/Bunga Artificial Premium Mawar Classic 7 Cabang Bunga Dekorasi Estetik/g, nama).replaceAll("2610204XQR3TQ2", no);
+  const kirim = async (nama, no) => (await admin("POST", "/api/belanja/tempel", { isi: ganti(nama, no) })).data;
+  assert.equal((await kirim("Mocorie - Babydoll Coquette Tumbler / Botol Minum Mini Coquette Pita / Tumbler Sedotan Pita Pink", "2610221TUMBLR1")).status, "abaikan");
+  assert.equal((await kirim("Tas Selempang Wanita Kualitas Premium", "2610221TASXYZ1")).status, "abaikan", "TAS / KUALITAS bukan barang toko");
+  assert.equal((await kirim("Flower Wrapping Pure Frame Cellophane Waterproof Kertas Bunga Buket", "2610221WRAP001")).status, "kirim");
+  // admin mengabaikan → barang yang sama berikutnya otomatis diabaikan
+  const x = await kirim("Gantungan Kunci Lucu Karakter", "2610221GANTUN1");
+  if (x.status === "kirim") {
+    assert.equal((await admin("POST", `/api/belanja/${x.id}/status`, { status: "abaikan" })).status, 200);
+    assert.equal((await kirim("Gantungan Kunci Lucu Karakter", "2610221GANTUN2")).status, "abaikan");
+  }
+  // email tanpa "Total Pembayaran" → total dihitung dari harga barang
+  const tanpaTotal = ganti("Pita Satin 2 cm Premium", "2610221PITA001").replace(/Total Pembayaran:.*\n/, "").replace(/Total Dibayarkan:[^\n]*\n[^\n]*\n/, "");
+  const r = (await admin("POST", "/api/belanja/tempel", { isi: tanpaTotal })).data;
+  const b = (await admin("GET", "/api/belanja?status=kirim")).data.find(v => v.id === r.id);
+  assert.ok(b && b.total > 0, "total terisi dari harga barang");
+});

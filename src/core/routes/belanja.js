@@ -51,17 +51,37 @@ export function bacaEmailShopee(isi, subjek = ""){
   return {
     no: no.toUpperCase(), tgl, toko: nilai("Penjual").slice(0, 80) || "Shopee", items,
     subtotal: uang(nilai("Subtotal")), ongkir: uang(nilai("Ongkos Kirim")), biaya: uang(nilai("Biaya Layanan")),
-    total: uang(nilai("Total Pembayaran")) || uang(nilai("Total Dibayarkan")),
+    // Email "telah dikirim / tiba" kadang tanpa total → pakai jumlah harga barang
+    total: uang(nilai("Total Pembayaran")) || uang(nilai("Total Dibayarkan")) || items.reduce((a, i) => a + (i.harga || 0) * (i.qty || 1), 0),
     metode: /COD|Cash On Delivery/i.test(semua + subjek) ? "COD" : (nilai("Metode Pembayaran").replace(/^\d+$/, "") || "Shopee").slice(0, 40), batal,
   };
 }
 
 /* ---------- Apakah barangnya barang toko? ---------- */
-const KATA_TOKO = ["BUNGA", "MAWAR", "ROSE", "TULIP", "LILY", "ANGGREK", "DAISY", "BABY BREATH", "BABYBREATH", "DAUN", "ARTIFICIAL", "ARTIFISIAL", "KERING", "PAMPAS",
-  "KERTAS", "WRAPPING", "CELLOPHANE", "SELOFAN", "CELOFAN", "MIKA", "TISSUE", "PITA", "RIBBON", "BALON", "BALLOON", "FOIL", "BONEKA", "BEAR", "AKRILIK", "ACRYLIC",
-  "BLOOM BOX", "BOX", "KOTAK", "HAMPERS", "BUKET", "BOUQUET", "FLORAL", "FLORIST", "OASIS", "FOAM", "KAWAT", "SELOTIP", "DOUBLE TAPE", "LEM TEMBAK", "GLUE GUN",
-  "STANDING", "PAPAN", "VAS", "TERARIUM", "TRAY", "SESERAHAN", "MAHAR", "LAMPU TUMBLR", "TUMBLR", "KARTU UCAPAN", "GREETING", "STIKER", "STICKER", "SNACK", "COKLAT",
-  "TAS", "PAPER BAG", "PAPERBAG", "GOODIE", "KAIN", "TILE", "MUTIARA", "GLITTER"];
+/* Dicocokkan per KATA UTUH (bukan potongan kata: "TAS" tidak cocok dengan "KUALITAS"). */
+const KATA_TOKO = ["BUNGA", "MAWAR", "ROSE", "ROSES", "TULIP", "LILY", "ANGGREK", "DAISY", "BABY BREATH", "BABYBREATH", "DAUN", "ARTIFICIAL", "ARTIFISIAL", "PAMPAS", "HYDRANGEA",
+  "KERTAS BUKET", "KERTAS BUNGA", "WRAPPING", "CELLOPHANE", "SELOFAN", "CELOFAN", "MIKA", "TISSUE BUNGA", "PITA SATIN", "PITA", "RIBBON", "BALON", "BALLOON", "BALLOONS", "FOIL", "BONEKA",
+  "AKRILIK", "ACRYLIC", "BLOOM BOX", "GIFT BOX", "HAMPERS", "BUKET", "BOUQUET", "FLORAL", "FLORIST", "FLORIS", "OASIS", "FOAM", "KAWAT", "SELOTIP", "DOUBLE TAPE", "LEM TEMBAK",
+  "GLUE GUN", "STANDING FLOWER", "PAPAN BUNGA", "PAPAN UCAPAN", "VAS", "TERARIUM", "TRAY", "SESERAHAN", "HANTARAN", "MAHAR", "TUMBLR", "KARTU UCAPAN", "GREETING CARD",
+  "STIKER", "STICKER", "PAPER BAG", "PAPERBAG", "GOODIE BAG", "MUTIARA", "GLITTER"];
+/* Kata yang menandakan barang pribadi (bukan untuk toko) — kecuali judulnya jelas barang florist (KUAT). */
+const KATA_PRIBADI = ["TUMBLER", "BOTOL MINUM", "SEDOTAN", "TERMOS", "BAJU", "KAOS", "KEMEJA", "BLOUSE", "CELANA", "ROK", "DRESS", "GAMIS", "HIJAB", "JILBAB", "KERUDUNG", "PASHMINA",
+  "MUKENA", "SEPATU", "SANDAL", "SENDAL", "SNEAKERS", "SKINCARE", "SERUM", "TONER", "MOISTURIZER", "SUNSCREEN", "LIPSTIK", "LIPSTICK", "LIP TINT", "LIP CREAM", "MASKARA", "MASCARA",
+  "BEDAK", "CUSHION", "FOUNDATION", "PARFUM", "PERFUME", "SABUN", "SHAMPOO", "SAMPO", "KOSMETIK", "MAKEUP", "MAKE UP", "CASING", "SOFTCASE", "HARDCASE", "CASE HP", "CHARGER",
+  "KABEL DATA", "EARPHONE", "HEADSET", "TWS", "POWERBANK", "POWER BANK", "HANDPHONE", "DOMPET", "JAM TANGAN", "KACAMATA", "SPREI", "SPREAD", "BANTAL", "GULING", "HANDUK", "PANCI",
+  "WAJAN", "PIRING", "MANGKOK", "SENDOK", "POPOK", "DIAPERS", "SUSU", "VITAMIN", "SUPLEMEN", "OBAT", "MASKER WAJAH", "HANDBAG", "SLING BAG", "TOTE BAG", "RANSEL", "BACKPACK",
+  "MAINAN ANAK", "KAUS KAKI", "PIYAMA", "LINGERIE", "BRA", "CELANA DALAM", "HELM", "JAKET", "SWEATER", "HOODIE"];
+const KATA_KUAT = ["BUNGA", "FLORAL", "FLORIST", "FLORIS", "BUKET", "BOUQUET", "WRAPPING", "BALON", "BALLOON", "OASIS", "BLOOM BOX", "SESERAHAN", "HANTARAN", "MAHAR", "STANDING FLOWER", "PAPAN BUNGA", "CELLOPHANE"];
+const adaKata = (N, w) => new RegExp(`(^| )${w}( |$)`).test(N);
+const normal = s => " " + String(s || "").toUpperCase().replace(/[^A-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim() + " ";
+/** Nama barang yang pernah di-"Abaikan" admin → otomatis diabaikan lagi. */
+function namaDiabaikan(){
+  const set = new Set();
+  for (const r of all("SELECT items FROM belanja WHERE status = 'abaikan' AND alasan = 'Diabaikan admin' ORDER BY id DESC LIMIT 300")) {
+    try { for (const i of JSON.parse(r.items || "[]")) set.add(normal(i.nama).trim()); } catch { /* abaikan */ }
+  }
+  return set;
+}
 const kata = s => String(s || "").toUpperCase().replace(/[^A-Z0-9 ]/g, " ").split(/\s+/).filter(w => w.length >= 3);
 /* Warna: barang toko berwarna (mis. "Mawar Putih") hanya cocok dengan belanja berwarna sama. */
 const WARNA = { PUTIH: "PUTIH", WHITE: "PUTIH", PINK: "PINK", MERAH: "MERAH", RED: "MERAH", KUNING: "KUNING", YELLOW: "KUNING", BIRU: "BIRU", BLUE: "BIRU", UNGU: "UNGU", PURPLE: "UNGU",
@@ -70,9 +90,11 @@ const WARNA = { PUTIH: "PUTIH", WHITE: "PUTIH", PINK: "PINK", MERAH: "MERAH", RE
 const warnaDari = s => new Set(kata(s).map(w => WARNA[w]).filter(Boolean));
 const BUKAN = new Set(["DAN", "THE", "FOR", "DENGAN", "UNTUK", "ISI", "PCS", "PREMIUM", "MURAH", "READY", "STOCK", "STOK", "IMPORT", "BESAR", "KECIL", "WARNA", ...Object.keys(WARNA), "SOFT", "CABANG", "TANGKAI", "DEKORASI", "ESTETIK", "AESTHETIC", "MODEL", "BAHAN", "SET", "ORIGINAL", "TERMURAH", "PAKET", "SIZE", "UKURAN"]);
 /** Cari barang toko yang paling cocok dengan nama barang belanja. */
-export function cocokkanBarang(nama){
+export function cocokkanBarang(nama, { abaikan = null } = {}){
+  const N = normal(nama);
+  const kuat = KATA_KUAT.some(w => adaKata(N, w)), pribadi = KATA_PRIBADI.find(w => adaKata(N, w));
+  if ((pribadi && !kuat) || (abaikan && abaikan.has(N.trim()))) return { toko: false, kata: "", pribadi: pribadi || "pernah diabaikan", barang: null };
   const k = new Set(kata(nama).filter(w => !BUKAN.has(w))), wq = warnaDari(nama);
-  const N = String(nama || "").toUpperCase();
   let terbaik = null;
   for (const jenis of ["bahan", "produk"]) {
     for (const b of all(`SELECT id, kode, nama, kategori FROM ${TABEL[jenis]} WHERE dihapus IS NULL`)) {
@@ -84,7 +106,7 @@ export function cocokkanBarang(nama){
       if (sama && skor >= 0.5 && (!terbaik || skor > terbaik.skor)) terbaik = { jenis, kode: b.kode, nama: b.nama, skor };
     }
   }
-  const kunci = KATA_TOKO.find(w => N.includes(w)) || [...KAT_BAHAN].find(w => w !== "LAIN-LAIN" && N.includes(w)) || "";
+  const kunci = KATA_TOKO.find(w => adaKata(N, w)) || [...KAT_BAHAN].find(w => w !== "LAIN-LAIN" && adaKata(N, w)) || "";
   return { toko: !!terbaik || !!kunci, kata: kunci, barang: terbaik ? { jenis: terbaik.jenis, kode: terbaik.kode, nama: terbaik.nama } : null };
 }
 
@@ -98,7 +120,8 @@ const untuk = (b, user) => {
 /** Catat belanja dari email/tempelan. Pesanan yang sama (nomor sama) tidak dobel; email berikutnya hanya memperbarui. */
 export function catatBelanja(p, { sumber = "shopee", oleh = "email" } = {}){
   return tx(() => {
-    const items = p.items.map(i => { const c = cocokkanBarang(`${i.nama} ${i.variasi || ""}`); return { ...i, toko: c.toko, kata: c.kata, barang: c.barang }; });
+    const abaikan = namaDiabaikan();
+    const items = p.items.map(i => { const c = cocokkanBarang(`${i.nama} ${i.variasi || ""}`, { abaikan }); if (abaikan.has(normal(i.nama).trim())) Object.assign(c, { toko: false, barang: null }); return { ...i, toko: c.toko, kata: c.kata, barang: c.barang }; });
     const relevan = items.some(i => i.toko);
     const ada = one("SELECT id, status FROM belanja WHERE sumber = ? AND no_pesanan = ?", [sumber, p.no]);
     if (ada) {
@@ -151,8 +174,9 @@ function datang(id, body, user){
       return { ...it, datang: qtyDatang, masuk };
     });
     let expenseId = null, nominal = 0;
-    if (user.peran === "admin" && body.catat_biaya !== false) nominal = angka(body.nominal ?? b.total, { min: 0, max: 1e11, bulat: true, nama: "Nominal belanja" }) ?? 0;
-    else if (body.catat_biaya !== false) nominal = b.total || 0; // karyawan: sesuai total pesanan
+    const totalB = b.total || b.items.reduce((a, i) => a + (i.harga || 0) * (i.qty || 1), 0);
+    if (user.peran === "admin" && body.catat_biaya !== false) nominal = angka(body.nominal ?? totalB, { min: 0, max: 1e11, bulat: true, nama: "Nominal belanja" }) ?? 0;
+    else if (body.catat_biaya !== false) nominal = totalB || 0; // karyawan: sesuai total pesanan
     if (nominal > 0) {
       const ket = `${ref} · ${b.toko}`.slice(0, 200);
       expenseId = Number(run("INSERT INTO expenses(tgl, kategori, ket, nominal, user_id, oleh) VALUES (?,?,?,?,?,?)", [tgl, "Belanja Bahan", ket, nominal, user.id, user.nama]).lastInsertRowid);

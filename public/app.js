@@ -2052,6 +2052,7 @@ function formJasa(jenis, paketAwal){
 }
 
 /* ================= BELANJA ONLINE: Shopee (otomatis dari email) & catatan manual → konfirmasi barang datang ================= */
+const totalBelanja = b => b.total || (b.items || []).reduce((a, i) => a + (i.harga || 0) * (i.qty || 1), 0);
 let blStatus = "kirim", blPanelBuka = false, blSuratBuka = false; // diingat agar tidak tertutup saat layar diperbarui otomatis
 const ALAMAT_BELANJA = "belanja@richgallery.my.id";
 async function vBelanja(){
@@ -2086,7 +2087,7 @@ async function vBelanja(){
   $("#blL").innerHTML = L.length ? `<div class="stack">${L.map(b => {
     const lama = st === "kirim" && (Date.parse(today()) - Date.parse(b.tgl)) / 864e5;
     return `<div class="panel stack bl-kartu" style="gap:6px">
-      <div class="row" style="align-items:center;gap:6px"><span class="pill ${b.sumber === "shopee" ? "bl-shopee" : "mut"}">${b.sumber === "shopee" ? "🛒 Shopee" : "✍️ Manual"}</span><b style="flex:1">${esc(b.toko)}</b>${b.total != null ? `<b class="num">${rp(b.total)}</b>` : ""}</div>
+      <div class="row" style="align-items:center;gap:6px"><span class="pill ${b.sumber === "shopee" ? "bl-shopee" : "mut"}">${b.sumber === "shopee" ? "🛒 Shopee" : "✍️ Manual"}</span><b style="flex:1">${esc(b.toko)}</b>${totalBelanja(b) ? `<b class="num">${rp(totalBelanja(b))}</b>` : ""}</div>
       <div class="small muted">${b.no_pesanan && b.sumber !== "manual" ? "#" + esc(b.no_pesanan) + " · " : ""}dipesan ${esc(tglID(b.tgl))}${b.metode ? " · " + esc(b.metode) : ""}${lama >= 5 ? ` · <b style="color:var(--warn)">sudah ${Math.round(lama)} hari</b>` : ""}${b.alasan ? " · " + esc(b.alasan) : ""}</div>
       <div class="stack" style="gap:4px">${b.items.map(i => `<div class="small bl-item ${i.toko ? "" : "bukan"}"><b>${esc(i.nama)}</b>${i.variasi ? ` <span class="pill mut">${esc(i.variasi)}</span>` : ""} ×${fq(i.qty)}${i.harga != null && i.harga ? ` · ${rp(i.harga)}` : ""}
         ${i.masuk ? `<div class="ok-teks">✅ masuk stok: ${esc(i.masuk.nama)} +${fq(i.masuk.qty)}${i.datang !== i.qty ? ` (datang ${fq(i.datang)} dari ${fq(i.qty)})` : ""}</div>` : st === "datang" ? `<div class="muted">tidak masuk stok${i.datang != null && i.datang !== i.qty ? ` · datang ${fq(i.datang)} dari ${fq(i.qty)}` : ""}</div>`
@@ -2109,7 +2110,7 @@ function barangDatang(b){
       <b class="small">${esc(it.nama)}${it.variasi ? " · " + esc(it.variasi) : ""}</b>
       <div class="row" style="flex-wrap:nowrap;gap:8px"><label class="f" style="flex:1">Dipesan<input value="${fq(it.qty)}" disabled></label><label class="f" style="flex:1">Datang<input type="number" class="bcD" value="${it.qty}" min="0" step="1" inputmode="decimal"></label><label class="f" style="flex:1">Masuk stok<input type="number" class="bcS" value="${it.qty}" min="0" step="1" inputmode="decimal"></label></div>
       <label class="f">Masuk ke stok<select class="bcB">${opsi(it)}</select></label></div>`).join("")}</div>
-    ${isAdmin() ? `<label class="row"><input type="checkbox" id="bcBiaya" checked> Catat pengeluaran "Belanja Bahan"</label><label class="f">Nominal<input type="number" id="bcN" value="${b.total || 0}" min="0" step="1000" inputmode="numeric"></label>` : `<p class="small muted" style="margin:0">Pengeluaran belanja dicatat otomatis sesuai total pesanan.</p>`}
+    ${isAdmin() ? `<label class="row"><input type="checkbox" id="bcBiaya" checked> Catat pengeluaran "Belanja Bahan"</label><label class="f">Nominal<input type="number" id="bcN" value="${totalBelanja(b)}" min="0" step="1000" inputmode="numeric"></label>` : `<p class="small muted" style="margin:0">Pengeluaran belanja dicatat otomatis sesuai total pesanan.</p>`}
     <label class="f">Catatan (rusak / kurang / lebih)<input type="text" id="bcC" maxlength="300" placeholder="Opsional"></label>
     <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="bcOk" type="button">Konfirmasi barang datang</button></div>`, m => {
     $$(".bl-cek", m).forEach(r => { const d = $(".bcD", r), s = $(".bcS", r); let ubah = false; s.oninput = () => { ubah = true; }; d.oninput = () => { if (!ubah) s.value = d.value; }; });
