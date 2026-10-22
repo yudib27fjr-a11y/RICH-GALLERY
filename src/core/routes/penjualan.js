@@ -31,7 +31,7 @@ const bacaDetail = d => { if (!d) return null; try { const o = JSON.parse(d); re
    mahar { isi, acara }, parcel { musim, isi },
    buket_uang { isian, pecahan, lembar, isian_ket, isian_terima, isian_metode } — uang isian milik pelanggan (titipan),
    TIDAK masuk total/omzet; hanya jasa buketnya yang menjadi pendapatan. Semua opsional & bisa ditambah. */
-export const JENIS_PESANAN = { dekorasi: "Dekorasi", sewa: "Penyewaan", seserahan: "Hantaran / seserahan", mahar: "Hias mahar", standing: "Standing & papan ucapan", parcel: "Parcel", buket_uang: "Buket uang" };
+export const JENIS_PESANAN = { dekorasi: "Dekorasi", sewa: "Penyewaan", seserahan: "Hantaran / seserahan", mahar: "Hias mahar", standing: "Standing & papan ucapan", parcel: "Parcel", buket_uang: "Buket uang", buket_costume: "Buket custom" };
 export function rapikanDetail(d){
   if (d == null || d === "") return {};
   if (typeof d !== "object" || Array.isArray(d)) throw bad("Rincian pesanan tidak valid");
@@ -107,7 +107,7 @@ route("POST", "/api/penjualan", "semua", ({ body, user, ctx }) => tx(() => {
 
   const jenis = JENIS_PESANAN[body.jenis] ? body.jenis : null;
   const detail = jenis ? rapikanDetail(body.detail) : null;
-  if (jenis && jenis !== "buket_uang" && !pesanan && !ctx?.replay) throw bad(`Isi tanggal ${jenis === "dekorasi" ? "acara" : "ambil / acara"} untuk pesanan ${JENIS_PESANAN[jenis].toLowerCase()}`);
+  if (jenis && !["buket_uang", "buket_costume"].includes(jenis) && !pesanan && !ctx?.replay) throw bad(`Isi tanggal ${jenis === "dekorasi" ? "acara" : "ambil / acara"} untuk pesanan ${JENIS_PESANAN[jenis].toLowerCase()}`);
 
   const no = kiriman && kiriman.no ? nomorKiriman(kiriman.no) : nomorBerikutnya(s);
   const jam = kiriman && kiriman.jam ? kiriman.jam : now.jam;

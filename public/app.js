@@ -162,6 +162,7 @@ function strukLines(s){
   if (s.hp) L.push({ t: lr("No HP", samarHp(s.hp), w) });
   L.push({ t: garis });
   s.items.forEach(it => { wrap(it.nama, w).forEach(x => L.push({ t: x })); L.push({ t: lr(`  ${fq(it.qty)} x ${angka(it.harga)}`, angka(it.harga * it.qty), w) }); });
+  if (s.detail && s.detail.barang_sendiri) wrap(`* Barang dari pelanggan${s.detail.barang_ket ? " (" + s.detail.barang_ket + ")" : ""} - harga = jasa saja`, w).forEach(x => L.push({ t: x }));
   L.push({ t: garis }, { t: lr("Subtotal", angka(s.subtotal), w) });
   if (s.diskon) L.push({ t: lr("Diskon", "-" + angka(s.diskon), w) });
   if (s.ongkir) L.push({ t: lr("Ongkir", angka(s.ongkir), w) });
@@ -810,6 +811,7 @@ const JENIS_PS = {
   standing: { label: "Standing & papan ucapan", pendek: "Standing", ikon: "🪧", warna: "j-standing", tgl: "Tanggal kirim / acara" },
   parcel: { label: "Parcel", ikon: "🎁", warna: "j-parcel", tgl: "Tanggal ambil / kirim" },
   buket_uang: { label: "Buket uang", ikon: "💵", warna: "j-uang", tgl: "Tanggal ambil / kirim" },
+  buket_costume: { label: "Buket custom", ikon: "🎀", warna: "j-uang", tgl: "Tanggal ambil / kirim", sembunyi: true },
 };
 const PECAHAN_UANG = [100000, 50000, 20000, 10000, 5000, 2000, 1000];
 const isianUang = s => s && s.jenis === "buket_uang" && !s.detail?.isi_sendiri ? Math.max(0, num(s.detail?.isian) || 0) : 0;
@@ -839,6 +841,7 @@ function ringkasDetail(s){
   if (s.jenis === "seserahan" && d.kembali_tgl) L.push(d.kembali_at ? "✅ Box sudah kembali" : "Box kembali " + tglID(d.kembali_tgl));
   if (s.jenis === "seserahan") { if (d.jumlah_tray) L.push(d.jumlah_tray + " tray/kotak"); if (d.isi) L.push(d.isi); if (d.acara) L.push(d.acara); if (d.tema) L.push("Tema: " + d.tema); }
   if (s.jenis === "parcel") { if (d.musim) L.push(d.musim); if (d.isi) L.push(d.isi); }
+  if (d.barang_sendiri) L.push(`🙋 Barang dari pelanggan — jasa saja${d.barang_ket ? ": " + d.barang_ket : ""}`);
   if (s.jenis === "buket_uang" && d.isi_sendiri) L.push("🙋 Uang diisi sendiri oleh pelanggan — jasa saja");
   if (s.jenis === "buket_uang" && !d.isi_sendiri) {
     if (d.isian) L.push(`💵 Uang isian ${rp(d.isian)}${d.pecahan && d.lembar ? ` (${rp(d.pecahan)} × ${fq(d.lembar)} lembar)` : ""}`);
@@ -913,6 +916,9 @@ const cartTotal = () => Math.max(0, cartSub() - num(cart.diskon) + num(cart.ongk
 /* Keranjang berisi buket uang → kolom uang isian muncul otomatis (titipan pelanggan, tidak masuk total/omzet). */
 const adaBuketUang = () => cart.items.some(i => i.kategori === "BUKET UANG" || /^BUKET UANG/i.test(i.nama || ""));
 const isianKeranjang = () => (cart.pesanan && cart.jenis && cart.jenis !== "buket_uang") ? false : (adaBuketUang() || (cart.pesanan && cart.jenis === "buket_uang"));
+/* Buket custom: barang isian dari toko (harga biasa) atau dibawa pelanggan sendiri (hanya jasa yang dibayar & masuk omzet). */
+const barisCustom = () => cart.items.filter(i => i.kategori === "BUKET COSTUME" || /\bCUST?OM|COSTUME/i.test(i.nama || ""));
+const adaCustom = () => barisCustom().length > 0;
 const isianCart = () => isianKeranjang() && !cart.detail?.isi_sendiri ? Math.max(0, num(cart.detail?.isian) || 0) : 0;
 /** Yang harus dibayar pelanggan di kasir: jasa (total) + uang isian buket uang. */
 const cartTagihan = () => cartTotal() + isianCart();
@@ -1013,10 +1019,15 @@ function drawCart(){
           ${!it.ready ? `<label class="pembuat-baris"><span class="small muted">Dibuat oleh</span><select class="pbIn" aria-label="Pembuat"><option value="">— pilih pembuat (insentif) —</option>${B.staf.map(u => `<option value="${u.id}" ${+it.pembuat_id === u.id ? "selected" : ""}>${esc(u.nama)}</option>`).join("")}</select></label>` : ""}
         </div>
       </div>`).join("") : `<div class="empty">Belum ada barang.<br>Ketuk produk di katalog atau scan barcode.</div>`}</div>
+    ${adaCustom() ? `<div class="pesanan-isi stack isian-custom"><b>🎀 Buket custom</b>
+      <div class="f"><span>Barang isian dari</span><div class="seg" id="bcAsal" style="display:flex"><button type="button" data-a="" style="flex:1" class="${cart.detail?.barang_sendiri ? "" : "on"}">🏪 Toko (harga biasa)</button><button type="button" data-a="1" style="flex:1" class="${cart.detail?.barang_sendiri ? "on" : ""}">🙋 Pelanggan (jasa saja)</button></div></div>
+      ${cart.detail?.barang_sendiri ? `<label class="f">Barang yang dibawa pelanggan *<input type="text" id="bcKet" value="${esc(cart.detail.barang_ket || "")}" placeholder="Mis. snack 10 bungkus, boneka, hijab"></label>
+        <label class="f">Harga jasa (yang dibayar & masuk omzet)<input type="number" id="bcJasa" value="${barisCustom()[0].harga}" min="0" step="1000" inputmode="numeric"></label>
+        <p class="small muted" style="margin:0">Barang milik pelanggan tidak ditagih — harga buket custom di keranjang diganti dengan harga jasa.</p>` : ""}</div>` : ""}
     ${isianKeranjang() ? `<div class="pesanan-isi stack isian-uang"><b>💵 Uang isian buket uang</b>${isianJenis("buket_uang")}</div>` : ""}
     <label class="row pesanan-cek"><input type="checkbox" id="cPes" ${cart.pesanan ? "checked" : ""}> <b>Pesanan</b> <span class="small muted">— diambil / diantar nanti, dekorasi, sewa, mahar, parcel</span></label>
     ${cart.pesanan ? `<div class="pesanan-isi stack">
-      <div class="jenis-pilih" id="cJenisPs">${[["", "📦", "Biasa"], ...Object.entries(JENIS_PS).map(([k, v]) => [k, v.ikon, v.label])].map(([k, ik, l]) => `<button type="button" data-j="${k}" class="${(cart.jenis || "") === k ? "on " + (JENIS_PS[k]?.warna || "") : ""}"><span>${ik}</span>${l}</button>`).join("")}</div>
+      <div class="jenis-pilih" id="cJenisPs">${[["", "📦", "Biasa"], ...Object.entries(JENIS_PS).filter(([, v]) => !v.sembunyi).map(([k, v]) => [k, v.ikon, v.label])].map(([k, ik, l]) => `<button type="button" data-j="${k}" class="${(cart.jenis || "") === k ? "on " + (JENIS_PS[k]?.warna || "") : ""}"><span>${ik}</span>${l}</button>`).join("")}</div>
       ${cart.jenis === "buket_uang" ? `<p class="small muted" style="margin:0">Isi uang isian di kotak 💵 di atas.</p>` : isianJenis()}
       <div class="seg" id="cCara" role="group" aria-label="Cara"><button type="button" data-c="ambil" class="${cart.ambil_cara !== "antar" ? "on" : ""}">Diambil</button><button type="button" data-c="antar" class="${cart.ambil_cara === "antar" ? "on" : ""}">Diantar</button></div>
       <div class="row"><label class="f grow">${JENIS_PS[cart.jenis] ? JENIS_PS[cart.jenis].tgl : "Tanggal " + (cart.ambil_cara === "antar" ? "antar" : "ambil")}<input type="date" id="cAmbilT" value="${esc(cart.ambil_tgl || "")}" min="${today()}"></label><label class="f grow">Jam<input type="time" id="cAmbilJ" value="${esc(cart.ambil_jam || "")}"></label></div>
@@ -1067,6 +1078,14 @@ function drawCart(){
     $$("#cJenisPs button", el).forEach(b => b.onclick = () => { cart.jenis = b.dataset.j; if (cart.jenis === "dekorasi" && cart.ambil_cara !== "antar") cart.ambil_cara = "antar"; saveCart(); gambarUlang(); });
   }
   if (cart.pesanan || isianKeranjang()) pasangIsianJenis(el);
+  $$("#bcAsal button", el).forEach(b => b.onclick = () => {
+    const d = cart.detail || (cart.detail = {}), sendiri = !!b.dataset.a;
+    d.barang_sendiri = sendiri || undefined;
+    barisCustom().forEach(it => { if (sendiri) { if (it.harga_toko == null) it.harga_toko = it.harga; } else if (it.harga_toko != null) { it.harga = it.harga_toko; delete it.harga_toko; } });
+    saveCart(); gambarUlang(); if (sendiri) setTimeout(() => $("#bcKet")?.focus(), 50);
+  });
+  const bk = $("#bcKet", el); if (bk) bk.oninput = e => { cart.detail.barang_ket = e.target.value; saveCart(); };
+  const bj = $("#bcJasa", el); if (bj) bj.onchange = e => { const it = barisCustom()[0]; if (it) { it.harga = Math.max(0, num(e.target.value) || 0); saveCart(); gambarUlang(); } };
   const isi = $("#juIsi", el); if (isi) { isi.addEventListener("input", () => upd()); ["#juIsi", "#juLbr", "#juPec"].forEach(q => $(q, el).addEventListener("change", gambarUlang)); }
   $("#cOng", el).oninput = e => { cart.ongkir = num(e.target.value); upd(); };
   if ($("#cBayar", el)) $("#cBayar", el).oninput = e => { cart.bayar = num(e.target.value); saveCart(); hitKembali(); };
@@ -1530,7 +1549,10 @@ async function simpanTransaksi(print, tombol){
   if (digitHp < 9 || digitHp > 15 || !/^\+?[\d\s-]+$/.test(String(cart.hp).trim())) return wajib("cHp", "Isi nomor HP pelanggan yang benar (contoh 0812xxxxxxx)");
   if (cart.bayarMode === "dp" && !(cart.bayar > 0)) return toast("Isi nominal DP dulu");
   if (cart.bayarMode === "dp" && cart.bayar >= cartTagihan()) return toast("Nominal DP sama atau lebih dari total. Pilih Lunas bila dibayar penuh.");
-  const jenis = cart.pesanan && JENIS_PS[cart.jenis] && cart.jenis !== "buket_uang" ? cart.jenis : isianKeranjang() ? "buket_uang" : "", dt = cart.detail || {};
+  const dt = cart.detail || {};
+  if (!adaCustom() || !dt.barang_sendiri) { delete dt.barang_sendiri; delete dt.barang_ket; }
+  const jenis = cart.pesanan && JENIS_PS[cart.jenis] && !["buket_uang", "buket_costume"].includes(cart.jenis) ? cart.jenis : isianKeranjang() ? "buket_uang" : dt.barang_sendiri ? "buket_costume" : "";
+  if (dt.barang_sendiri && !String(dt.barang_ket || "").trim()) return wajib("bcKet", "Isi barang yang dibawa pelanggan untuk buket custom");
   if (jenis === "buket_uang" && !dt.isi_sendiri && !(num(dt.isian) > 0)) return wajib("juIsi", "Isi total uang isian buket uang, atau pilih \"Pelanggan isi sendiri\"");
   if (jenis === "dekorasi" && !String(dt.macam || "").trim()) return wajib("jdMacam", "Isi macam dekorasi dulu");
   if (jenis === "sewa" && !dt.kembali_tgl) return wajib("jsKem", "Isi tanggal barang sewaan kembali");

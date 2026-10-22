@@ -627,3 +627,10 @@ test("promosi & pengingat tugas: PJ promosi, minimal per bulan, dana jadi pengel
   await admin("PUT", "/api/tugas/setelan", { pic_promosi_id: null });
   assert.equal((await kasir("GET", "/api/promosi")).status, 403);
 });
+
+test("buket custom: barang dari pelanggan → hanya jasa yang tercatat (tanpa harus pesanan)", async () => {
+  const r = await kasir("POST", "/api/penjualan", { pelanggan: "Sari", hp: "081234567891", items: [{ nama: "custom 280k", kategori: "BUKET COSTUME", harga: 60000, qty: 1 }],
+    jenis: "buket_costume", detail: { barang_sendiri: true, barang_ket: "snack 10 bungkus" } });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.total, 60000); assert.equal(r.data.jenis, "buket_costume"); assert.equal(r.data.detail.barang_ket, "snack 10 bungkus");
+});
