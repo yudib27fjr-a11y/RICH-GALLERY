@@ -1986,7 +1986,7 @@ function formJasa(jenis, paketAwal){
 }
 
 /* ================= BELANJA ONLINE: Shopee (otomatis dari email) & catatan manual → konfirmasi barang datang ================= */
-let blStatus = "kirim";
+let blStatus = "kirim", blPanelBuka = false, blSuratBuka = false; // diingat agar tidak tertutup saat layar diperbarui otomatis
 const ALAMAT_BELANJA = "belanja@richgallery.my.id";
 async function vBelanja(){
   const st = blStatus;
@@ -1995,7 +1995,7 @@ async function vBelanja(){
     <div class="seg" id="blS" style="display:flex;margin-bottom:10px">${[["kirim", "🚚 Dikirim"], ["datang", "📦 Datang"], ...(isAdmin() ? [["abaikan", "Diabaikan"], ["batal", "Batal"]] : [])]
       .map(([k, l]) => `<button type="button" data-s="${k}" style="flex:1" class="${st === k ? "on" : ""}">${l}</button>`).join("")}</div>
     <div id="blL"><div class="empty">Memuat…</div></div>
-    ${isAdmin() ? `<details class="panel" style="margin-top:14px"><summary><b>⚙️ Otomatis dari email Shopee</b></summary><div class="stack small" style="margin-top:8px">
+    ${isAdmin() ? `<details class="panel" id="blPanel" style="margin-top:14px"${blPanelBuka ? " open" : ""}><summary><b>⚙️ Otomatis dari email Shopee</b></summary><div class="stack small" style="margin-top:8px">
       <p style="margin:0">Email pesanan Shopee yang masuk ke <b>${ALAMAT_BELANJA}</b> langsung tercatat di sini sebagai <b>Dalam pengiriman</b>. Hanya barang yang berhubungan dengan barang toko (bunga, kertas, pita, balon, boneka, akrilik, box, dll.) yang dicatat — email lain diabaikan.</p>
       <ol style="margin:0;padding-left:18px"><li>Cloudflare → domain richgallery.my.id → <b>Email → Email Routing</b> → aktifkan → <b>Routing rules</b> → Custom address <b>belanja</b> → Action <b>Send to a Worker</b> → <b>rich-gallery-pos</b>.</li>
         <li>Gmail akun Shopee → Setelan → <b>Penerusan dan POP/IMAP</b> → Tambahkan alamat penerusan <b>${ALAMAT_BELANJA}</b>. Kode konfirmasi Gmail akan muncul di bawah ini.</li>
@@ -2004,10 +2004,16 @@ async function vBelanja(){
   $$("#blS button").forEach(b => b.onclick = () => { blStatus = b.dataset.s; vBelanja(); });
   $("#blManual").onclick = belanjaManual;
   const tp = $("#blTempel"); if (tp) tp.onclick = tempelEmail;
-  const su = $("#blSurat"); if (su) su.onclick = e => coba(async () => {
+  const pn = $("#blPanel"); if (pn) pn.ontoggle = () => { blPanelBuka = pn.open; };
+  const muatSurat = async () => {
     const S = await api("GET", "/api/belanja/surat");
+    if (!$("#blSuratL")) return;
     $("#blSuratL").innerHTML = S.length ? S.map(x => `<div class="panel stack" style="gap:4px;margin-top:6px"><b>${esc(x.subjek || "(tanpa judul)")}</b><span class="muted">${esc(x.dari)} · ${esc(waktuLokal(x.waktu.replace(" ", "T") + "Z"))}</span><div style="white-space:pre-wrap;max-height:200px;overflow:auto">${esc(x.isi.slice(0, 3000)).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')}</div></div>`).join("") : `<p class="muted" style="margin:6px 0 0">Belum ada email lain.</p>`;
-  }, e.target);
+  };
+  const su = $("#blSurat"); if (su) {
+    su.onclick = e => coba(async () => { blSuratBuka = true; await muatSurat(); }, e.target);
+    if (blPanelBuka && blSuratBuka) muatSurat().catch(() => {});
+  }
   const L = await api("GET", `/api/belanja?status=${st}`).catch(e => { toast(e.message); return null; });
   if (view !== "belanja" || blStatus !== st || !$("#blL")) return;
   if (!L) { $("#blL").innerHTML = `<div class="empty">Belum bisa dimuat${LOKAL ? " (butuh internet)" : ""}.</div>`; return; }
