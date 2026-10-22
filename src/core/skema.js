@@ -411,6 +411,26 @@ CREATE TABLE surat(
   isi TEXT NOT NULL DEFAULT '',
   waktu TEXT NOT NULL DEFAULT (datetime('now'))
 );`,
+/* 17: konten Instagram & TikTok (insentif buat konten otomatis), insentif per video bawaan Rp5.000. */
+`CREATE TABLE konten(
+  id INTEGER PRIMARY KEY,
+  platform TEXT NOT NULL,
+  pid TEXT NOT NULL,
+  url TEXT NOT NULL DEFAULT '',
+  caption TEXT NOT NULL DEFAULT '',
+  waktu_ms INTEGER NOT NULL,
+  tgl TEXT NOT NULL,
+  thumb TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'hitung',
+  grup INTEGER,
+  user_id INTEGER,
+  insentif_id INTEGER,
+  oleh TEXT NOT NULL DEFAULT '',
+  dibuat TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX konten_pid ON konten(platform, pid);
+CREATE INDEX konten_tgl ON konten(tgl);
+UPDATE settings SET nilai = '5000' WHERE kunci = 'ins_konten' AND nilai IN ('0', '"0"', 'null');`,
 ];
 
 export const DEFAULT_SETTINGS = {
@@ -470,7 +490,7 @@ export const DEFAULT_SETTINGS = {
   lembur_bulat: 30,
   ins_kurir: 0,
   ins_lapangan: 0,
-  ins_konten: 0,
+  ins_konten: 5000,
   kurir_offline: [],
   mitra: [ // contoh awal; nomor WA diisi admin di menu Mitra
     { kategori: "Toko mitra", nama: "You n Me", hp: "", kota: "", catatan: "" },

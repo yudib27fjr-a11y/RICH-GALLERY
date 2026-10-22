@@ -581,3 +581,24 @@ test("produksi baru → notifikasi HP admin (barang, pembuat, stok ready)", asyn
   const l = (await admin("GET", "/api/notif/langganan")).data;
   for (const x of l) await admin("DELETE", "/api/notif/langganan", { id: x.id });
 });
+
+test("konten IG & TikTok: video sama dihitung sekali, maks per minggu, insentif masuk & bisa dibatalkan", async () => {
+  const b = (await admin("GET", "/api/bootstrap")).data, hari = b.hariIni;
+  const pembuat = b.staf.find(u => u.peran !== "admin");
+  assert.equal((await kasir("GET", "/api/konten")).status, 403, "hanya admin");
+  assert.equal((await admin("PUT", "/api/konten/setelan", { penerima_id: pembuat.id, nominal: 5000, maks_minggu: 2 })).status, 200);
+  const catat = async (url, ket) => (await admin("POST", "/api/konten", { url, ket, tgl: hari })).data;
+  assert.equal((await catat("https://www.instagram.com/reel/AAA111/", "Buket wisuda pink cantik untuk sahabat")).status, "hitung");
+  assert.equal((await catat("https://www.tiktok.com/@richgallery/video/7000000000000000001", "Buket wisuda pink cantik untuk sahabat 🌸")).status, "kembar", "video sama di TikTok tidak dihitung lagi");
+  assert.equal((await catat("https://www.instagram.com/reel/BBB222/", "Promo hampers lebaran")).status, "hitung");
+  assert.equal((await catat("https://www.tiktok.com/@richgallery/video/7000000000000000002", "Tutorial rangkai mawar merah")).status, "batas", "lewat maksimal mingguan");
+  assert.equal((await admin("POST", "/api/konten", { url: "https://www.instagram.com/reel/AAA111/", tgl: hari })).status, 400, "link sama tidak dobel");
+  const ins = (await admin("GET", `/api/insentif-lain?dari=${hari}&sampai=${hari}`)).data.filter(x => x.jenis === "konten");
+  assert.equal(ins.length, 2); assert.ok(ins.every(x => x.nominal === 5000 && x.user_id === pembuat.id));
+  const D = (await admin("GET", "/api/konten")).data;
+  assert.equal(D.minggu_ini.hitung, 2); assert.ok(!JSON.stringify(D).includes("secret"));
+  const satu = D.daftar.find(x => x.status === "hitung");
+  assert.equal((await admin("POST", `/api/konten/${satu.id}/status`, { status: "batal" })).status, 200);
+  assert.equal((await admin("GET", `/api/insentif-lain?dari=${hari}&sampai=${hari}`)).data.filter(x => x.jenis === "konten").length, 1, "insentif ikut dibatalkan");
+  assert.ok(!("konten" in (await admin("GET", "/api/pengaturan")).data), "kunci aplikasi tidak ikut terbaca di pengaturan");
+});

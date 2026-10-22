@@ -713,6 +713,7 @@ const ICON = {
   riwayat: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   jasa: '<ellipse cx="9" cy="8" rx="4" ry="5"/><path d="M9 13l-.8 1.4h1.6zM9 14.4c0 2.2 1.6 2.8 1.6 6.1"/><path d="M15 21l1.5-6h4L22 21z"/><path d="M16.5 15c0-1.6 1.1-2.6 2.5-2.6s2.5 1 2.5 2.6"/>',
   buketuang: '<rect x="3" y="6.5" width="13" height="8" rx="1.2"/><circle cx="9.5" cy="10.5" r="2"/><path d="M16 9l3.5-3.5M17.5 12.5L21 9M14 17.5l3 3.5M10 17.5l-3 3.5M8 21h8"/>',
+  konten: '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.5v5l4.5-2.5z"/>',
   belanja: '<path d="M3 4h2l2.2 11h10.6L20 7H6.2"/><circle cx="9" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/><path d="M11 10.5l2 2 3.5-3.5"/>',
   mitra: '<path d="M2.5 12.5l4-4 3 1 2.5-2 2.5 1 4-1.5 3 4"/><path d="M6.5 8.5l5 5.5c.8.8 2 .8 2.6 0l2.4-2.6"/><path d="M9.5 15.5l1.5 1.5c.7.7 1.8.7 2.4 0"/><path d="M2.5 12.5l3 3M21.5 13l-3 3"/>',
   kurir: '<circle cx="6" cy="16.5" r="2.8"/><circle cx="18" cy="16.5" r="2.8"/><path d="M8.8 16.5h5.4l2.3-5H12l-2 3"/><path d="M14.5 7.5h2.2l1.3 4"/><path d="M5 11.5h4"/>',
@@ -728,7 +729,7 @@ const ICON = {
   gaji: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/><path d="M16 3.5l-4 2.5-4-2.5"/>',
   atur: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
 };
-const SEMUA_VIEW = [["kasir", "Kasir"], ["absenku", "Absen"], ["pesanan", "Pesanan"], ["jasa", "Jasa"], ["buketuang", "Buket uang"], ["kurir", "Kurir"], ["mitra", "Mitra"], ["belanja", "Belanja"], ["riwayat", "Transaksi"], ["produksi", "Produksi"], ["stok", "Stok"], ["mutasi", "Masuk/Keluar"], ["opname", "Opname"], ["biaya", "Pengeluaran", 1], ["laporan", "Laporan", 1], ["absen", "Rekap Absen", 1], ["gaji", "Gaji", 1], ["atur", "Pengaturan"]];
+const SEMUA_VIEW = [["kasir", "Kasir"], ["absenku", "Absen"], ["pesanan", "Pesanan"], ["jasa", "Jasa"], ["buketuang", "Buket uang"], ["kurir", "Kurir"], ["mitra", "Mitra"], ["belanja", "Belanja"], ["riwayat", "Transaksi"], ["produksi", "Produksi"], ["stok", "Stok"], ["mutasi", "Masuk/Keluar"], ["opname", "Opname"], ["biaya", "Pengeluaran", 1], ["laporan", "Laporan", 1], ["absen", "Rekap Absen", 1], ["gaji", "Gaji", 1], ["konten", "Konten", 1], ["atur", "Pengaturan"]];
 const daftarView = () => SEMUA_VIEW.filter(v => (!v[2] || isAdmin()) && (v[0] !== "absen" || (B && B.toko.absen_aktif))
   && (v[0] !== "absenku" || (kioskInfo && kioskInfo.aktif)));
 let view = "kasir";
@@ -792,7 +793,7 @@ function render(){
   if (!daftarView().some(v => v[0] === view)) view = "kasir";
   renderNav();
   $("#cartbar").hidden = view !== "kasir";
-  return ({ kasir: vKasir, pesanan: vPesanan, riwayat: vRiwayat, produksi: vProduksi, stok: vStok, mutasi: vMutasi, opname: vOpname, biaya: vBiaya, laporan: vLaporan, absen: vAbsen, absenku: vAbsenku, gaji: vGaji, atur: vAtur, kurir: vKurir, mitra: vMitra, jasa: vJasa, buketuang: vBuketUang, belanja: vBelanja })[view]();
+  return ({ kasir: vKasir, pesanan: vPesanan, riwayat: vRiwayat, produksi: vProduksi, stok: vStok, mutasi: vMutasi, opname: vOpname, biaya: vBiaya, laporan: vLaporan, absen: vAbsen, absenku: vAbsenku, gaji: vGaji, atur: vAtur, kurir: vKurir, mitra: vMitra, jasa: vJasa, buketuang: vBuketUang, belanja: vBelanja, konten: vKonten })[view]();
 }
 
 /* ================= KASIR ================= */
@@ -1613,6 +1614,100 @@ async function muatRiwayat(){
   });
 }
 
+/* ================= KONTEN: Instagram & TikTok → insentif buat konten otomatis ================= */
+const PF_KONTEN = { instagram: { ikon: "📸", nama: "Instagram" }, tiktok: { ikon: "🎵", nama: "TikTok" }, manual: { ikon: "✍️", nama: "Manual" } };
+const ST_KONTEN = { hitung: ["ok", "Dihitung"], kembar: ["mut", "Sama dengan video lain"], batas: ["warn", "Lewat batas mingguan"], batal: ["bad", "Dibatalkan"], lama: ["mut", "Sebelum tersambung"] };
+let knMinggu = null;
+/** Kembali dari login Instagram/TikTok (?code=…&state=…): selesaikan penyambungan akun di server. */
+async function selesaiSambungSosmed(){
+  const q = new URLSearchParams(location.search), code = q.get("code"), state = q.get("state");
+  if (!state || !/^(ig|tt)_/.test(state)) return;
+  try { history.replaceState(null, "", "/#konten"); } catch {}
+  if (q.get("error") || !code) { toast("Penyambungan dibatalkan"); return; }
+  if (!isAdmin()) return;
+  toast("Menyambungkan akun…");
+  try { await api("POST", "/api/konten/sambung", { code, state }); toast(`${state.startsWith("ig_") ? "Instagram" : "TikTok"} tersambung ✅`); }
+  catch (e) { toast("Gagal menyambungkan: " + e.message); }
+  view = "konten"; render();
+}
+async function vKonten(){
+  if (!knMinggu) knMinggu = today();
+  $("#main").innerHTML = `<div class="view-head"><h2>🎬 Konten & insentif</h2></div><div id="knIsi"><div class="empty">Memuat…</div></div>`;
+  const [a, b] = (() => { const d = new Date(knMinggu + "T00:00:00"), h = (d.getDay() + 6) % 7; const s = new Date(d - h * 864e5), e = new Date(s.getTime() + 6 * 864e5); const f = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`; return [f(s), f(e)]; })();
+  const D = await api("GET", `/api/konten?dari=${a}&sampai=${b}`).catch(e => { $("#knIsi").innerHTML = `<div class="empty">${esc(e.message)}</div>`; return null; });
+  if (!D || view !== "konten") return;
+  const hitung = D.daftar.filter(x => x.status === "hitung").length, pen = B.staf.find(u => u.id === D.penerima_id);
+  const kartuAkun = (k, p) => `<div class="panel stack" style="gap:6px"><div class="row" style="align-items:center;gap:8px"><b style="font-size:16px">${PF_KONTEN[p].ikon} ${PF_KONTEN[p].nama}</b><span class="sp" style="flex:1"></span>
+      ${k.tersambung ? `<span class="pill ok">Tersambung</span>` : `<span class="pill mut">Belum tersambung</span>`}</div>
+      ${k.tersambung ? `<div class="small">${esc(k.nama)} · sejak ${esc(k.mulai)}${k.cek ? ` · dicek ${esc(k.cek)}` : ""}</div>` : ""}
+      ${k.galat ? `<div class="small" style="color:var(--bad)">⚠️ ${esc(k.galat)}</div>` : ""}
+      <div class="row" style="gap:6px;flex-wrap:wrap">${k.tersambung ? `<button class="btn sm ghost" data-putus="${p}" type="button">Putuskan</button>` : `<button class="btn sm pri" data-sambung="${p}" type="button" ${k.app ? "" : "disabled"}>Sambungkan</button>`}
+      ${k.app ? "" : `<span class="small muted">Isi kunci aplikasi di ⚙️ Pengaturan konten dulu</span>`}</div></div>`;
+  $("#knIsi").innerHTML = `
+    <div class="kpis" style="margin-bottom:12px"><div class="kpi"><div class="l">Video dihitung minggu ini</div><div class="v num">${hitung} / ${D.maks_minggu}</div></div>
+      <div class="kpi"><div class="l">Insentif minggu ini</div><div class="v num">${rp(D.daftar.reduce((s, x) => s + (x.status === "hitung" ? x.nominal || 0 : 0), 0))}</div></div>
+      <div class="kpi"><div class="l">Per video · penerima</div><div class="v num" style="font-size:16px">${rp(D.nominal)} · ${pen ? esc(pen.nama) : `<span style="color:var(--warn)">belum dipilih</span>`}</div></div></div>
+    <div class="grid2" style="margin-bottom:12px">${kartuAkun(D.ig, "instagram")}${kartuAkun(D.tt, "tiktok")}</div>
+    <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px"><button class="btn" id="knCek" type="button">🔄 Cek unggahan sekarang</button><button class="btn" id="knManual" type="button">+ Catat dari link</button><button class="btn" id="knAtur" type="button">⚙️ Pengaturan konten</button></div>
+    <div class="row" style="align-items:center;gap:6px;margin-bottom:8px"><button class="btn sm" id="knPrev" type="button">‹</button><b style="flex:1;text-align:center">${tglID(a)} – ${tglID(b)}</b><button class="btn sm" id="knNext" type="button" ${b >= today() ? "disabled" : ""}>›</button></div>
+    ${D.daftar.length ? `<div class="list">${D.daftar.map(x => `<div class="li"><div class="main"><div class="t">${PF_KONTEN[x.platform]?.ikon || ""} ${esc(String(x.caption || "(tanpa keterangan)").split("\n")[0].slice(0, 90))}</div>
+        <div class="small muted">${esc(tglID(x.tgl))} · ${esc(PF_KONTEN[x.platform]?.nama || x.platform)}${x.nama ? " · " + esc(x.nama) : ""}${x.oleh === "manual" ? " · dicatat manual" : ""}${x.url ? ` · <a href="${esc(x.url)}" target="_blank" rel="noopener">lihat</a>` : ""}</div></div>
+        <div style="text-align:right"><span class="pill ${ST_KONTEN[x.status]?.[0] || "mut"}">${ST_KONTEN[x.status]?.[1] || esc(x.status)}</span>${x.status === "hitung" && x.nominal ? `<div class="num small" style="margin-top:4px">${rp(x.nominal)}</div>` : ""}
+          <div style="margin-top:4px">${x.status === "hitung" ? `<button class="btn sm ghost" data-kst="${x.id}" data-v="batal" type="button">Batalkan</button>` : x.status !== "lama" ? `<button class="btn sm ghost" data-kst="${x.id}" data-v="hitung" type="button">Hitung</button>` : ""}</div></div></div>`).join("")}</div>`
+      : `<div class="list"><div class="empty">Belum ada video minggu ini.</div></div>`}
+    <p class="small muted">Hanya <b>video</b> yang dihitung (Instagram: video/reels di feed, TikTok: video). Video yang sama diunggah di Instagram & TikTok dihitung <b>1 kali</b>. Maksimal ${D.maks_minggu} video per minggu (Senin–Minggu); insentif masuk ke Gaji sebagai <b>Buat konten</b>.</p>`;
+  $("#knPrev").onclick = () => { const d = new Date(a + "T00:00:00"); d.setDate(d.getDate() - 7); knMinggu = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; vKonten(); };
+  $("#knNext").onclick = () => { const d = new Date(a + "T00:00:00"); d.setDate(d.getDate() + 7); knMinggu = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; vKonten(); };
+  $("#knCek").onclick = e => coba(async () => { const r = await api("POST", "/api/konten/cek", {}); toast(r.baru ? `${r.baru} video baru tercatat` : "Tidak ada video baru"); vKonten(); }, e.target);
+  $("#knManual").onclick = () => kontenManual(pen);
+  $("#knAtur").onclick = () => aturKonten(D);
+  $$("[data-sambung]").forEach(x => x.onclick = () => coba(async () => { const r = await api("POST", "/api/konten/mulai-sambung", { platform: x.dataset.sambung, asal: location.origin }); location.href = r.url; }, x));
+  $$("[data-putus]").forEach(x => x.onclick = () => konfirmasi(`Putuskan ${PF_KONTEN[x.dataset.putus].nama}?`, "Unggahan baru tidak akan dicek lagi sampai disambungkan ulang. Catatan lama tetap ada.", "Putuskan", async () => { await api("POST", "/api/konten/putus", { platform: x.dataset.putus }); vKonten(); }));
+  $$("[data-kst]").forEach(x => x.onclick = () => coba(async () => { await api("POST", `/api/konten/${x.dataset.kst}/status`, { status: x.dataset.v }); toast(x.dataset.v === "batal" ? "Dibatalkan, insentifnya dihapus" : "Dihitung sebagai video tersendiri"); vKonten(); }, x));
+}
+function kontenManual(pen){
+  modal(`<h3>+ Catat video dari link</h3>
+    <label class="f">Link video Instagram / TikTok<input type="url" id="kmU" placeholder="https://www.instagram.com/reel/… atau https://www.tiktok.com/@…/video/…"></label>
+    <div class="row"><label class="f grow">Tanggal unggah<input type="date" id="kmT" value="${today()}" max="${today()}"></label>
+      <label class="f grow">Pembuat konten<select id="kmP">${B.staf.map(u => `<option value="${u.id}" ${pen && pen.id === u.id ? "selected" : ""}>${esc(u.nama)}</option>`).join("")}</select></label></div>
+    <label class="f">Keterangan / caption (untuk mengenali video yang sama)<input type="text" id="kmK" maxlength="300"></label>
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="kmOk" type="button">Catat</button></div>`, m => {
+    $("#kmOk", m).onclick = e => coba(async () => {
+      const r = await api("POST", "/api/konten", { url: $("#kmU", m).value.trim(), tgl: $("#kmT", m).value, user_id: +$("#kmP", m).value, ket: $("#kmK", m).value.trim() });
+      closeModal(); toast(r.status === "hitung" ? "Dicatat & dihitung insentifnya" : r.status === "kembar" ? "Dicatat — sama dengan video lain, tidak dihitung lagi" : "Dicatat — batas minggu ini sudah tercapai"); vKonten();
+    }, e.target);
+  });
+}
+function aturKonten(D){
+  const redirect = location.origin + "/";
+  modal(`<h3>⚙️ Pengaturan konten</h3><div class="stack">
+    <div class="row"><label class="f grow">Penerima insentif (pembuat konten)<select id="akP"><option value="">— pilih —</option>${B.staf.map(u => `<option value="${u.id}" ${D.penerima_id === u.id ? "selected" : ""}>${esc(u.nama)}</option>`).join("")}</select></label></div>
+    <div class="row"><label class="f grow">Insentif per video<input type="number" id="akN" value="${D.nominal}" min="0" step="500" inputmode="numeric"></label><label class="f grow">Maks. video / minggu<input type="number" id="akM" value="${D.maks_minggu}" min="1" step="1" inputmode="numeric"></label></div>
+    <details class="panel"><summary><b>📸 Kunci aplikasi Instagram</b> ${D.ig.app ? `<span class="pill ok">terisi</span>` : ""}</summary><div class="stack small" style="margin-top:8px">
+      <ol style="margin:0;padding-left:18px"><li>Akun Instagram toko harus <b>akun profesional</b> (Bisnis / Kreator): Instagram → Pengaturan → Jenis akun.</li>
+        <li>Buka <b>developers.facebook.com</b> → My Apps → <b>Create App</b> → pilih kasus penggunaan <b>Instagram</b> (“Manage messaging & content on Instagram”).</li>
+        <li>Di <b>API setup with Instagram login</b>: tambahkan akun Instagram toko sebagai <b>Instagram tester</b> (lalu terima undangannya di Instagram → Pengaturan → Aplikasi & situs web), dan isi <b>OAuth redirect URI</b>: <code>${esc(redirect)}</code></li>
+        <li>Salin <b>Instagram app ID</b> & <b>Instagram app secret</b> ke kolom di bawah.</li></ol>
+      <label class="f">Instagram app ID<input type="text" id="akIgId" value="${esc(D.ig.app_id)}" autocomplete="off"></label>
+      <label class="f">Instagram app secret<input type="password" id="akIgS" placeholder="${D.ig.app ? "(tersimpan — kosongkan bila tidak diubah)" : ""}" autocomplete="off"></label></div></details>
+    <details class="panel"><summary><b>🎵 Kunci aplikasi TikTok</b> ${D.tt.app ? `<span class="pill ok">terisi</span>` : ""}</summary><div class="stack small" style="margin-top:8px">
+      <ol style="margin:0;padding-left:18px"><li>Buka <b>developers.tiktok.com</b> → Manage apps → <b>Connect an app</b>.</li>
+        <li>Tambahkan produk <b>Login Kit</b> (Web) dengan Redirect URI <code>${esc(redirect)}</code>, dan scope <b>user.info.basic</b> & <b>video.list</b>.</li>
+        <li>Pakai mode <b>Sandbox</b> dan tambahkan akun TikTok toko sebagai <b>Target user</b> (atau ajukan review aplikasi).</li>
+        <li>Salin <b>Client key</b> & <b>Client secret</b> ke kolom di bawah.</li></ol>
+      <label class="f">TikTok client key<input type="text" id="akTtK" value="${esc(D.tt.app_key)}" autocomplete="off"></label>
+      <label class="f">TikTok client secret<input type="password" id="akTtS" placeholder="${D.tt.app ? "(tersimpan — kosongkan bila tidak diubah)" : ""}" autocomplete="off"></label></div></details>
+    <p class="small muted" style="margin:0">Setelah kunci tersimpan, tekan <b>Sambungkan</b> di kartu Instagram / TikTok dan masuk dengan akun toko. Video yang diunggah <b>sebelum</b> tersambung tidak dihitung.</p></div>
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="akOk" type="button">Simpan</button></div>`, m => {
+    $("#akOk", m).onclick = e => coba(async () => {
+      const body = { penerima_id: $("#akP", m).value ? +$("#akP", m).value : null, nominal: num($("#akN", m).value), maks_minggu: num($("#akM", m).value) };
+      const igId = $("#akIgId", m).value.trim(), igS = $("#akIgS", m).value.trim(), ttK = $("#akTtK", m).value.trim(), ttS = $("#akTtS", m).value.trim();
+      if (igId || igS) body.ig_app = { id: igId, secret: igS };
+      if (ttK || ttS) body.tt_app = { key: ttK, secret: ttS };
+      await api("PUT", "/api/konten/setelan", body); closeModal(); toast("Pengaturan konten disimpan"); vKonten();
+    }, e.target);
+  });
+}
 /** Laporan penjualan periode yang dipilih, sebagai teks WA — kirim ke WA atau bagikan ke aplikasi lain. */
 async function laporanWA(){
   const data = await coba(() => api("GET", `/api/penjualan?dari=${rDari}&sampai=${rSampai}`)); if (!data) return;
@@ -4009,6 +4104,7 @@ async function mulai(){
   pPer = null; shell(); render();
   halamanTampil();
   bukaTautanNotif();
+  selesaiSambungSosmed();
   setTimeout(pengingatPesanan, 800);
 }
 /** Ketuk notifikasi → langsung ke halamannya: transaksi & pesanan → halaman Transaksi (baris transaksinya disorot),
@@ -4018,11 +4114,11 @@ async function bukaTautanNotif(){
   const [v, q] = location.hash.slice(1).split("?");
   if (!q || !B) return;
   const p = new URLSearchParams(q);
-  const tujuan = v === "absen" ? "absen" : v === "produksi" || v === "belanja" ? v : "riwayat"; // pesanan juga ke halaman Transaksi
+  const tujuan = v === "absen" ? "absen" : ["produksi", "belanja", "konten"].includes(v) ? v : "riwayat"; // pesanan juga ke halaman Transaksi
   try { history.replaceState(null, "", "#" + tujuan); } catch {}
   if (!daftarView().some(x => x[0] === tujuan)) return;
   closeModal();
-  if (tujuan === "produksi" || tujuan === "belanja") { view = tujuan; await render(); return; }
+  if (["produksi", "belanja", "konten"].includes(tujuan)) { view = tujuan; await render(); return; }
   if (tujuan === "absen") {
     if (/^\d{4}-\d{2}-\d{2}$/.test(p.get("tgl") || "")) aDari = aSampai = p.get("tgl");
     view = "absen"; await render();
