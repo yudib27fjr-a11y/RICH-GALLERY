@@ -885,6 +885,9 @@ try { const c = JSON.parse(sessionStorage.getItem(CKEY) || "null"); if (c && Arr
 const saveCart = () => { try { sessionStorage.setItem(CKEY, JSON.stringify(cart)); } catch {} };
 const cartSub = () => cart.items.reduce((a, it) => a + it.harga * it.qty, 0);
 const cartTotal = () => Math.max(0, cartSub() - num(cart.diskon) + num(cart.ongkir));
+/* Keranjang berisi buket uang → kolom uang isian muncul otomatis (titipan pelanggan, tidak masuk total/omzet). */
+const adaBuketUang = () => cart.items.some(i => i.kategori === "BUKET UANG" || /^BUKET UANG/i.test(i.nama || ""));
+const isianKeranjang = () => (cart.pesanan && cart.jenis && cart.jenis !== "buket_uang") ? false : (adaBuketUang() || (cart.pesanan && cart.jenis === "buket_uang"));
 let posKat = "SEMUA", posQ = "", hanyaReady = false, saleTerakhir = null;
 
 function vKasir(){
@@ -981,10 +984,11 @@ function drawCart(){
           ${!it.ready ? `<label class="pembuat-baris"><span class="small muted">Dibuat oleh</span><select class="pbIn" aria-label="Pembuat"><option value="">— pilih pembuat (insentif) —</option>${B.staf.map(u => `<option value="${u.id}" ${+it.pembuat_id === u.id ? "selected" : ""}>${esc(u.nama)}</option>`).join("")}</select></label>` : ""}
         </div>
       </div>`).join("") : `<div class="empty">Belum ada barang.<br>Ketuk produk di katalog atau scan barcode.</div>`}</div>
+    ${isianKeranjang() ? `<div class="pesanan-isi stack isian-uang"><b>💵 Uang isian buket uang</b>${isianJenis("buket_uang")}</div>` : ""}
     <label class="row pesanan-cek"><input type="checkbox" id="cPes" ${cart.pesanan ? "checked" : ""}> <b>Pesanan</b> <span class="small muted">— diambil / diantar nanti, dekorasi, sewa, mahar, parcel</span></label>
     ${cart.pesanan ? `<div class="pesanan-isi stack">
       <div class="jenis-pilih" id="cJenisPs">${[["", "📦", "Biasa"], ...Object.entries(JENIS_PS).map(([k, v]) => [k, v.ikon, v.label])].map(([k, ik, l]) => `<button type="button" data-j="${k}" class="${(cart.jenis || "") === k ? "on " + (JENIS_PS[k]?.warna || "") : ""}"><span>${ik}</span>${l}</button>`).join("")}</div>
-      ${isianJenis()}
+      ${cart.jenis === "buket_uang" ? `<p class="small muted" style="margin:0">Isi uang isian di kotak 💵 di atas.</p>` : isianJenis()}
       <div class="seg" id="cCara" role="group" aria-label="Cara"><button type="button" data-c="ambil" class="${cart.ambil_cara !== "antar" ? "on" : ""}">Diambil</button><button type="button" data-c="antar" class="${cart.ambil_cara === "antar" ? "on" : ""}">Diantar</button></div>
       <div class="row"><label class="f grow">${JENIS_PS[cart.jenis] ? JENIS_PS[cart.jenis].tgl : "Tanggal " + (cart.ambil_cara === "antar" ? "antar" : "ambil")}<input type="date" id="cAmbilT" value="${esc(cart.ambil_tgl || "")}" min="${today()}"></label><label class="f grow">Jam<input type="time" id="cAmbilJ" value="${esc(cart.ambil_jam || "")}"></label></div>
       <label class="f">Catatan khusus / request<textarea id="cReq" rows="3" placeholder="Contoh: warna pink-putih, tulisan 'Happy Graduation Sinta', tambah coklat. ${cart.ambil_cara === "antar" ? "Alamat antar: …" : ""}">${esc(cart.request || "")}</textarea></label>
@@ -1008,7 +1012,7 @@ function drawCart(){
     <label class="f">Catatan (ucapan kartu, jadwal ambil, dll)<textarea id="cNote" rows="2">${esc(cart.catatan)}</textarea></label>
     </div>
     <div class="cart-foot">
-      <div class="tot"><span class="muted">Subtotal <span class="num">${rp(sub)}</span></span><span></span><span style="align-self:end;font-weight:700">TOTAL · ${esc(cart.metode)}</span><span class="big num" id="cTot">${rp(tot)}</span></div>
+      <div class="tot"><span class="muted">Subtotal <span class="num">${rp(sub)}</span></span><span></span><span style="align-self:end;font-weight:700">TOTAL · ${esc(cart.metode)}</span><span class="big num" id="cTot">${rp(tot)}</span>${isianKeranjang() ? `<span class="small" id="cIsianTot" style="grid-column:1/-1"${num(cart.detail?.isian) > 0 ? "" : " hidden"}>＋ 💵 Uang isian <b>${rp(num(cart.detail?.isian))}</b> — terpisah, tidak termasuk total & omzet</span>` : ""}</div>
       <div class="small" id="kembali"></div>
       <div class="row" style="flex-wrap:nowrap"><button class="btn big" id="saveOnly" type="button" style="flex:1" ${cart.items.length ? "" : "disabled"} title="Simpan pembayaran tanpa mencetak struk">Bayar</button><button class="btn pri big" id="savePrint" type="button" style="flex:2" ${cart.items.length ? "" : "disabled"}>Bayar &amp; Cetak</button></div>
       ${saleTerakhir ? `<button class="btn ghost sm" id="reprint" type="button" style="align-self:center">Cetak ulang struk terakhir (${esc(saleTerakhir.no)})</button>` : ""}
@@ -1032,8 +1036,9 @@ function drawCart(){
     $("#cAmbilJ", el).onchange = e => { cart.ambil_jam = e.target.value; saveCart(); };
     $("#cReq", el).oninput = e => { cart.request = e.target.value; saveCart(); };
     $$("#cJenisPs button", el).forEach(b => b.onclick = () => { cart.jenis = b.dataset.j; if (cart.jenis === "dekorasi" && cart.ambil_cara !== "antar") cart.ambil_cara = "antar"; saveCart(); gambarUlang(); });
-    pasangIsianJenis(el, gambarUlang);
   }
+  if (cart.pesanan || isianKeranjang()) pasangIsianJenis(el);
+  const isi = $("#juIsi", el); if (isi) isi.addEventListener("input", () => { const t = $("#cIsianTot", el); if (!t) return; const v = num(isi.value) || 0; t.hidden = !v; t.querySelector("b").textContent = rp(v); });
   $("#cOng", el).oninput = e => { cart.ongkir = num(e.target.value); upd(); };
   if ($("#cBayar", el)) $("#cBayar", el).oninput = e => { cart.bayar = num(e.target.value); saveCart(); hitKembali(); };
   $$("#cMode button", el).forEach(b => b.onclick = () => { cart.bayarMode = b.dataset.p; cart.bayar = 0; saveCart(); const sc = $(".cart-body", el).scrollTop; drawCart(); $(".cart-body", el).scrollTop = sc; if (cart.bayarMode === "dp") $("#cBayar")?.focus(); });
@@ -1496,7 +1501,8 @@ async function simpanTransaksi(print, tombol){
   if (digitHp < 9 || digitHp > 15 || !/^\+?[\d\s-]+$/.test(String(cart.hp).trim())) return wajib("cHp", "Isi nomor HP pelanggan yang benar (contoh 0812xxxxxxx)");
   if (cart.bayarMode === "dp" && !(cart.bayar > 0)) return toast("Isi nominal DP dulu");
   if (cart.bayarMode === "dp" && cart.bayar >= cartTotal()) return toast("Nominal DP sama atau lebih dari total. Pilih Lunas bila dibayar penuh.");
-  const jenis = cart.pesanan && JENIS_PS[cart.jenis] ? cart.jenis : "", dt = cart.detail || {};
+  const jenis = cart.pesanan && JENIS_PS[cart.jenis] && cart.jenis !== "buket_uang" ? cart.jenis : isianKeranjang() ? "buket_uang" : "", dt = cart.detail || {};
+  if (jenis === "buket_uang" && !(num(dt.isian) > 0)) return wajib("juIsi", "Isi total uang isian buket uang");
   if (jenis === "dekorasi" && !String(dt.macam || "").trim()) return wajib("jdMacam", "Isi macam dekorasi dulu");
   if (jenis === "sewa" && !dt.kembali_tgl) return wajib("jsKem", "Isi tanggal barang sewaan kembali");
   const timIds = jenis === "dekorasi" && Array.isArray(dt.tim_id) ? dt.tim_id.filter(id => B.staf.some(u => u.id === id)) : [];

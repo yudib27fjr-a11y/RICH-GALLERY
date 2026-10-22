@@ -543,4 +543,7 @@ test("buket uang: uang isian dicatat terpisah (titipan), hanya jasa yang masuk t
   assert.equal((await kasir("POST", `/api/penjualan/${r.data.id}/detail`, { detail: { isian_terima: true, isian_metode: "Tunai" } })).status, 200);
   const s2 = (await admin("GET", `/api/penjualan/${r.data.id}`)).data;
   assert.equal(s2.detail.isian_terima, true); assert.equal(s2.detail.isian, 1000000); assert.equal(s2.total, 100000);
+  // dari kasir langsung (bukan pesanan) juga boleh
+  const k = await kasir("POST", "/api/penjualan", { pelanggan: "Sari", hp: "081234567891", items: [{ nama: "buket uang 85k", harga: 85000, qty: 1 }], jenis: "buket_uang", detail: { isian: 500000 } });
+  assert.equal(k.status, 200, JSON.stringify(k.data)); assert.equal(k.data.total, 85000); assert.equal(k.data.detail.isian, 500000);
 });

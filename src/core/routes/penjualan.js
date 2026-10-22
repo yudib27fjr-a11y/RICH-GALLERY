@@ -107,7 +107,7 @@ route("POST", "/api/penjualan", "semua", ({ body, user, ctx }) => tx(() => {
 
   const jenis = JENIS_PESANAN[body.jenis] ? body.jenis : null;
   const detail = jenis ? rapikanDetail(body.detail) : null;
-  if (jenis && !pesanan && !ctx?.replay) throw bad(`Isi tanggal ${jenis === "dekorasi" ? "acara" : "ambil / acara"} untuk pesanan ${JENIS_PESANAN[jenis].toLowerCase()}`);
+  if (jenis && jenis !== "buket_uang" && !pesanan && !ctx?.replay) throw bad(`Isi tanggal ${jenis === "dekorasi" ? "acara" : "ambil / acara"} untuk pesanan ${JENIS_PESANAN[jenis].toLowerCase()}`);
 
   const no = kiriman && kiriman.no ? nomorKiriman(kiriman.no) : nomorBerikutnya(s);
   const jam = kiriman && kiriman.jam ? kiriman.jam : now.jam;
