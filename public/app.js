@@ -1583,6 +1583,7 @@ async function vRiwayat(){
     <div class="view-head"><h2>Transaksi</h2><span class="sp"></span>
       ${isAdmin() ? `<input type="date" id="rD" value="${rDari}" style="width:auto" aria-label="Dari"><span class="muted">s/d</span><input type="date" id="rS" value="${rSampai}" style="width:auto" aria-label="Sampai"><button class="btn sm" id="rHari" type="button">Hari ini</button><button class="btn sm" id="rPel" type="button">Data pelanggan</button>` : `<span class="muted small">Hari ini, ${tglID(today())}</span>`}</div>
     <input type="search" id="rQ" placeholder="Cari no invoice, pelanggan, atau barang…" value="${esc(rQ)}" style="margin-bottom:12px">
+    <button class="btn pri" id="rLap" type="button" style="width:100%;margin-bottom:12px">📤 Kirim laporan (WA / bagikan)</button>
     <div id="rSum" class="kpis" style="margin-bottom:12px"></div>
     <div id="rList"><div class="empty">Memuat…</div></div>
     ${isAdmin() ? `<div class="row" style="margin-top:16px"><span class="sp" style="flex:1"></span><button class="btn ghost sm danger-teks" id="rHapusSemua" type="button">Hapus semua transaksi di tanggal ini…</button></div>` : ""}`;
@@ -1593,6 +1594,7 @@ async function vRiwayat(){
   }
   let t; $("#rQ").oninput = e => { rQ = e.target.value; clearTimeout(t); t = setTimeout(muatRiwayat, 300); };
   const hs = $("#rHapusSemua"); if (hs) hs.onclick = hapusRentang;
+  $("#rLap").onclick = laporanWA;
   const rp_ = $("#rPel"); if (rp_) rp_.onclick = dataPelanggan;
   await muatRiwayat();
 }
@@ -1611,6 +1613,40 @@ async function muatRiwayat(){
   });
 }
 
+/** Laporan penjualan periode yang dipilih, sebagai teks WA — kirim ke WA atau bagikan ke aplikasi lain. */
+async function laporanWA(){
+  const data = await coba(() => api("GET", `/api/penjualan?dari=${rDari}&sampai=${rSampai}`)); if (!data) return;
+  const L = isAdmin() ? await api("GET", `/api/laporan?dari=${rDari}&sampai=${rSampai}`).catch(() => null) : null;
+  const susun = denganUang => {
+    const ok = data.filter(s => !s.batal_at), batal = data.length - ok.length;
+    const omzet = ok.reduce((a, s) => a + s.total, 0), per = m => ok.filter(s => s.metode === m).reduce((a, s) => a + Math.min(s.bayar, s.total), 0);
+    const belum = ok.reduce((a, s) => a + sisaTagihan(s), 0), isian = ok.reduce((a, s) => a + isianDibayar(s), 0);
+    const kat = {}; ok.forEach(s => s.items.forEach(i => { const k = i.kategori || "LAIN-LAIN"; kat[k] = kat[k] || { q: 0, n: 0 }; kat[k].q += i.qty; kat[k].n += i.harga * i.qty; }));
+    const T = [`*LAPORAN PENJUALAN ${String(B.toko.nama_toko || "").toUpperCase()}*`, rDari === rSampai ? tglHari(rDari) : `${tglID(rDari)} s/d ${tglID(rSampai)}`, "",
+      `💰 Omzet: *${rp(omzet)}*`, `🧾 Transaksi: ${ok.length}${batal ? ` (batal ${batal})` : ""}`,
+      `💵 Tunai diterima: ${rp(per("Tunai"))}`, ...B.metode.filter(m => m !== "Tunai").map(m => `${m === "QRIS" ? "📱" : "🏦"} ${m}: ${rp(per(m))}`),
+      ...(belum ? [`⏳ Belum lunas (DP): ${rp(belum)}`] : []),
+      ...(isian ? [`💵 Uang isian buket uang (titipan, bukan omzet): ${rp(isian)}`] : [])];
+    if (denganUang && L) T.push(`💸 Pengeluaran: ${rp(L.biaya || 0)}`, `📈 Laba bersih: *${rp(L.labaBersih || 0)}*`);
+    const K = Object.entries(kat).sort((a, b) => b[1].n - a[1].n);
+    if (K.length) T.push("", "*Per kategori*", ...K.map(([k, v]) => `• ${toTitle(k)}: ${fq(v.q)} pcs · ${rp(v.n)}`));
+    if (ok.length) T.push("", "*Daftar transaksi*", ...ok.slice().reverse().map((s, i) => `${i + 1}. ${rDari === rSampai ? "" : tglPendek(s.tgl) + " "}${s.jam} ${toTitle(s.pelanggan)} — ${s.items.map(x => toTitle(x.nama).replace(/(\d)k\b/g, "$1K") + (x.qty != 1 ? " ×" + fq(x.qty) : "")).join(", ")} — ${rp(s.total)} (${s.metode}${sisaTagihan(s) ? ", DP" : ""})`));
+    T.push("", `_Dikirim dari aplikasi ${toTitle(B.toko.nama_toko || "Rich Gallery")} · ${toTitle(B.me?.nama || "")}_`);
+    return T.join("\n");
+  };
+  modal(`<h3>📤 Laporan penjualan</h3>
+    ${L ? `<label class="row small"><input type="checkbox" id="lwUang"> Sertakan pengeluaran & laba (khusus admin)</label>` : ""}
+    <textarea id="lwT" rows="14" style="font-size:13px"></textarea>
+    <p class="small muted" style="margin:0">Teks bisa diedit dulu sebelum dikirim.</p>
+    <div class="actions" style="flex-wrap:wrap"><button class="btn" data-close>Tutup</button><button class="btn" id="lwSalin" type="button">Salin</button>
+      ${navigator.share ? `<button class="btn" id="lwShare" type="button">Bagikan…</button>` : ""}<button class="btn pri" id="lwWa" type="button">Kirim WA</button></div>`, m => {
+    const isi = () => { $("#lwT", m).value = susun(!!$("#lwUang", m)?.checked); };
+    isi(); const u = $("#lwUang", m); if (u) u.onchange = isi;
+    $("#lwSalin", m).onclick = () => salinTeks($("#lwT", m).value, "Laporan disalin");
+    const sh = $("#lwShare", m); if (sh) sh.onclick = () => navigator.share({ text: $("#lwT", m).value }).catch(() => {});
+    $("#lwWa", m).onclick = () => bukaWA("", $("#lwT", m).value);
+  });
+}
 /** Data pelanggan (admin): dari seluruh riwayat transaksi. */
 async function dataPelanggan(){
   const semua = await coba(() => api("GET", "/api/pelanggan?semua=1")); if (!semua) return;
