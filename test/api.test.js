@@ -513,6 +513,7 @@ test("belanja Shopee: email dibaca, hanya barang toko dicatat, konfirmasi datang
   assert.equal(b.items[0].barang && b.items[0].barang.kode, bb.data.kode, "dicocokkan dengan bahan toko");
   const kL = (await kasir("GET", "/api/belanja?status=kirim")).data;
   assert.ok(!("total" in kL[0]) && !("harga" in kL[0].items[0]), "karyawan tidak melihat harga belanja");
+  assert.equal(kL[0].toko, "", "karyawan tidak melihat nama toko penjual"); assert.equal(kL[0].no_pesanan, "");
   assert.equal((await admin("GET", "/api/belanja?status=abaikan")).data.length, 1);
   // barang datang: putih 5 ikat x 7 tangkai = 35 tangkai masuk stok, pink datang 4 saja → 28
   const d = await kasir("POST", `/api/belanja/${b.id}/datang`, { items: [{ i: 0, datang: 5, jenis: "bahan", kode: bb.data.kode, stok: 35 }, { i: 1, datang: 4, jenis: "bahan", kode: bb.data.kode, stok: 28 }], catatan: "pink kurang 1" });

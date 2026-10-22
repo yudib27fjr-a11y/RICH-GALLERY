@@ -2087,7 +2087,7 @@ async function vBelanja(){
   $("#blL").innerHTML = L.length ? `<div class="stack">${L.map(b => {
     const lama = st === "kirim" && (Date.parse(today()) - Date.parse(b.tgl)) / 864e5;
     return `<div class="panel stack bl-kartu" style="gap:6px">
-      <div class="row" style="align-items:center;gap:6px"><span class="pill ${b.sumber === "shopee" ? "bl-shopee" : "mut"}">${b.sumber === "shopee" ? "🛒 Shopee" : "✍️ Manual"}</span><b style="flex:1">${esc(b.toko)}</b>${totalBelanja(b) ? `<b class="num">${rp(totalBelanja(b))}</b>` : ""}</div>
+      <div class="row" style="align-items:center;gap:6px"><span class="pill ${b.sumber === "shopee" ? "bl-shopee" : "mut"}">${b.sumber === "shopee" ? "🛒 Shopee" : "✍️ Manual"}</span><b style="flex:1">${esc(b.toko || "Belanja online")}</b>${totalBelanja(b) ? `<b class="num">${rp(totalBelanja(b))}</b>` : ""}</div>
       <div class="small muted">${b.no_pesanan && b.sumber !== "manual" ? "#" + esc(b.no_pesanan) + " · " : ""}dipesan ${esc(tglID(b.tgl))}${b.metode ? " · " + esc(b.metode) : ""}${lama >= 5 ? ` · <b style="color:var(--warn)">sudah ${Math.round(lama)} hari</b>` : ""}${b.alasan ? " · " + esc(b.alasan) : ""}</div>
       <div class="stack" style="gap:4px">${b.items.map(i => `<div class="small bl-item ${i.toko ? "" : "bukan"}"><b>${esc(i.nama)}</b>${i.variasi ? ` <span class="pill mut">${esc(i.variasi)}</span>` : ""} ×${fq(i.qty)}${i.harga != null && i.harga ? ` · ${rp(i.harga)}` : ""}
         ${i.masuk ? `<div class="ok-teks">✅ masuk stok: ${esc(i.masuk.nama)} +${fq(i.masuk.qty)}${i.datang !== i.qty ? ` (datang ${fq(i.datang)} dari ${fq(i.qty)})` : ""}</div>` : st === "datang" ? `<div class="muted">tidak masuk stok${i.datang != null && i.datang !== i.qty ? ` · datang ${fq(i.datang)} dari ${fq(i.qty)}` : ""}</div>`
@@ -2104,7 +2104,7 @@ async function vBelanja(){
 function barangDatang(b){
   const semua = [...B.bahan.map(x => ({ ...x, jenis: "bahan" })), ...B.produk.map(x => ({ ...x, jenis: "produk" }))];
   const opsi = it => `<option value="">— tidak masuk stok —</option>${["bahan", "produk"].map(j => `<optgroup label="${j === "bahan" ? "Bahan baku" : "Produk jadi"}">${semua.filter(x => x.jenis === j).map(x => `<option value="${j}|${esc(x.kode)}" ${it.barang && it.barang.kode === x.kode && it.barang.jenis === j ? "selected" : ""}>${esc(x.nama)} (${esc(x.kode)})${x.satuan ? " · " + esc(x.satuan) : ""}</option>`).join("")}</optgroup>`).join("")}`;
-  modal(`<h3>📦 Barang datang · ${esc(b.toko)}</h3>
+  modal(`<h3>📦 Barang datang${b.toko ? " · " + esc(b.toko) : ""}</h3>
     <p class="small muted" style="margin:0">Cek paketnya. Isi jumlah yang <b>benar-benar datang</b>, lalu pilih masuk ke stok barang apa. Bila satuannya beda (mis. 1 ikat = 7 tangkai), ubah jumlah masuk stok.</p>
     <div class="stack">${b.items.map((it, i) => `<div class="panel stack bl-cek" data-i="${i}" style="gap:6px">
       <b class="small">${esc(it.nama)}${it.variasi ? " · " + esc(it.variasi) : ""}</b>

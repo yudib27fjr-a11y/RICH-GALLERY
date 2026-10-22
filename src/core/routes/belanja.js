@@ -114,8 +114,9 @@ export function cocokkanBarang(nama, { abaikan = null } = {}){
 const muat = id => { const b = one("SELECT * FROM belanja WHERE id = ?", [+id]); if (!b) throw notFound("Belanja tidak ditemukan"); b.items = JSON.parse(b.items || "[]"); return b; };
 const untuk = (b, user) => {
   if (user && user.peran === "admin") return b;
-  const { subtotal, ongkir, biaya, total, nominal_bayar, ...x } = b; // harga belanja hanya untuk admin
-  return { ...x, items: b.items.map(({ harga, ...i }) => i) };
+  // harga belanja, nama toko penjual & nomor pesanan hanya untuk admin
+  const { subtotal, ongkir, biaya, total, nominal_bayar, toko, no_pesanan, alasan, ...x } = b;
+  return { ...x, toko: "", no_pesanan: "", items: b.items.map(({ harga, ...i }) => i) };
 };
 /** Catat belanja dari email/tempelan. Pesanan yang sama (nomor sama) tidak dobel; email berikutnya hanya memperbarui. */
 export function catatBelanja(p, { sumber = "shopee", oleh = "email" } = {}){
@@ -167,8 +168,8 @@ function datang(id, body, user){
         const item = one(`SELECT id, kode, nama, stok FROM ${TABEL[t.jenis]} WHERE kode = ? AND dihapus IS NULL`, [String(t.kode)]);
         if (!item) throw bad(`Barang ${t.kode} tidak ada`);
         const qtyStok = angka(t.stok ?? qtyDatang, { min: 0.01, max: 1e7, nama: `Jumlah masuk stok ${item.nama}` });
-        ubahStok({ jenis: t.jenis, item, delta: qtyStok, tipe: "masuk", tgl, ref, ket: `${ref} · ${b.toko}`.slice(0, 200), user });
-        antre("masuk", [[tgl, sekarang().jam, t.jenis.toUpperCase(), item.kode, item.nama, qtyStok, item.stok, ref, user.nama]]);
+        ubahStok({ jenis: t.jenis, item, delta: qtyStok, tipe: "masuk", tgl, ref: "Belanja online", ket: "Belanja online", user }); // tanpa nama toko: riwayat stok terlihat karyawan
+        antre("masuk", [[tgl, sekarang().jam, t.jenis.toUpperCase(), item.kode, item.nama, qtyStok, item.stok, "Belanja online", user.nama]]);
         masuk = { jenis: t.jenis, kode: item.kode, nama: item.nama, qty: qtyStok };
       }
       return { ...it, datang: qtyDatang, masuk };
