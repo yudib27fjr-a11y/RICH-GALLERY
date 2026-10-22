@@ -370,6 +370,7 @@ input.sIn.berubah{background:#fff4c2;border-color:#d9a400;color:#1c2420}
 .jasa-tab .j-dekor.on{background:#fde7f3;color:#be185d;border-color:#be185d}
 .jasa-tab .j-seserahan.on{background:#efe7fb;color:#6d28d9;border-color:#6d28d9}
 .jasa-tab .j-mahar.on{background:#fff4d6;color:#a16207;border-color:#a16207}
+.j-uang.pill,.jenis-pilih .j-uang.on,.jenis-saring .j-uang.on,.jasa-tab .j-uang.on{background:#e6f7ef;color:#047857;border-color:#047857}
 .jasa-tab .j-parcel.on{background:#e3f6ea;color:#15803d;border-color:#15803d}
 .jasa-tab .j-sewa.on{background:#e0edff;color:#1d4ed8;border-color:#1d4ed8}
 @media (max-width:420px){.jasa-tab{gap:5px}.jasa-tab button{font-size:11px;padding:10px 2px}.jasa-tab button span{font-size:22px}}

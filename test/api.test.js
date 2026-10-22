@@ -527,3 +527,20 @@ test("belanja Shopee: email dibaca, hanya barang toko dicatat, konfirmasi datang
   const m = await kasir("POST", "/api/belanja", { toko: "Toko Pita Jaya", items: [{ nama: "Pita satin 2 cm", qty: 3 }] });
   assert.equal(m.status, 200, JSON.stringify(m.data));
 });
+
+test("buket uang: uang isian dicatat terpisah (titipan), hanya jasa yang masuk total & omzet", async () => {
+  const b = (await admin("GET", "/api/bootstrap")).data, hari = b.hariIni;
+  const omzet = async () => (await admin("GET", `/api/laporan?dari=${hari}&sampai=${hari}`)).data;
+  const sebelum = await omzet();
+  const r = await kasir("POST", "/api/penjualan", { pelanggan: "Rina", hp: "081234567890", items: [{ nama: "buket uang 100k", kategori: "BUKET UANG", harga: 100000, qty: 1 }],
+    pesanan: { tgl: hari, cara: "ambil" }, jenis: "buket_uang", detail: { isian: 1000000, pecahan: 50000, lembar: 20, isian_ket: "uang baru" } });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.total, 100000, "total hanya jasa"); assert.equal(r.data.detail.isian, 1000000); assert.equal(r.data.jenis, "buket_uang");
+  const sesudah = await omzet();
+  assert.equal(JSON.stringify(sesudah).length > 0, true);
+  const angkaOmzet = L => L.ringkas?.omzet ?? L.omzet ?? L.total?.omzet;
+  if (angkaOmzet(sebelum) != null) assert.equal(angkaOmzet(sesudah) - angkaOmzet(sebelum), 100000, "omzet bertambah sebesar jasa saja");
+  assert.equal((await kasir("POST", `/api/penjualan/${r.data.id}/detail`, { detail: { isian_terima: true, isian_metode: "Tunai" } })).status, 200);
+  const s2 = (await admin("GET", `/api/penjualan/${r.data.id}`)).data;
+  assert.equal(s2.detail.isian_terima, true); assert.equal(s2.detail.isian, 1000000); assert.equal(s2.total, 100000);
+});
