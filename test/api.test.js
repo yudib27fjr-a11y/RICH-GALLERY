@@ -569,3 +569,15 @@ test("belanja Shopee: barang pribadi (tumbler berpita, tas) tidak dicatat; yang 
   const b = (await admin("GET", "/api/belanja?status=kirim")).data.find(v => v.id === r.id);
   assert.ok(b && b.total > 0, "total terisi dari harga barang");
 });
+
+test("produksi baru → notifikasi HP admin (barang, pembuat, stok ready)", async () => {
+  assert.equal((await admin("POST", "/api/notif/langganan", { endpoint: "https://fcm.googleapis.com/fcm/send/uji-produksi", nama: "HP admin" })).status, 200);
+  const b = (await admin("GET", "/api/bootstrap")).data;
+  const p = (await admin("POST", "/api/produk", { nama: "buket produksi uji", harga: 75000 })).data, pembuat = b.staf.find(u => u.peran !== "admin") || b.staf[0];
+  const r = await kasir("POST", "/api/produksi", { pembuat_id: pembuat.id, restock: true, items: [{ product_id: p.id, qty: 2 }] });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const n = (await admin("GET", "/api/notif/terbaru")).data;
+  assert.ok(n.some(x => /Produksi baru/.test(x.judul) && /×2/.test(x.isi) && x.url.startsWith("/#produksi")), JSON.stringify(n));
+  const l = (await admin("GET", "/api/notif/langganan")).data;
+  for (const x of l) await admin("DELETE", "/api/notif/langganan", { id: x.id });
+});

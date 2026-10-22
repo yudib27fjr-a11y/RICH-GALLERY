@@ -1617,6 +1617,7 @@ async function muatRiwayat(){
 async function laporanWA(){
   const data = await coba(() => api("GET", `/api/penjualan?dari=${rDari}&sampai=${rSampai}`)); if (!data) return;
   const L = isAdmin() ? await api("GET", `/api/laporan?dari=${rDari}&sampai=${rSampai}`).catch(() => null) : null;
+  const P = await api("GET", `/api/produksi?dari=${rDari}&sampai=${rSampai}`).catch(() => []);
   const susun = denganUang => {
     const ok = data.filter(s => !s.batal_at), batal = data.length - ok.length;
     const omzet = ok.reduce((a, s) => a + s.total, 0), per = m => ok.filter(s => s.metode === m).reduce((a, s) => a + Math.min(s.bayar, s.total), 0);
@@ -1630,6 +1631,11 @@ async function laporanWA(){
     if (denganUang && L) T.push(`💸 Pengeluaran: ${rp(L.biaya || 0)}`, `📈 Laba bersih: *${rp(L.labaBersih || 0)}*`);
     const K = Object.entries(kat).sort((a, b) => b[1].n - a[1].n);
     if (K.length) T.push("", "*Per kategori*", ...K.map(([k, v]) => `• ${toTitle(k)}: ${fq(v.q)} pcs · ${rp(v.n)}`));
+    if (P.length) {
+      const g = {}; P.forEach(x => { const k = x.nama; g[k] = g[k] || { q: 0, o: {} }; g[k].q += x.qty; g[k].o[x.pembuat] = (g[k].o[x.pembuat] || 0) + x.qty; });
+      T.push("", `*Produksi (dibuat)* — ${fq(P.reduce((a, x) => a + x.qty, 0))} barang`, ...Object.entries(g).sort((a, b) => b[1].q - a[1].q).map(([n, v]) => {
+        const st = B.produk.find(p => p.nama === n); return `• ${toTitle(n).replace(/(\d)k\b/g, "$1K")} ×${fq(v.q)} (${Object.entries(v.o).map(([o, q]) => toTitle(o) + " " + fq(q)).join(", ")})${st ? ` · stok ready ${fq(st.stok)}` : ""}`; }));
+    }
     if (ok.length) T.push("", "*Daftar transaksi*", ...ok.slice().reverse().map((s, i) => `${i + 1}. ${rDari === rSampai ? "" : tglPendek(s.tgl) + " "}${s.jam} ${toTitle(s.pelanggan)} — ${s.items.map(x => toTitle(x.nama).replace(/(\d)k\b/g, "$1K") + (x.qty != 1 ? " ×" + fq(x.qty) : "")).join(", ")} — ${rp(s.total)} (${s.metode}${sisaTagihan(s) ? ", DP" : ""})`));
     T.push("", `_Dikirim dari aplikasi ${toTitle(B.toko.nama_toko || "Rich Gallery")} · ${toTitle(B.me?.nama || "")}_`);
     return T.join("\n");
@@ -4012,10 +4018,11 @@ async function bukaTautanNotif(){
   const [v, q] = location.hash.slice(1).split("?");
   if (!q || !B) return;
   const p = new URLSearchParams(q);
-  const tujuan = v === "absen" ? "absen" : "riwayat"; // pesanan juga ke halaman Transaksi
+  const tujuan = v === "absen" ? "absen" : v === "produksi" || v === "belanja" ? v : "riwayat"; // pesanan juga ke halaman Transaksi
   try { history.replaceState(null, "", "#" + tujuan); } catch {}
   if (!daftarView().some(x => x[0] === tujuan)) return;
   closeModal();
+  if (tujuan === "produksi" || tujuan === "belanja") { view = tujuan; await render(); return; }
   if (tujuan === "absen") {
     if (/^\d{4}-\d{2}-\d{2}$/.test(p.get("tgl") || "")) aDari = aSampai = p.get("tgl");
     view = "absen"; await render();

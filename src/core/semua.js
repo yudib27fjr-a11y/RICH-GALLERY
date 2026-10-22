@@ -21,4 +21,5 @@ export { bersihkanSesiKadaluarsa } from "./auth.js";
 export { hapusFotoAbsenLama } from "./routes/absen.js";
 export { sinkronCabang, cabangAktif, pendengar } from "./cabang-perangkat.js";
 export { kirimNotif } from "./notif.js";
+export { rekapProduksiHarian } from "./routes/produksi.js";
 export { terimaEmail } from "./routes/belanja.js";

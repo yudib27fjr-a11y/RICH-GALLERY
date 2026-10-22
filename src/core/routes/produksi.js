@@ -1,10 +1,33 @@
 import { route } from "../router.js";
-import { one, all, run, tx, getSettings } from "../db.js";
+import { one, all, run, tx, getSettings, setSetting } from "../db.js";
 import { HttpError, bad, notFound, teks, angka, tanggal, daftar, sekarang } from "../util.js";
 import { ambilItem, ubahStok, antre } from "../stok.js";
 import { periodeDari } from "../../../public/shared.js";
 import { lemburPeriode } from "./absen.js";
 import { cabangAktif, mintaPusat } from "../cabang-perangkat.js";
+import { antreNotif } from "../notif.js";
+import { platform } from "../platform.js";
+
+const judul = s => String(s || "").toLowerCase().replace(/\b\w/g, c => c.toUpperCase()).replace(/(\d)k\b/gi, "$1K");
+/** Rekap produksi satu hari (untuk notifikasi admin): per barang & per pembuat, plus stok ready sekarang supaya bisa dicocokkan dengan barang aslinya. */
+export function teksRekapProduksi(tgl){
+  const R = all(`SELECT p.nama, p.product_id, SUM(p.qty) qty, GROUP_CONCAT(u.nama || ' ' || p.qty, ', ') oleh, MAX(p.restock) restock
+    FROM produksi p JOIN users u ON u.id = p.pembuat_id WHERE p.tgl = ? GROUP BY p.product_id ORDER BY qty DESC`, [tgl]);
+  if (!R.length) return { jumlah: 0, isi: "Belum ada produksi tercatat hari ini." };
+  const total = R.reduce((a, r) => a + r.qty, 0);
+  const isi = R.map(r => { const st = one("SELECT stok FROM products WHERE id = ?", [r.product_id]);
+    return `${judul(r.nama)} ×${r.qty} (${judul(r.oleh)})${st ? ` · stok ready ${st.stok}` : ""}`; }).join("\n");
+  return { jumlah: total, isi };
+}
+/** Dipanggil berkala (cron): sekali sehari setelah 21.30 waktu toko, kirim rekap produksi hari itu ke HP admin. */
+export function rekapProduksiHarian(){
+  if (platform.perangkat) return;
+  const { tgl, jam } = sekarang();
+  if (jam < "21:30" || getSettings().rekap_produksi_tgl === tgl) return;
+  setSetting("rekap_produksi_tgl", tgl);
+  const r = teksRekapProduksi(tgl);
+  antreNotif(`📋 Rekap produksi hari ini${r.jumlah ? " · " + r.jumlah + " barang" : ""}`, r.isi + "\nCocokkan dengan barang aslinya.", `/#produksi?tgl=${tgl}`);
+}
 
 const sudahDibayar = (pembuatId, tgl) => {
   const [dari] = periodeDari(tgl, getSettings().periode_mulai);
@@ -33,6 +56,7 @@ route("POST", "/api/produksi", "semua", ({ body, user }) => tx(() => {
     return [tgl, p.kode, p.nama, qty, pembuat.nama, tarif, Math.round(qty * tarif), restock ? "RESTOCK" : "PESANAN", user.nama];
   });
   antre("produksi", rows);
+  antreNotif(`🌸 Produksi baru · ${judul(pembuat.nama)}`, rows.map(r => `${judul(r[2])} ×${r[3]}`).join(", ") + ` · ${restock ? "masuk stok ready" : "untuk pesanan"}\n${tgl}${user.nama !== pembuat.nama ? " · dicatat " + judul(user.nama) : ""}`, `/#produksi?tgl=${tgl}`);
   return { ok: true, jumlah: rows.length };
 }), { uid: true, cabang: ({ body }) => ({ aksi: "produksi", data: {
   uid: body.uid, tgl: body.tgl || sekarang().tgl, restock: body.restock ? 1 : 0,
