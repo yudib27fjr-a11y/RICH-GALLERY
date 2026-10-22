@@ -809,7 +809,7 @@ const JENIS_PS = {
   buket_uang: { label: "Buket uang", ikon: "💵", warna: "j-uang", tgl: "Tanggal ambil / kirim" },
 };
 const PECAHAN_UANG = [100000, 50000, 20000, 10000, 5000, 2000, 1000];
-const isianUang = s => s && s.jenis === "buket_uang" ? Math.max(0, num(s.detail?.isian) || 0) : 0;
+const isianUang = s => s && s.jenis === "buket_uang" && !s.detail?.isi_sendiri ? Math.max(0, num(s.detail?.isian) || 0) : 0;
 /* Buket uang: pelanggan membayar jasa + uang isian sekaligus (boleh DP). Tagihan = jasa + isian; omzet tetap hanya jasa.
    Pembayaran dibagi: jasa dulu (sales.bayar), sisanya untuk uang isian (detail.isian_dibayar). */
 const isianDibayar = s => isianUang(s) ? Math.min(isianUang(s), Math.max(0, num(s.detail?.isian_dibayar ?? (s.detail?.isian_terima ? s.detail.isian : 0)) || 0)) : 0;
@@ -836,7 +836,8 @@ function ringkasDetail(s){
   if (s.jenis === "seserahan" && d.kembali_tgl) L.push(d.kembali_at ? "✅ Box sudah kembali" : "Box kembali " + tglID(d.kembali_tgl));
   if (s.jenis === "seserahan") { if (d.jumlah_tray) L.push(d.jumlah_tray + " tray/kotak"); if (d.isi) L.push(d.isi); if (d.acara) L.push(d.acara); if (d.tema) L.push("Tema: " + d.tema); }
   if (s.jenis === "parcel") { if (d.musim) L.push(d.musim); if (d.isi) L.push(d.isi); }
-  if (s.jenis === "buket_uang") {
+  if (s.jenis === "buket_uang" && d.isi_sendiri) L.push("🙋 Uang diisi sendiri oleh pelanggan — jasa saja");
+  if (s.jenis === "buket_uang" && !d.isi_sendiri) {
     if (d.isian) L.push(`💵 Uang isian ${rp(d.isian)}${d.pecahan && d.lembar ? ` (${rp(d.pecahan)} × ${fq(d.lembar)} lembar)` : ""}`);
     if (d.isian_ket) L.push(d.isian_ket);
     if (d.isian) { const dib = isianDibayar(s); L.push(dib >= d.isian ? "✅ Uang isian sudah dibayar penuh" : dib > 0 ? `Uang isian dibayar ${rp(dib)} · kurang ${rp(d.isian - dib)}` : "⚠️ Uang isian belum dibayar"); }
@@ -870,11 +871,13 @@ function isianJenis(j = cart.jenis, d = cart.detail || (cart.detail = {})){
       <label class="f">Nama pengantin / acara<input type="text" id="jhAcara" value="${esc(d.acara || "")}" placeholder="Mis. lamaran Dimas & Sinta"></label>`;
   if (j === "mahar") return `<label class="f">Isi mahar (bisa ketik sendiri)<input type="text" id="jmIsi" list="jmIsiL" value="${esc(d.isi || "")}" placeholder="Mis. uang mahar Rp2.026.000 bentuk masjid"><datalist id="jmIsiL">${[...new Set([...macamTersimpan("mahar"), ...ISI_MAHAR])].map(x => `<option value="${esc(x)}">`).join("")}</datalist></label>
       <label class="f">Nama pengantin / acara<input type="text" id="jmAcara" value="${esc(d.acara || "")}" placeholder="Mis. Dimas & Sinta"></label>`;
-  if (j === "buket_uang") return `<div class="row"><label class="f grow">Pecahan uang<select id="juPec"><option value="">— pilih —</option>${PECAHAN_UANG.map(v => `<option value="${v}" ${num(d.pecahan) === v ? "selected" : ""}>${rp(v)}</option>`).join("")}</select></label>
+  if (j === "buket_uang") return `<div class="f"><span>Uang isian</span><div class="seg" id="juSendiri" style="display:flex"><button type="button" data-s="" style="flex:1" class="${d.isi_sendiri ? "" : "on"}">💵 Dari pelanggan, diisi toko</button><button type="button" data-s="1" style="flex:1" class="${d.isi_sendiri ? "on" : ""}">🙋 Pelanggan isi sendiri (jasa saja)</button></div></div>
+      <p class="small muted" id="juSendiriInfo" style="margin:0"${d.isi_sendiri ? "" : " hidden"}>Pelanggan mengisi uangnya sendiri — hanya <b>jasa buket</b> yang ditagih & dicatat.</p>
+      <div class="stack" id="juBox"${d.isi_sendiri ? " hidden" : ""}><div class="row"><label class="f grow">Pecahan uang<select id="juPec"><option value="">— pilih —</option>${PECAHAN_UANG.map(v => `<option value="${v}" ${num(d.pecahan) === v ? "selected" : ""}>${rp(v)}</option>`).join("")}</select></label>
       <label class="f grow">Jumlah lembar<input type="number" id="juLbr" value="${d.lembar || ""}" min="1" step="1" inputmode="numeric" placeholder="Mis. 20"></label></div>
       <label class="f">Total uang isian (Rp) *<input type="number" id="juIsi" value="${d.isian || ""}" min="0" step="1000" inputmode="numeric" placeholder="Terisi otomatis dari pecahan × lembar"></label>
       <label class="f">Keterangan isian / bentuk<input type="text" id="juKet" value="${esc(d.isian_ket || "")}" placeholder="Mis. campur 50rb & 100rb, bentuk kipas, uang baru"></label>
-      <p class="note small" style="margin:0">💡 Uang isian adalah <b>uang titipan pelanggan</b> — dicatat terpisah, <b>tidak masuk omzet</b>. Pembayaran (lunas / DP) dihitung dari <b>jasa + uang isian</b>, sisanya otomatis terhitung. Yang masuk omzet hanya <b>jasa</b>.</p>`;
+      <p class="note small" style="margin:0">💡 Uang isian adalah <b>uang titipan pelanggan</b> — dicatat terpisah, <b>tidak masuk omzet</b>. Pembayaran (lunas / DP) dihitung dari <b>jasa + uang isian</b>, sisanya otomatis terhitung. Yang masuk omzet hanya <b>jasa</b>.</p></div>`;
   if (j === "parcel") return `<div class="seg" id="jpMusim" style="display:flex">${["Ramadan", "Lebaran", "Lainnya"].map(m => `<button type="button" style="flex:1" data-m="${m}" class="${(d.musim || "Lebaran") === m ? "on" : ""}">${m === "Ramadan" ? "🌙 " : m === "Lebaran" ? "✨ " : ""}${m}</button>`).join("")}</div>
       <label class="f">Isi parcel<textarea id="jpIsi" rows="2" placeholder="Mis. kue kering 3 toples, sirup, kurma, keranjang rotan">${esc(d.isi || "")}</textarea></label>`;
   return "";
@@ -891,6 +894,10 @@ function pasangIsianJenis(el, d = cart.detail || (cart.detail = {}), simpan = sa
   $$("#jdTim button", el).forEach(b => b.onclick = () => { const id = +b.dataset.u, t = Array.isArray(d.tim_id) ? d.tim_id : []; d.tim_id = t.includes(id) ? t.filter(x => x !== id) : [...t, id]; b.classList.toggle("on"); simpan(); });
   $$("#jpMusim button", el).forEach(b => b.onclick = () => { set("musim", b.dataset.m); $$("#jpMusim button", el).forEach(x => x.classList.toggle("on", x === b)); });
   on("juIsi", "isian", num); on("juKet", "isian_ket");
+  $$("#juSendiri button", el).forEach(b => b.onclick = () => {
+    d.isi_sendiri = !!b.dataset.s || undefined; $$("#juSendiri button", el).forEach(x => x.classList.toggle("on", x === b));
+    $("#juBox", el).hidden = !!d.isi_sendiri; $("#juSendiriInfo", el).hidden = !d.isi_sendiri; simpan();
+    const x = $("#juIsi", el); if (x) { x.dispatchEvent(new Event("input")); x.dispatchEvent(new Event("change")); } });
   const hitungIsian = () => { const pc = num($("#juPec", el)?.value) || 0, lb = num($("#juLbr", el)?.value) || 0; d.pecahan = pc || undefined; d.lembar = lb || undefined;
     if (pc && lb) { const x = $("#juIsi", el); x.value = pc * lb; d.isian = pc * lb; x.dispatchEvent(new Event("input")); } simpan(); };
   const pc = $("#juPec", el); if (pc) { pc.onchange = hitungIsian; $("#juLbr", el).oninput = hitungIsian; }
@@ -903,10 +910,10 @@ const cartTotal = () => Math.max(0, cartSub() - num(cart.diskon) + num(cart.ongk
 /* Keranjang berisi buket uang → kolom uang isian muncul otomatis (titipan pelanggan, tidak masuk total/omzet). */
 const adaBuketUang = () => cart.items.some(i => i.kategori === "BUKET UANG" || /^BUKET UANG/i.test(i.nama || ""));
 const isianKeranjang = () => (cart.pesanan && cart.jenis && cart.jenis !== "buket_uang") ? false : (adaBuketUang() || (cart.pesanan && cart.jenis === "buket_uang"));
-const isianCart = () => isianKeranjang() ? Math.max(0, num(cart.detail?.isian) || 0) : 0;
+const isianCart = () => isianKeranjang() && !cart.detail?.isi_sendiri ? Math.max(0, num(cart.detail?.isian) || 0) : 0;
 /** Yang harus dibayar pelanggan di kasir: jasa (total) + uang isian buket uang. */
 const cartTagihan = () => cartTotal() + isianCart();
-const teksIsianCart = () => `Jasa <b>${rp(cartTotal())}</b> (omzet) + 💵 uang isian <b>${rp(isianCart())}</b> (titipan)`;
+const teksIsianCart = () => cart.detail?.isi_sendiri ? "🙋 Pelanggan isi uang sendiri — hanya jasa yang ditagih" : `Jasa <b>${rp(cartTotal())}</b> (omzet) + 💵 uang isian <b>${rp(isianCart())}</b> (titipan)`;
 let posKat = "SEMUA", posQ = "", hanyaReady = false, saleTerakhir = null;
 
 function vKasir(){
@@ -1031,7 +1038,7 @@ function drawCart(){
     <label class="f">Catatan (ucapan kartu, jadwal ambil, dll)<textarea id="cNote" rows="2">${esc(cart.catatan)}</textarea></label>
     </div>
     <div class="cart-foot">
-      <div class="tot"><span class="muted">Subtotal <span class="num">${rp(sub)}</span></span><span></span><span style="align-self:end;font-weight:700">TOTAL${isianKeranjang() ? " TAGIHAN" : ""} · ${esc(cart.metode)}</span><span class="big num" id="cTot">${rp(tot)}</span>${isianKeranjang() ? `<span class="small" id="cIsianTot" style="grid-column:1/-1">${teksIsianCart()}</span>` : ""}</div>
+      <div class="tot"><span class="muted">Subtotal <span class="num">${rp(sub)}</span></span><span></span><span style="align-self:end;font-weight:700">TOTAL${isianKeranjang() && !cart.detail?.isi_sendiri ? " TAGIHAN" : ""} · ${esc(cart.metode)}</span><span class="big num" id="cTot">${rp(tot)}</span>${isianKeranjang() ? `<span class="small" id="cIsianTot" style="grid-column:1/-1">${teksIsianCart()}</span>` : ""}</div>
       <div class="small" id="kembali"></div>
       <div class="row" style="flex-wrap:nowrap"><button class="btn big" id="saveOnly" type="button" style="flex:1" ${cart.items.length ? "" : "disabled"} title="Simpan pembayaran tanpa mencetak struk">Bayar</button><button class="btn pri big" id="savePrint" type="button" style="flex:2" ${cart.items.length ? "" : "disabled"}>Bayar &amp; Cetak</button></div>
       ${saleTerakhir ? `<button class="btn ghost sm" id="reprint" type="button" style="align-self:center">Cetak ulang struk terakhir (${esc(saleTerakhir.no)})</button>` : ""}
@@ -1521,7 +1528,7 @@ async function simpanTransaksi(print, tombol){
   if (cart.bayarMode === "dp" && !(cart.bayar > 0)) return toast("Isi nominal DP dulu");
   if (cart.bayarMode === "dp" && cart.bayar >= cartTagihan()) return toast("Nominal DP sama atau lebih dari total. Pilih Lunas bila dibayar penuh.");
   const jenis = cart.pesanan && JENIS_PS[cart.jenis] && cart.jenis !== "buket_uang" ? cart.jenis : isianKeranjang() ? "buket_uang" : "", dt = cart.detail || {};
-  if (jenis === "buket_uang" && !(num(dt.isian) > 0)) return wajib("juIsi", "Isi total uang isian buket uang");
+  if (jenis === "buket_uang" && !dt.isi_sendiri && !(num(dt.isian) > 0)) return wajib("juIsi", "Isi total uang isian buket uang, atau pilih \"Pelanggan isi sendiri\"");
   if (jenis === "dekorasi" && !String(dt.macam || "").trim()) return wajib("jdMacam", "Isi macam dekorasi dulu");
   if (jenis === "sewa" && !dt.kembali_tgl) return wajib("jsKem", "Isi tanggal barang sewaan kembali");
   const timIds = jenis === "dekorasi" && Array.isArray(dt.tim_id) ? dt.tim_id.filter(id => B.staf.some(u => u.id === id)) : [];
@@ -1535,9 +1542,10 @@ async function simpanTransaksi(print, tombol){
   let bagiIsian = null;
   if (jenis === "buket_uang" && !cart.pesanan && nilaiBayar() < cartTagihan()) return toast("Pembayaran kurang dari tagihan (jasa + uang isian). Centang Pesanan & isi tanggal ambil supaya kekurangannya tercatat dan bisa dilunasi nanti.");
   if (jenis === "buket_uang") {
-    const isian = num(dt.isian) || 0, b = nilaiBayar(), bg = bagiBayar(cartTotal(), isian, b);
+    const isian = isianCart(), b = nilaiBayar(), bg = bagiBayar(cartTotal(), isian, b);
+    if (dt.isi_sendiri) ["isian", "pecahan", "lembar", "isian_ket"].forEach(k => delete detailKirim[k]);
     bagiIsian = { jasa: b - bg.isian };
-    Object.assign(detailKirim, { isian_dibayar: bg.isian, isian_terima: bg.isian >= isian, isian_metode: bg.isian ? cart.metode : undefined });
+    if (!dt.isi_sendiri) Object.assign(detailKirim, { isian_dibayar: bg.isian, isian_terima: bg.isian >= isian, isian_metode: bg.isian ? cart.metode : undefined });
   }
   await coba(async () => {
     const s = await api("POST", "/api/penjualan", {
@@ -1996,7 +2004,7 @@ function formJasa(jenis, paketAwal){
     <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="fjOk" type="button">Simpan pesanan</button></div>`, m => {
     pasangIsianJenis(m, d, () => { try { ringkas(); } catch { /* belum siap */ } });
     const total = () => Math.round((num($("#fjR", m).value) || 0) * Math.max(1, num($("#fjQ", m).value) || 1));
-    const isianF = () => jenis === "buket_uang" ? (num(d.isian) || 0) : 0, tagih = () => total() + isianF();
+    const isianF = () => jenis === "buket_uang" && !d.isi_sendiri ? (num(d.isian) || 0) : 0, tagih = () => total() + isianF();
     const dp = () => bayarMode === "lunas" ? tagih() : bayarMode === "dp50" ? Math.round(tagih() / 2) : Math.min(tagih(), num($("#fjD", m).value) || 0);
     const ringkas = () => { const t = total(), q = Math.max(1, num($("#fjQ", m).value) || 1);
       const bonus = paket && paket.min ? (q >= paket.min ? ` · 🎁 FREE 1 box perhiasan / ring box` : ` · minimal ${paket.min} ${paket.satuan || ""} untuk FREE ring box`) : "";
@@ -2034,7 +2042,7 @@ function formJasa(jenis, paketAwal){
       if (jenis === "dekorasi" && !String(d.macam || "").trim()) salah("jdMacam", "Isi macam dekorasi");
       if (jenis === "dekorasi" && !String(d.lokasi || "").trim()) salah("jdLok", "Isi lokasi acara");
       if (jenis === "sewa" && !d.kembali_tgl) salah("jsKem", "Isi tanggal barang kembali");
-      if (jenis === "buket_uang" && !(num(d.isian) > 0)) salah("juIsi", "Isi total uang isian");
+      if (jenis === "buket_uang" && !d.isi_sendiri && !(num(d.isian) > 0)) salah("juIsi", "Isi total uang isian, atau pilih \"Pelanggan isi sendiri\"");
       if (bayarMode === "dp" && !(dp() > 0)) salah("fjD", "Isi nominal DP");
       const timIds = jenis === "dekorasi" && Array.isArray(d.tim_id) ? d.tim_id.filter(id => B.staf.some(u => u.id === id)) : [];
       const insentif = timIds.length ? (isAdmin() ? (d.insentif ?? B.toko.ins_dekorasi) : B.toko.ins_dekorasi) : undefined;
@@ -2045,6 +2053,7 @@ function formJasa(jenis, paketAwal){
         bonus: paket && paket.min && qty >= paket.min ? "FREE 1 box perhiasan / ring box" : undefined,
         barang: jenis === "sewa" ? (String(d.barang || "").trim() || namaPaket) : d.barang }).filter(([, v]) => v !== undefined && v !== "" && !(Array.isArray(v) && !v.length)));
       const bg = bagiBayar(total(), isianF(), dp());
+      if (d.isi_sendiri) ["isian", "pecahan", "lembar", "isian_ket"].forEach(k => delete detail[k]);
       if (isianF()) Object.assign(detail, { isian_dibayar: bg.isian, isian_terima: bg.isian >= isianF(), isian_metode: bg.isian ? metode : undefined });
       const s = await api("POST", "/api/penjualan", { pelanggan: nama, hp, metode, bayar: isianF() ? bg.jasa : dp(), catatan: "",
         pesanan: { tgl: $("#fjT", m).value, jam: $("#fjJ", m).value || "", cara: jenis === "dekorasi" ? "antar" : cara, request: $("#fjCat", m).value.trim() },
