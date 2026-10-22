@@ -4066,6 +4066,22 @@ setInterval(async () => {
   } catch {}
 }, LOKAL ? 5_000 : 15_000);
 
+/* Website (browser / ikon di layar utama iPhone): bila tampilan baru sudah terpasang di server, tawarkan muat ulang.
+   Dicek dari tanda versi file app.js (ETag) saat aplikasi dibuka lagi dan tiap 5 menit. */
+let tandaTampilan = null;
+async function cekTampilanBaru(){
+  if (NATIVE || LOKAL || $("#spandukUpdate")) return;
+  try {
+    const tanda = r => r.headers.get("etag") || r.headers.get("last-modified") || "";
+    // Patokan: salinan app.js yang dipakai halaman ini (dari cache browser), dibanding versi di server sekarang.
+    if (tandaTampilan === null) tandaTampilan = tanda(await fetch("/app.js", { cache: "force-cache" }));
+    const server = tanda(await fetch("/app.js", { method: "HEAD", cache: "no-store" }));
+    if (tandaTampilan && server && server !== tandaTampilan) window.rgPembaruan("web", "Tampilan baru tersedia");
+  } catch { /* offline */ }
+}
+cekTampilanBaru(); setInterval(cekTampilanBaru, 5 * 60_000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) cekTampilanBaru(); });
+
 /* Tarik ke bawah untuk sinkron (layar sentuh). */
 (function tarikSegarkan(){
   let mulaiY = null, jarak = 0, aktif = false;
