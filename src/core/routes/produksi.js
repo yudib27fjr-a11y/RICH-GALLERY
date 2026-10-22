@@ -3,7 +3,7 @@ import { one, all, run, tx, getSettings, setSetting } from "../db.js";
 import { HttpError, bad, notFound, teks, angka, tanggal, daftar, sekarang } from "../util.js";
 import { ambilItem, ubahStok, antre } from "../stok.js";
 import { periodeDari } from "../../../public/shared.js";
-import { lemburPeriode } from "./absen.js";
+import { lemburPeriode, jamKhusus, daftarShift } from "./absen.js";
 import { cabangAktif, mintaPusat } from "../cabang-perangkat.js";
 import { antreNotif } from "../notif.js";
 import { platform } from "../platform.js";
@@ -19,11 +19,17 @@ export function teksRekapProduksi(tgl){
     return `${judul(r.nama)} ×${r.qty} (${judul(r.oleh)})${st ? ` · stok ready ${st.stok}` : ""}`; }).join("\n");
   return { jumlah: total, isi };
 }
-/** Dipanggil berkala (cron): sekali sehari setelah 21.30 waktu toko, kirim rekap produksi hari itu ke HP admin. */
+/** Jam tutup toko pada tanggal itu: jam khusus hari itu (mis. Minggu 17.00, Sabtu 21.00), selain itu jam tutup biasa / shift terakhir. */
+export function jamTutupToko(tgl, s = getSettings()){
+  const k = jamKhusus(tgl, s); if (k) return k.tutup;
+  if (/^\d{2}:\d{2}$/.test(s.jam_tutup || "")) return s.jam_tutup;
+  return daftarShift(s).map(x => x.pulang).sort().pop() || "21:00";
+}
+/** Dipanggil berkala (cron): sekali sehari saat toko tutup (sesuai jam operasional hari itu), kirim rekap produksi ke HP admin. */
 export function rekapProduksiHarian(){
   if (platform.perangkat) return;
-  const { tgl, jam } = sekarang();
-  if (jam < "21:30" || getSettings().rekap_produksi_tgl === tgl) return;
+  const { tgl, jam } = sekarang(), s = getSettings();
+  if (jam < jamTutupToko(tgl, s) || s.rekap_produksi_tgl === tgl) return;
   setSetting("rekap_produksi_tgl", tgl);
   const r = teksRekapProduksi(tgl);
   antreNotif(`📋 Rekap produksi hari ini${r.jumlah ? " · " + r.jumlah + " barang" : ""}`, r.isi + "\nCocokkan dengan barang aslinya.", `/#produksi?tgl=${tgl}`);
