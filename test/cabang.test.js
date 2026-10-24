@@ -300,7 +300,8 @@ test("absensi sidik jari: mesin kirim scan → rekap di server & di cabang", asy
   assert.deepEqual(J.shifts.map(x => `${x.masuk}-${x.pulang}`), ["09:00-17:00", "12:00-21:00"]);
   assert.equal(J.jam_buka, "09:00"); assert.equal(J.jam_tutup, "21:00");
   assert.equal((await pusat("PUT", "/api/jam-kerja", { shifts: [{ nama: "Rusak", masuk: "17:00", pulang: "09:00" }] })).status, 400, "pulang sebelum masuk ditolak");
-  assert.equal((await pusat("PUT", "/api/jam-kerja", { lembur_per_jam: 20000, lembur_bulat: 30, ins_kurir: 15000 })).status, 200);
+  // Tes ini memakai jam shift biasa: kosongkan jam khusus per hari (Sabtu/Minggu) supaya hasil sama di hari apa pun.
+  assert.equal((await pusat("PUT", "/api/jam-kerja", { lembur_per_jam: 20000, lembur_bulat: 30, ins_kurir: 15000, jam_hari: {} })).status, 200);
   const A = (await pusat("GET", "/api/absen/pengaturan")).data;
   assert.match(A.alamat, /^\/api\/absen\/mesin\/.{20,}$/);
   const iza = A.karyawan.find(k => k.nama === "IZA"), eva = A.karyawan.find(k => k.nama === "EVA");
