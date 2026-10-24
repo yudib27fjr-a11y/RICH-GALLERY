@@ -448,6 +448,9 @@ UPDATE settings SET nilai = '5000' WHERE kunci = 'ins_konten' AND nilai IN ('0',
   dibuat TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX promosi_mulai ON promosi(mulai);`,
+/* 19: pencocokan wajah saat absen (jarak wajah: makin kecil makin mirip; wajah_ok 1 cocok / 0 tidak cocok / NULL tidak dicek). */
+`ALTER TABLE absen ADD COLUMN wajah REAL;
+ALTER TABLE absen ADD COLUMN wajah_ok INTEGER;`,
 ];
 
 export const DEFAULT_SETTINGS = {

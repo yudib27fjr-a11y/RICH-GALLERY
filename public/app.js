@@ -2694,7 +2694,7 @@ async function vAbsen(){
       ${LOKAL && B.me ? "" : `<button class="btn sm" id="aManual" type="button">+ Absen oleh admin</button>`}<button class="btn sm" id="aCsv" type="button">Unduh CSV</button></div>
     ${R.harian.length ? `<div class="list">${R.harian.map(h => `<div class="li click" data-k="${h.tgl}|${h.user_id}">
       <div class="main"><div class="t">${esc(h.nama)}${satuHari ? "" : ` <span class="small muted">${tglPendek(h.tgl)}</span>`}</div>
-        <div class="small muted">${esc(h.shift || "")}${h.shift ? " · " : ""}${h.scan.length} scan${h.scan.some(x => x.sumber === "pin") ? " · 📷 selfie" : ""}${h.scan.some(x => x.sumber === "manual") ? " · ada manual" : ""}${h.hari_libur ? ` · <b style="color:var(--warn)">masuk di hari libur</b>` : ""}</div></div>
+        <div class="small muted">${esc(h.shift || "")}${h.shift ? " · " : ""}${h.scan.length} scan${h.scan.some(x => x.sumber === "pin") ? " · 📷 selfie" : ""}${h.scan.some(x => x.wajah_ok === 0) ? ` · <b style="color:var(--bad)">⚠️ wajah tidak cocok</b>` : ""}${h.scan.some(x => x.sumber === "manual") ? " · ada manual" : ""}${h.hari_libur ? ` · <b style="color:var(--warn)">masuk di hari libur</b>` : ""}</div></div>
       <div style="text-align:right"><div class="num" style="font-weight:700">${h.masuk} – ${h.pulang || "…"}</div>
         ${h.terlambat ? `<span class="pill warn">terlambat</span>` : `<span class="pill ok">tepat</span>`}${h.pulangCepat ? ` <span class="pill mut">pulang cepat</span>` : ""}${h.lembur ? ` <span class="pill">lembur ${jamMenit(h.lembur)}</span>` : ""}</div></div>`).join("")}</div>`
       : `<div class="list"><div class="empty">Belum ada scan pada ${satuHari ? "tanggal" : "periode"} ini.</div></div>`}`;
@@ -2705,7 +2705,7 @@ async function vAbsen(){
     const h = R.harian.find(x => `${x.tgl}|${x.user_id}` === el.dataset.k); if (!h) return;
     modal(`<h3>${esc(h.nama)} · ${esc(tglID(h.tgl))}</h3>
       <p class="small muted" style="margin:0">${esc(h.shift || "")} ${esc(h.shift_masuk || "")}–${esc(h.shift_pulang || "")}${h.lembur ? ` · lembur <b>${jamMenit(h.lembur)}</b> (datang awal ${h.lembur_awal} mnt, pulang lewat ${h.lembur_akhir} mnt)` : ""}</p>
-      <div class="list">${h.scan.map(x => `<div class="li"><div class="main"><div class="t num">${x.jam}${x.jenis ? ` <span class="pill ${x.jenis === "masuk" ? "ok" : "mut"}">${x.jenis}</span>` : ""}</div><div class="small muted">${x.sumber === "manual" ? "Manual oleh " + esc(x.oleh) + (x.ket ? " · " + esc(x.ket) : "") : x.sumber === "pin" ? `PIN + selfie di ${esc(x.perangkat || "perangkat kasir")}${x.jarak != null ? ` · ±${Math.round(x.jarak)} m dari toko` : ""}` : "Mesin sidik jari"}</div></div>
+      <div class="list">${h.scan.map(x => `<div class="li"><div class="main"><div class="t num">${x.jam}${x.jenis ? ` <span class="pill ${x.jenis === "masuk" ? "ok" : "mut"}">${x.jenis}</span>` : ""}</div><div class="small muted">${x.sumber === "manual" ? "Manual oleh " + esc(x.oleh) + (x.ket ? " · " + esc(x.ket) : "") : x.sumber === "pin" ? `PIN + selfie di ${esc(x.perangkat || "perangkat kasir")}${x.jarak != null ? ` · ±${Math.round(x.jarak)} m dari toko` : ""}${x.wajah_ok === 1 ? ` · <b style="color:var(--ok)">😊 wajah cocok</b>` : x.wajah_ok === 0 ? ` · <b style="color:var(--bad)">⚠️ wajah tidak cocok</b>` : ""}` : "Mesin sidik jari"}</div></div>
         ${x.foto ? `<button class="btn sm" data-foto="${x.id}" type="button">📷 Foto</button>` : ""}${LOKAL ? "" : `<button class="btn sm danger" data-hapus="${x.id}" type="button">Hapus</button>`}</div>`).join("")}</div>
       <div class="actions"><button class="btn" data-close>Tutup</button></div>`, m => {
       m.querySelectorAll("[data-foto]").forEach(b => b.onclick = () => coba(async () => {
@@ -2760,6 +2760,7 @@ async function aturAbsen(){
     <p class="small muted" style="margin:0">Hemat memori: <b>foto selfie absen dihapus otomatis tanggal ${(+B.toko.periode_mulai || 15) + 1}</b> setiap bulan (sehari setelah gajian) untuk periode yang sudah digaji. Jam absen & rekapnya tetap tersimpan.</p>
     <p class="small muted" style="margin:0">Karyawan absen di iMin kasir: pilih nama, ketik PIN, ambil foto selfie. Hanya bisa dari perangkat yang diizinkan, dan hanya bila perangkat berada di lokasi toko.</p>
     <label class="row"><input type="checkbox" id="abPinAktif" ${A.pin_aktif ? "checked" : ""}> <b>Aktifkan absen PIN + selfie</b></label>
+    <button class="btn" id="abWajah" type="button">😊 Daftar wajah karyawan (AI pengenal wajah)</button>
     <label class="f">Koordinat lokasi toko (lintang, bujur)<input type="text" id="abKoord" value="${esc(koordinat)}" placeholder="-6.3274, 108.3247" inputmode="decimal"></label>
     <p class="small muted" style="margin:0">Cara termudah: di iMin (saat di toko) buka Pengaturan → Absensi → <b>Pakai lokasi perangkat ini</b>. Atau <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(B.toko.alamat || "")}" target="_blank" rel="noopener">buka alamat toko di Google Maps</a>, tekan lama titik toko, salin angka koordinatnya, lalu tempel di sini.</p>
     <button class="btn" id="abLokasiSaya" type="button">📍 Pakai lokasi saya sekarang</button>
@@ -2795,6 +2796,7 @@ async function aturAbsen(){
     $("#abKoord").value = `${p.lat.toFixed(7)}, ${p.lng.toFixed(7)}`;
     $("#abLokasiInfo").innerHTML = `Lokasi terbaca: <b>${p.lat.toFixed(7)}, ${p.lng.toFixed(7)}</b> (akurasi ±${Math.round(p.akurasi)} m)${p.akurasi > 100 ? " — kurang akurat, coba lagi di dekat pintu/jendela" : ""}. <a href="https://www.google.com/maps?q=${p.lat},${p.lng}" target="_blank" rel="noopener">Cek di peta</a>, lalu tekan <b>Simpan pengaturan absen</b>.`;
   }, e.target);
+  const bw = $("#abWajah"); if (bw) bw.onclick = daftarWajah;
   $("#abSimpanUmum").onclick = e => coba(async () => {
     const k = $("#abKoord").value.trim(), m = k.match(/^\s*(-?\d+(?:\.\d+)?)\s*[,; ]\s*(-?\d+(?:\.\d+)?)\s*$/);
     if (k && !m) throw new Error("Format koordinat: lintang, bujur — contoh -6.3274, 108.3247");
@@ -2963,11 +2965,90 @@ async function vAbsenku(){
   pasangJam(el);
 }
 
+/* ---------- AI pengenal wajah (face-api, berjalan di HP; model ada di /vendor/face) ---------- */
+let _wajahAI = null;
+function muatWajahAI(){
+  if (!_wajahAI) _wajahAI = (async () => {
+    const f = await import("/vendor/face/face-api.esm.js");
+    // WebGL (cepat) bila ada; selain itu CPU (lebih lambat, tetap jalan).
+    if (!(await f.tf.setBackend("webgl").catch(() => false))) await f.tf.setBackend("cpu");
+    await f.tf.ready();
+    const U = "/vendor/face/model";
+    await Promise.all([f.nets.tinyFaceDetector.loadFromUri(U), f.nets.faceLandmark68TinyNet.loadFromUri(U), f.nets.faceRecognitionNet.loadFromUri(U)]);
+    return f;
+  })().catch(e => { _wajahAI = null; throw e; });
+  return _wajahAI;
+}
+/** Ciri wajah (128 angka) dari kanvas/gambar; null bila tidak ada wajah. */
+async function ciriWajah(src){
+  const f = await muatWajahAI();
+  const r = await f.detectSingleFace(src, new f.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.45 })).withFaceLandmarks(true).withFaceDescriptor();
+  return r ? Array.from(r.descriptor) : null;
+}
+const BATAS_WAJAH = 0.5; // jarak < 0,5 = orang yang sama
+const jarakWajah = (a, b) => Math.sqrt(a.reduce((s, x, i) => s + (x - b[i]) ** 2, 0));
+const jarakKe = (ciri, data) => data && data.d && data.d.length ? Math.min(...data.d.map(v => jarakWajah(ciri, v))) : null;
+/** Admin: daftarkan wajah tiap karyawan (3–5 foto) untuk dicocokkan saat absen. Disimpan di server sebagai angka ciri wajah, bukan foto. */
+async function daftarWajah(){
+  const W = await coba(() => api("GET", "/api/absen/wajah")); if (!W) return;
+  modal(`<h3>😊 Wajah karyawan</h3>
+    <p class="small muted" style="margin:0">Daftarkan wajah tiap karyawan sekali saja (3–5 foto, tempat terang, tanpa masker). Saat absen, AI di HP mencocokkan selfie dengan wajah ini. Yang disimpan hanya angka ciri wajah, bukan fotonya.</p>
+    <div class="list">${B.staf.map(u => `<div class="li"><div class="main"><div class="t">${esc(u.nama)}</div><div class="small muted">${W[u.id] ? `✅ terdaftar · ${W[u.id].jumlah} foto · ${esc(tglID(W[u.id].tgl))}` : "Belum terdaftar"}</div></div>
+      <div class="row" style="gap:6px"><button class="btn sm ${W[u.id] ? "" : "pri"}" data-dw="${u.id}" type="button">${W[u.id] ? "Ulangi" : "Daftar"}</button>${W[u.id] ? `<button class="btn sm ghost danger-teks" data-hw="${u.id}" type="button">Hapus</button>` : ""}</div></div>`).join("")}</div>
+    <div class="actions"><button class="btn" data-close>Tutup</button></div>`, m => {
+    $$("[data-dw]", m).forEach(b => b.onclick = () => rekamWajah(B.staf.find(u => u.id === +b.dataset.dw)));
+    $$("[data-hw]", m).forEach(b => b.onclick = () => coba(async () => { await api("DELETE", "/api/absen/wajah", { user_id: +b.dataset.hw }); toast("Data wajah dihapus"); daftarWajah(); }, b));
+  });
+}
+function rekamWajah(u){
+  let stream = null; const ciriL = [];
+  modal(`<h3>😊 Wajah ${esc(u.nama)}</h3>
+    <div class="absen-kamera"><video id="rwV" autoplay playsinline muted></video><div id="rwKet" class="small muted">Menyalakan kamera & AI…</div></div>
+    <p class="small" style="margin:0">Foto <b id="rwN">0</b> / 5 — hadap lurus, lalu sedikit miring kiri & kanan.</p>
+    <div class="actions"><button class="btn" id="rwBatal" type="button">Batal</button><button class="btn" id="rwAmbil" type="button" disabled>📸 Ambil</button><button class="btn pri" id="rwSimpan" type="button" disabled>Simpan</button></div>`, m => {
+    const v = $("#rwV", m), ket = $("#rwKet", m);
+    const matikan = () => { try { stream && stream.getTracks().forEach(t => t.stop()); } catch {} stream = null; };
+    const pantau = setInterval(() => { if (!document.body.contains(v)) { matikan(); clearInterval(pantau); } }, 800);
+    $("#rwBatal", m).onclick = () => { matikan(); daftarWajah(); };
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+        v.srcObject = stream; await v.play().catch(() => {});
+        ket.textContent = "Memuat AI…"; await muatWajahAI();
+        ket.textContent = "Siap. Tekan Ambil."; $("#rwAmbil", m).disabled = false;
+      } catch (e) { ket.textContent = e.name === "NotAllowedError" ? "Izin kamera ditolak." : "Kamera / AI tidak bisa dipakai: " + e.message; }
+    })();
+    $("#rwAmbil", m).onclick = e => coba(async () => {
+      const w = 360, h = Math.round(w * (v.videoHeight || 480) / (v.videoWidth || 640)), c = document.createElement("canvas"); c.width = w; c.height = h;
+      const g = c.getContext("2d"); g.translate(w, 0); g.scale(-1, 1); g.drawImage(v, 0, 0, w, h); // sama seperti saat absen (cermin)
+      ket.textContent = "🤖 Membaca wajah…";
+      const x = await ciriWajah(c);
+      if (!x) { ket.innerHTML = `<b style="color:var(--bad)">Wajah tidak terdeteksi</b> — dekatkan & terangkan.`; return; }
+      ciriL.push(x); $("#rwN", m).textContent = ciriL.length; ket.textContent = ciriL.length >= 5 ? "Cukup. Tekan Simpan." : "Bagus. Ambil lagi dengan posisi sedikit berbeda.";
+      $("#rwSimpan", m).disabled = ciriL.length < 3; if (ciriL.length >= 5) $("#rwAmbil", m).disabled = true;
+    }, e.target);
+    $("#rwSimpan", m).onclick = e => coba(async () => { await api("PUT", "/api/absen/wajah", { user_id: u.id, data: ciriL }); matikan(); toast(`Wajah ${u.nama} tersimpan`); daftarWajah(); }, e.target);
+  });
+}
+/* ---------- suara: "Terima kasih, Wulan. Absen masuk berhasil." ---------- */
+function bunyiBip(){ try { const A = window.AudioContext || window.webkitAudioContext; const c = new A(), o = c.createOscillator(), g = c.createGain(); o.frequency.value = 880; g.gain.value = 0.15; o.connect(g); g.connect(c.destination); o.start(); setTimeout(() => { o.frequency.value = 1320; }, 150); setTimeout(() => { o.stop(); c.close(); }, 320); } catch {} }
+function siapkanSuara(){ try { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u); } catch {} } // iPhone: "buka kunci" suara saat tombol ditekan
+function ucapkan(teks){
+  bunyiBip();
+  try {
+    if (NATIVE && NATIVE.bicara) return NATIVE.bicara(teks);
+    if (!window.speechSynthesis) return;
+    const u = new SpeechSynthesisUtterance(teks); u.lang = "id-ID"; u.rate = 0.95;
+    const v = speechSynthesis.getVoices().find(x => /^id|indonesia/i.test(x.lang + " " + x.name)); if (v) u.voice = v;
+    setTimeout(() => speechSynthesis.speak(u), 350);
+  } catch { /* tanpa suara */ }
+}
 /** Layar absen: pilih nama + PIN + foto selfie, lokasi dicek otomatis. */
 async function bukaAbsen(jenisAwal){
   const K = await cekKiosk();
   if (!K || !K.boleh) return toast(K ? K.alasan : "Absen tidak tersedia");
-  let jenis = jenisAwal === "pulang" || jenisAwal === "masuk" ? jenisAwal : new Date().getHours() < 13 ? "masuk" : "pulang", foto = "", lokasi = null, stream = null;
+  let jenis = jenisAwal === "pulang" || jenisAwal === "masuk" ? jenisAwal : new Date().getHours() < 13 ? "masuk" : "pulang", foto = "", lokasi = null, stream = null, ciri = null, cekWajah = "belum"; // cekWajah: belum | proses | ok | tanpa (AI tidak tersedia) | gagal (tidak ada wajah)
+  const WJ = K.wajah || {};
   const saya = B && B.me && K.staf.some(s => s.id === B.me.id) ? B.me.id : null;
   modal(`<h3 id="akJudul" class="absen-judul ${jenis}">${jenis === "masuk" ? "☀️ ABSEN MASUK" : "🌙 ABSEN PULANG"} · ${jamSekarang()}</h3>
     <div class="stack">
@@ -2982,12 +3063,25 @@ async function bukaAbsen(jenisAwal){
     <div class="actions"><button class="btn" id="akBatal" type="button">Batal</button><button class="btn pri" id="akKirim" type="button" disabled>Simpan absen</button></div>`, m => {
     const v = $("#akV", m), img = $("#akF", m), ket = $("#akKet", m);
     const matikan = () => { try { stream && stream.getTracks().forEach(t => t.stop()); } catch {} stream = null; };
-    const siap = () => { $("#akKirim", m).disabled = !(foto && lokasi && lokasi.ok && $("#akU", m).value && $("#akP", m).value); };
+    const siap = () => { $("#akKirim", m).disabled = !(foto && lokasi && lokasi.ok && $("#akU", m).value && $("#akP", m).value && ["ok", "tanpa"].includes(cekWajah)); };
+    const hasilWajah = () => {
+      if (cekWajah !== "ok") return { wajah: undefined, wajah_ok: undefined };
+      const d = jarakKe(ciri, WJ[$("#akU", m).value]); return d == null ? {} : { wajah: d, wajah_ok: d < BATAS_WAJAH };
+    };
+    const tulisWajah = () => {
+      if (cekWajah !== "ok") return;
+      const id = $("#akU", m).value, nama = (K.staf.find(x => String(x.id) === id) || {}).nama || "";
+      if (!id) { ket.innerHTML = "🤖 Wajah terbaca. Pilih nama kamu."; return; }
+      const d = jarakKe(ciri, WJ[id]);
+      ket.innerHTML = d == null ? `🤖 Wajah ${esc(nama)} belum didaftarkan admin — absen tetap tersimpan.`
+        : d < BATAS_WAJAH ? `<b style="color:var(--ok)">✅ Wajah cocok: ${esc(nama)}</b>`
+        : `<b style="color:var(--bad)">⚠️ Wajah tidak cocok dengan ${esc(nama)}</b><br><span class="small">Ulangi foto dengan wajah jelas & terang. Bila tetap disimpan, admin akan melihat tanda ⚠️.</span>`;
+    };
     const pantau = setInterval(() => { if (!document.body.contains(v)) { matikan(); clearInterval(pantau); } }, 800);
     $$("#akJ button", m).forEach(b => b.onclick = () => { jenis = b.dataset.j; $$("#akJ button", m).forEach(x => x.classList.toggle("on", x === b)); $("#akKirim", m).textContent = "Simpan absen " + jenis;
       const jd = $("#akJudul", m); jd.className = "absen-judul " + jenis; jd.textContent = (jenis === "masuk" ? "☀️ ABSEN MASUK" : "🌙 ABSEN PULANG") + " · " + jamSekarang(); });
     $("#akKirim", m).textContent = "Simpan absen " + jenis;
-    $("#akU", m).onchange = siap; $("#akP", m).oninput = siap;
+    $("#akU", m).onchange = () => { tulisWajah(); siap(); }; $("#akP", m).oninput = siap;
     $("#akBatal", m).onclick = () => { matikan(); closeModal(); };
     // Kamera depan
     (async () => {
@@ -3004,10 +3098,21 @@ async function bukaAbsen(jenisAwal){
       const c = document.createElement("canvas"); c.width = w; c.height = h;
       const g = c.getContext("2d"); g.translate(w, 0); g.scale(-1, 1); g.drawImage(v, 0, 0, w, h); // seperti cermin
       foto = c.toDataURL("image/jpeg", 0.6);
-      img.src = foto; img.hidden = false; v.hidden = true; ket.textContent = "";
+      img.src = foto; img.hidden = false; v.hidden = true; ket.textContent = "🤖 Mencocokkan wajah…"; cekWajah = "proses"; ciri = null;
       $("#akAmbil", m).hidden = true; $("#akUlang", m).hidden = false; siap();
+      ciriWajah(c).then(x => {
+        if (!foto) return;
+        if (!x) { cekWajah = "gagal"; ket.innerHTML = `<b style="color:var(--bad)">Wajah tidak terdeteksi.</b> Tekan <b>Ulangi foto</b> — wajah menghadap kamera, tempat terang, tanpa masker.`; return siap(); }
+        ciri = x; cekWajah = "ok";
+        if (!$("#akU", m).value) { // pilih nama otomatis dari wajah yang paling mirip
+          let terbaik = null; for (const sx of K.staf) { const d = jarakKe(x, WJ[sx.id]); if (d != null && d < BATAS_WAJAH - 0.05 && (!terbaik || d < terbaik.d)) terbaik = { id: sx.id, d }; }
+          if (terbaik) $("#akU", m).value = String(terbaik.id);
+        }
+        tulisWajah(); siap();
+      }).catch(() => { cekWajah = "tanpa"; ket.textContent = "Pengenal wajah belum bisa dipakai di perangkat ini — absen tetap bisa disimpan."; siap(); });
     };
-    $("#akUlang", m).onclick = () => { foto = ""; img.hidden = true; v.hidden = false; $("#akAmbil", m).hidden = false; $("#akUlang", m).hidden = true; siap(); };
+    $("#akUlang", m).onclick = () => { foto = ""; ciri = null; cekWajah = "belum"; img.hidden = true; v.hidden = false; ket.textContent = "Arahkan wajah ke kamera, lalu tekan Ambil foto"; $("#akAmbil", m).hidden = false; $("#akUlang", m).hidden = true; siap(); };
+    muatWajahAI().catch(() => {}); // siapkan model AI sambil karyawan mengisi nama & PIN
     // Lokasi
     const bacaLokasi = async () => {
       $("#akLok", m).textContent = "📍 Membaca lokasi…";
@@ -3024,11 +3129,12 @@ async function bukaAbsen(jenisAwal){
       siap();
     };
     bacaLokasi();
-    $("#akKirim", m).onclick = e => coba(async () => {
-      const r = await api("POST", "/api/absen/pin", { alat: LOKAL ? undefined : tokenHpAbsen(), user_id: +$("#akU", m).value, pin: $("#akP", m).value, jenis, foto, lat: lokasi.lat, lng: lokasi.lng, akurasi: lokasi.akurasi });
+    $("#akKirim", m).onclick = e => { siapkanSuara(); coba(async () => {
+      const r = await api("POST", "/api/absen/pin", { alat: LOKAL ? undefined : tokenHpAbsen(), user_id: +$("#akU", m).value, pin: $("#akP", m).value, jenis, foto, lat: lokasi.lat, lng: lokasi.lng, akurasi: lokasi.akurasi, ...hasilWajah() });
       matikan(); closeModal();
+      ucapkan(`Terima kasih, ${toTitle(r.nama)}. Absen ${r.jenis} berhasil.`);
       modal(`<h3>✅ Absen ${r.jenis} tercatat</h3><p style="font-size:18px;margin:0"><b>${esc(r.nama)}</b> — jam <b>${esc(r.jam)}</b></p><p class="small muted">±${r.jarak} m dari titik toko</p><div class="actions"><button class="btn pri" data-close>Selesai</button></div>`);
-    }, e.target);
+    }, e.target); };
   });
 }
 /** 90 → "1 j 30 m" */

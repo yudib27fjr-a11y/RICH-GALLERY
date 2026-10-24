@@ -634,3 +634,16 @@ test("buket custom: barang dari pelanggan → hanya jasa yang tercatat (tanpa ha
   assert.equal(r.status, 200, JSON.stringify(r.data));
   assert.equal(r.data.total, 60000); assert.equal(r.data.jenis, "buket_costume"); assert.equal(r.data.detail.barang_ket, "snack 10 bungkus");
 });
+
+test("wajah karyawan: admin daftar ciri wajah, absen menyimpan hasil cocok/tidak", async () => {
+  const b = (await admin("GET", "/api/bootstrap")).data, k = b.staf.find(u => u.peran !== "admin");
+  const v = Array.from({ length: 128 }, (_, i) => Math.sin(i) / 10);
+  assert.equal((await kasir("PUT", "/api/absen/wajah", { user_id: k.id, data: [v, v, v] })).status, 403);
+  assert.equal((await admin("PUT", "/api/absen/wajah", { user_id: k.id, data: [[1, 2, 3]] })).status, 400, "data tidak valid ditolak");
+  assert.equal((await admin("PUT", "/api/absen/wajah", { user_id: k.id, data: [v, v, v] })).status, 200);
+  const W = (await admin("GET", "/api/absen/wajah")).data;
+  assert.equal(W[k.id].jumlah, 3);
+  assert.ok(!("wajah" in (await admin("GET", "/api/pengaturan")).data), "data wajah tidak ikut di pengaturan");
+  assert.equal((await admin("DELETE", "/api/absen/wajah", { user_id: k.id })).status, 200);
+  assert.ok(!(await admin("GET", "/api/absen/wajah")).data[k.id]);
+});

@@ -53,7 +53,7 @@ function statusKiosk(token){
 }
 route("GET", "/api/absen/kiosk", false, ({ query }) => {
   const { hpId, ...st } = statusKiosk(query.alat);
-  return st.boleh ? { ...st, staf: all("SELECT id, nama FROM users WHERE aktif = 1 AND pass_hash IS NOT NULL ORDER BY nama") } : st;
+  return st.boleh ? { ...st, staf: all("SELECT id, nama FROM users WHERE aktif = 1 AND pass_hash IS NOT NULL ORDER BY nama"), wajah: dataWajah() } : st;
 });
 /** Admin mendaftarkan HP yang sedang dipakai (browser) sebagai tempat absen. Langsung diizinkan absen. */
 route("POST", "/api/absen/daftar-hp", "admin", ({ body, user }) => {
@@ -65,6 +65,18 @@ route("POST", "/api/absen/daftar-hp", "admin", ({ body, user }) => {
   return { token, kode: "W" + i, nama };
 }, { pusatSaja: true });
 const FOTO = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+/* ---- Wajah karyawan (untuk mencocokkan selfie absen; dihitung & dicocokkan di HP, server hanya menyimpan angka ciri wajah) ---- */
+const dataWajah = () => { const w = getSettings().wajah; return w && typeof w === "object" && !Array.isArray(w) ? w : {}; };
+const wajahAbsen = b => { const d = Number(b.wajah); return isFinite(d) && d >= 0 && d < 5 ? { wajah: Math.round(d * 1000) / 1000, wajah_ok: b.wajah_ok ? 1 : 0 } : { wajah: null, wajah_ok: null }; };
+route("GET", "/api/absen/wajah", "admin", () => Object.fromEntries(Object.entries(dataWajah()).map(([id, x]) => [id, { jumlah: (x.d || []).length, tgl: x.t || "" }])));
+route("PUT", "/api/absen/wajah", "admin", ({ body }) => {
+  const u = one("SELECT id FROM users WHERE id = ? AND aktif = 1", [+body.user_id]); if (!u) throw bad("Pilih karyawan");
+  const d = Array.isArray(body.data) ? body.data.slice(0, 8) : [];
+  if (!d.length || !d.every(v => Array.isArray(v) && v.length === 128 && v.every(n => typeof n === "number" && isFinite(n) && Math.abs(n) < 5))) throw bad("Data wajah tidak valid — ambil foto wajah lagi");
+  const w = { ...dataWajah(), [u.id]: { d: d.map(v => v.map(n => Math.round(n * 10000) / 10000)), t: sekarang().tgl } };
+  setSetting("wajah", w); return { ok: true, jumlah: d.length };
+}, { pusatSaja: true });
+route("DELETE", "/api/absen/wajah", "admin", ({ body }) => { const w = { ...dataWajah() }; delete w[+body.user_id]; setSetting("wajah", w); return { ok: true }; }, { pusatSaja: true });
 route("POST", "/api/absen/pin", false, ({ body, ctx }) => {
   const st = statusKiosk(body.alat);
   if (!st.boleh) throw new HttpError(403, st.alasan);
@@ -80,14 +92,16 @@ route("POST", "/api/absen/pin", false, ({ body, ctx }) => {
   const jarak = cekLokasi(body.lat, body.lng, body.akurasi);
   const jenis = body.jenis === "pulang" ? "pulang" : "masuk";
   const w = sekarang(), uid = platform.token();
-  const id = Number(run(`INSERT INTO absen(tgl, jam, user_id, sumber, jenis, foto, lat, lng, jarak, uid, mesin, oleh) VALUES (?,?,?, 'pin', ?,?,?,?,?,?,?,?)`,
-    [w.tgl, w.jam.slice(0, 5) + ":00", u.id, jenis, foto, +body.lat, +body.lng, jarak, uid, st.hp || getSettings().cabang_nama || "", u.nama]).lastInsertRowid);
+  const wj = wajahAbsen(body);
+  const id = Number(run(`INSERT INTO absen(tgl, jam, user_id, sumber, jenis, foto, lat, lng, jarak, uid, mesin, oleh, wajah, wajah_ok) VALUES (?,?,?, 'pin', ?,?,?,?,?,?,?,?,?,?)`,
+    [w.tgl, w.jam.slice(0, 5) + ":00", u.id, jenis, foto, +body.lat, +body.lng, jarak, uid, st.hp || getSettings().cabang_nama || "", u.nama, wj.wajah, wj.wajah_ok]).lastInsertRowid);
   if (st.hpId) run("UPDATE perangkat SET terakhir = datetime('now') WHERE id = ?", [st.hpId]);
   notifAbsen({ userId: u.id, tgl: w.tgl, jam: w.jam, jenis, tempat: st.hp || getSettings().cabang_nama || "" });
+  if (wj.wajah_ok === 0) antreNotif(`⚠️ Wajah tidak cocok · ${u.nama}`, `Absen ${jenis} ${w.jam.slice(0, 5)} — cek foto selfie-nya di Rekap Absen`, `/#absen?tgl=${w.tgl}&u=${u.id}`);
   return { ok: true, id, uid, nama: u.nama, jenis, jam: w.jam.slice(0, 5), jarak };
 }, { batas: 500_000, cabang: ({ hasil: h }) => {
-  const a = one("SELECT a.tgl, a.jam, a.jenis, a.foto, a.lat, a.lng, u.nama_key FROM absen a JOIN users u ON u.id = a.user_id WHERE a.uid = ?", [h.uid]);
-  return { aksi: "absen", data: { uid: h.uid, nama_key: a.nama_key, tgl: a.tgl, jam: a.jam.slice(0, 5), jenis: a.jenis, foto: a.foto, lat: a.lat, lng: a.lng } };
+  const a = one("SELECT a.tgl, a.jam, a.jenis, a.foto, a.lat, a.lng, a.wajah, a.wajah_ok, u.nama_key FROM absen a JOIN users u ON u.id = a.user_id WHERE a.uid = ?", [h.uid]);
+  return { aksi: "absen", data: { uid: h.uid, nama_key: a.nama_key, tgl: a.tgl, jam: a.jam.slice(0, 5), jenis: a.jenis, foto: a.foto, lat: a.lat, lng: a.lng, wajah: a.wajah, wajah_ok: a.wajah_ok } };
 } });
 
 /** Absen dari perangkat cabang diterima server (dipanggil dari /api/cabang/kirim). */
@@ -96,8 +110,10 @@ export function terimaAbsen(x, alat){
   const u = one("SELECT id, nama FROM users WHERE nama_key = ?", [String(x.nama_key || "")]);
   if (!u) throw bad("Karyawan tidak dikenal di server");
   const jarak = cekLokasi(x.lat, x.lng, 0);
-  const r = run(`INSERT OR IGNORE INTO absen(tgl, jam, user_id, sumber, jenis, foto, lat, lng, jarak, uid, mesin, oleh) VALUES (?,?,?, 'pin', ?,?,?,?,?,?,?,?)`,
-    [tanggal(x.tgl), String(x.jam || "00:00").slice(0, 5) + ":00", u.id, x.jenis === "pulang" ? "pulang" : "masuk", String(x.foto || "").slice(0, 400_000), +x.lat, +x.lng, jarak, String(x.uid), alat.nama, u.nama]);
+  const wj = x.wajah == null ? { wajah: null, wajah_ok: null } : wajahAbsen(x);
+  const r = run(`INSERT OR IGNORE INTO absen(tgl, jam, user_id, sumber, jenis, foto, lat, lng, jarak, uid, mesin, oleh, wajah, wajah_ok) VALUES (?,?,?, 'pin', ?,?,?,?,?,?,?,?,?,?)`,
+    [tanggal(x.tgl), String(x.jam || "00:00").slice(0, 5) + ":00", u.id, x.jenis === "pulang" ? "pulang" : "masuk", String(x.foto || "").slice(0, 400_000), +x.lat, +x.lng, jarak, String(x.uid), alat.nama, u.nama, wj.wajah, wj.wajah_ok]);
+  if (Number(r.changes || 0) > 0 && wj.wajah_ok === 0) antreNotif(`⚠️ Wajah tidak cocok · ${u.nama}`, `Absen ${x.jenis === "pulang" ? "pulang" : "masuk"} ${String(x.jam || "").slice(0, 5)} di ${alat.nama} — cek foto selfie-nya`, `/#absen?tgl=${tanggal(x.tgl)}&u=${u.id}`);
   if (Number(r.changes || 0) > 0) notifAbsen({ userId: u.id, tgl: tanggal(x.tgl), jam: String(x.jam || "00:00"), jenis: x.jenis === "pulang" ? "pulang" : "masuk", tempat: alat.nama });
   return { ok: true };
 }
@@ -213,14 +229,14 @@ export function rekapAbsen(dari, sampai){
   const users = all("SELECT id, nama, nama_key, peran, aktif, pin_absen, shift, libur FROM users ORDER BY nama");
   const perPin = new Map(users.filter(u => u.pin_absen).map(u => [u.pin_absen, u]));
   const perId = new Map(users.map(u => [u.id, u]));
-  const scan = all("SELECT id, tgl, jam, pin, user_id, sumber, ket, oleh, jenis, jarak, mesin, foto IS NOT NULL ada_foto FROM absen WHERE dihapus IS NULL AND tgl BETWEEN ? AND ? ORDER BY tgl, jam", [dari, sampai]);
+  const scan = all("SELECT id, tgl, jam, pin, user_id, sumber, ket, oleh, jenis, jarak, mesin, wajah, wajah_ok, foto IS NOT NULL ada_foto FROM absen WHERE dihapus IS NULL AND tgl BETWEEN ? AND ? ORDER BY tgl, jam", [dari, sampai]);
   const hari = new Map(), takDikenal = new Map();
   for (const a of scan) {
     const u = a.user_id ? perId.get(a.user_id) : perPin.get(a.pin);
     if (!u) { const t = takDikenal.get(a.pin) || { pin: a.pin, jumlah: 0, terakhir: "" }; t.jumlah++; t.terakhir = `${a.tgl} ${a.jam}`; takDikenal.set(a.pin, t); continue; }
     const k = `${a.tgl}|${u.id}`;
     if (!hari.has(k)) hari.set(k, { tgl: a.tgl, user_id: u.id, nama: u.nama, nama_key: u.nama_key, pilihanShift: u.shift, hari_libur: liburPada(u, a.tgl), scan: [] });
-    hari.get(k).scan.push({ id: a.id, jam: a.jam.slice(0, 5), sumber: a.sumber, ket: a.ket, oleh: a.oleh, jenis: a.jenis, jarak: a.jarak, perangkat: a.sumber === "pin" ? a.mesin : "", foto: !!a.ada_foto });
+    hari.get(k).scan.push({ id: a.id, jam: a.jam.slice(0, 5), sumber: a.sumber, ket: a.ket, oleh: a.oleh, jenis: a.jenis, jarak: a.jarak, perangkat: a.sumber === "pin" ? a.mesin : "", foto: !!a.ada_foto, wajah: a.wajah, wajah_ok: a.wajah_ok });
   }
   const harian = [...hari.values()].map(({ pilihanShift, ...h }) => {
     const sc = h.scan, akhir = sc[sc.length - 1];
