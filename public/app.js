@@ -251,11 +251,39 @@ function pdfStruk(s){
   simpanPdf(`struk-${String(s.no || "rich-gallery").replace(/[^\w-]+/g, "-")}.pdf`, buatPdf(c, mm, tinggi));
 }
 function waLink(s){ return `https://wa.me/${nomorWA(s.hp)}?text=` + encodeURIComponent(pesanWA(s)); }
+/** Terima pembayaran sisa (DP → lunas). Buket uang: jasa dulu, sisanya menambah uang isian yang sudah dibayar. */
+async function bayarSisa(s, nominal, metode){
+  if (!isianUang(s)) return api("POST", `/api/penjualan/${s.id}/lunasi`, nominal < s.total - s.bayar ? { metode, nominal } : { metode });
+  const bg = bagiBayar(s.total - s.bayar, isianUang(s) - isianDibayar(s), nominal);
+  if (bg.jasa > 0) await api("POST", `/api/penjualan/${s.id}/lunasi`, { metode, nominal: bg.jasa });
+  if (bg.isian > 0) { const baru = isianDibayar(s) + bg.isian;
+    await api("POST", `/api/penjualan/${s.id}/detail`, { detail: { isian_dibayar: baru, isian_terima: baru >= isianUang(s), isian_metode: metode, isian_at: `${today()} ${jamSekarang()}` } }); }
+}
+/** Dari struk / Transaksi: lunasi sisa pembayaran, lalu struk terbaru langsung siap dicetak. */
+function lunasiDariStruk(s, setelah){
+  const sisa = sisaTagihan(s); let metode = "Tunai";
+  modal(`<h3>💵 Lunasi ${esc(s.no)}</h3><p style="margin:0">${esc(toTitle(s.pelanggan))} · sisa <b>${rp(sisa)}</b></p>
+    <label class="f">Nominal yang dibayar<input type="number" id="lsN" value="${sisa}" min="1" max="${sisa}" step="1000" inputmode="numeric"></label>
+    <div class="seg" id="lsM2" style="display:flex">${B.metode.map(x => `<button type="button" data-m="${x}" style="flex:1" class="${x === metode ? "on" : ""}">${x}</button>`).join("")}</div>
+    ${s.ambil_tgl && !s.diambil_at ? `<label class="row small"><input type="checkbox" id="lsAmbil" checked> Pesanan sudah ${s.ambil_cara === "antar" ? "diantar" : "diambil"}</label>` : ""}
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="lsOk" type="button">Simpan & lihat struk</button></div>`, m => {
+    $$("#lsM2 button", m).forEach(b => b.onclick = () => { metode = b.dataset.m; $$("#lsM2 button", m).forEach(x => x.classList.toggle("on", x === b)); });
+    $("#lsOk", m).onclick = e => coba(async () => {
+      const n = Math.min(sisa, num($("#lsN", m).value) || 0); if (!(n > 0)) throw new Error("Isi nominal yang dibayar");
+      await bayarSisa(s, n, metode);
+      if ($("#lsAmbil", m)?.checked) await api("POST", `/api/penjualan/${s.id}/diambil`, {});
+      const baru = await api("GET", `/api/penjualan/${s.id}`);
+      closeModal(); toast(n >= sisa ? `Lunas (${metode})` : `Diterima ${rp(n)} · sisa ${rp(sisa - n)}`);
+      lihatStruk(baru, setelah); setelah && setelah();
+    }, e.target);
+  });
+}
 function lihatStruk(s, setelahBatal){
   modal(`<h3>Struk ${esc(s.no)}</h3>
     <pre class="receipt-prev">${esc(strukText(s))}</pre>
     ${s.kartu ? `<div class="pesanan-isi stack" style="margin-bottom:8px"><b>Kartu ucapan</b><div style="white-space:pre-wrap">${esc(s.kartu)}</div>${tombolKartu(s.id)}</div>` : ""}
     ${s.batal_at ? `<p class="small muted">Dibatalkan oleh ${esc(s.batal_oleh || "-")}${s.batal_alasan ? ": " + esc(s.batal_alasan) : ""}</p>` : ""}
+    ${!s.batal_at && sisaTagihan(s) > 0 ? `<button class="btn pri" id="lunasBtn" type="button" style="width:100%;margin-bottom:8px">💵 Lunasi sisa ${rp(sisaTagihan(s))}</button>` : ""}
     <div class="actions">
       ${!s.batal_at && isAdmin() ? `<button class="btn bk b-batal" id="voidBtn" type="button">${ikon("batal", 18)}Batalkan</button>` : ""}
       ${isAdmin() ? `<button class="btn bk b-koreksi" id="koreksiBtn" type="button">${ikon("koreksi", 18)}Koreksi</button><button class="btn bk b-hapus" id="hapusBtn" type="button">${ikon("hapus", 18)}Hapus</button>` : ""}
@@ -269,6 +297,7 @@ function lihatStruk(s, setelahBatal){
       $("#printBtn", m).onclick = () => cetak(s);
       $("#notaBtn", m).onclick = () => bukaNota(s);
       $("#pdfStrukBtn", m).onclick = () => pdfStruk(s);
+      const lb = $("#lunasBtn", m); if (lb) lb.onclick = () => lunasiDariStruk(s, setelahBatal);
       const sb = $("#stikerBtn", m); if (sb) sb.onclick = () => pesanStiker(s);
       if (s.kartu) pasangTombolKartu(m, s.kartu);
       const hb = $("#hapusBtn", m);
@@ -1581,7 +1610,6 @@ async function simpanTransaksi(print, tombol){
   }).filter(([, v]) => v !== undefined && v !== "" && !(Array.isArray(v) && !v.length))) : undefined;
   // Buket uang: bayaran gabungan (jasa + isian) dibagi — jasa dulu, sisanya uang isian; kelebihan = kembalian (ikut di bayar jasa).
   let bagiIsian = null;
-  if (jenis === "buket_uang" && !cart.pesanan && nilaiBayar() < cartTagihan()) return toast("Pembayaran kurang dari tagihan (jasa + uang isian). Centang Pesanan & isi tanggal ambil supaya kekurangannya tercatat dan bisa dilunasi nanti.");
   if (jenis === "buket_uang") {
     const isian = isianCart(), b = nilaiBayar(), bg = bagiBayar(cartTotal(), isian, b);
     if (dt.isi_sendiri) ["isian", "pecahan", "lembar", "isian_ket"].forEach(k => delete detailKirim[k]);
@@ -1593,7 +1621,9 @@ async function simpanTransaksi(print, tombol){
       tgl: isAdmin() ? (cart.tgl || today()) : undefined, pelanggan: cart.pelanggan, hp: cart.hp, metode: cart.metode,
       bayar: bagiIsian ? bagiIsian.jasa : cart.bayarMode === "dp50" || cart.bayarMode === "dp" ? nilaiBayar() : (cart.bayar || undefined), diskon: cart.diskon || 0, ongkir: cart.ongkir || 0, catatan: cart.catatan,
       kartu: cart.kartuOn ? (cart.kartu || "") : "",
-      pesanan: cart.pesanan ? { tgl: cart.ambil_tgl || today(), jam: cart.ambil_jam || "", cara: cart.ambil_cara || "ambil", request: cart.request || "" } : undefined,
+      // DP / belum lunas tanpa dicentang Pesanan → tetap jadi pesanan (ambil hari ini) supaya muncul di menu Pesanan & bisa dilunasi di sana.
+      pesanan: cart.pesanan ? { tgl: cart.ambil_tgl || today(), jam: cart.ambil_jam || "", cara: cart.ambil_cara || "ambil", request: cart.request || "" }
+        : nilaiBayar() < cartTagihan() ? { tgl: today(), jam: "", cara: "ambil", request: "" } : undefined,
       jenis: jenis || undefined, detail: detailKirim,
       items: cart.items.map(i => ({ product_id: i.product_id, nama: i.nama, kategori: i.kategori, harga: i.harga, qty: i.qty, ready: i.ready, pembuat_id: !i.ready && i.pembuat_id ? i.pembuat_id : undefined })),
     });
@@ -2608,13 +2638,7 @@ function detailPesanan(s, setelah = () => render()){
     const pk = $("#psKurir", m); if (pk) pk.onclick = () => { krSaleId = s.id; krData = null; closeModal(); pindah("kurir"); };
     if (s.kartu) pasangTombolKartu(m, s.kartu);
     // Buket uang: bayaran dibagi — jasa dulu (lunasi), sisanya menambah uang isian yang sudah dibayar.
-    const lunasi = async (nominal = sisa) => {
-      if (!bu) return api("POST", `/api/penjualan/${s.id}/lunasi`, { metode });
-      const bg = bagiBayar(s.total - s.bayar, isianUang(s) - isianDibayar(s), nominal);
-      if (bg.jasa > 0) await api("POST", `/api/penjualan/${s.id}/lunasi`, { metode, nominal: bg.jasa });
-      if (bg.isian > 0) { const baru = isianDibayar(s) + bg.isian;
-        await api("POST", `/api/penjualan/${s.id}/detail`, { detail: { isian_dibayar: baru, isian_terima: baru >= isianUang(s), isian_metode: metode, isian_at: `${today()} ${jamSekarang()}` } }); }
-    };
+    const lunasi = (nominal = sisa) => bayarSisa(s, nominal, metode);
     const ls = $("#psLunas", m); if (ls) ls.onclick = e => coba(async () => {
       const n = bu ? Math.min(sisa, num($("#lsNom", m).value) || 0) : sisa;
       if (!(n > 0)) throw new Error("Isi nominal yang dibayar");
