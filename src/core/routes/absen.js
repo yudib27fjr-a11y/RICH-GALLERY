@@ -104,6 +104,10 @@ route("PUT", "/api/absen/wajah", "admin", ({ body }) => {
   const w = { ...dataWajah(), [u.id]: { d: d.map(v => v.map(n => Math.round(n * 10000) / 10000)), t: sekarang().tgl } };
   setSetting("wajah", w); return { ok: true, jumlah: d.length };
 }, { pusatSaja: true });
+/** Foto selfie absen terbaru seorang karyawan (untuk mendaftarkan wajah dari absen sebelumnya). */
+route("GET", "/api/absen/foto-terakhir", "admin", ({ query }) => all(
+  "SELECT id, tgl, jam, foto FROM absen WHERE user_id = ? AND foto IS NOT NULL AND dihapus IS NULL AND sumber = 'pin' ORDER BY tgl DESC, jam DESC LIMIT ?",
+  [+query.user_id, Math.min(12, Math.max(1, +query.n || 8))]).map(a => ({ ...a, jam: a.jam.slice(0, 5) })), { pusatSaja: true });
 route("DELETE", "/api/absen/wajah", "admin", ({ body }) => { const w = { ...dataWajah() }; delete w[+body.user_id]; setSetting("wajah", w); return { ok: true }; }, { pusatSaja: true });
 route("POST", "/api/absen/pin", false, ({ body, ctx }) => {
   const st = statusKiosk(body.alat);
