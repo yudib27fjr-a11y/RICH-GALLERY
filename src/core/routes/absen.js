@@ -90,11 +90,29 @@ route("POST", "/api/login-wajah", false, ({ body, ctx }) => {
   if (!satu || satu.d >= BATAS_WAJAH - 0.05 || (dua && dua.d - satu.d < 0.08)) { catatGagal(kunci); throw new HttpError(401, "Wajah tidak dikenali — masuk dengan nama & PIN"); }
   const u = one("SELECT id, nama, peran, aktif FROM users WHERE id = ?", [satu.id]);
   if (!u || !u.aktif) throw new HttpError(401, "Akun tidak aktif");
-  if (u.peran === "admin") throw new HttpError(401, `Wajah dikenali: ${u.nama}. Akun admin tetap masuk dengan password.`);
+  if (u.peran === "admin") {
+    // Admin: syarat wajah lebih ketat & harus dikonfirmasi (Ya / Tidak) di layar sebelum masuk.
+    if (satu.d >= BATAS_WAJAH - 0.1) { catatGagal(kunci); throw new HttpError(401, "Wajah admin kurang jelas — dekatkan ke kamera di tempat terang, atau masuk dengan password"); }
+    const t = platform.token();
+    konfirmasiAdmin.set(t, { id: u.id, sampai: Date.now() + 60_000, tempat: st.hp || getSettings().cabang_nama || "perangkat kasir" });
+    for (const [k, v] of konfirmasiAdmin) if (v.sampai < Date.now()) konfirmasiAdmin.delete(k);
+    resetGagal(kunci);
+    return { konfirmasi: t, nama: u.nama, admin: true };
+  }
   resetGagal(kunci);
   buatSesi(ctx, u.id);
   return { ok: true, nama: u.nama };
 }, { batas: 20_000 });
+const konfirmasiAdmin = new Map();
+/** Admin menekan "Ya, masuk" setelah wajahnya dikenali (berlaku 1 menit). */
+route("POST", "/api/login-wajah/konfirmasi", false, ({ body, ctx }) => {
+  const k = konfirmasiAdmin.get(String(body.konfirmasi || "")); konfirmasiAdmin.delete(String(body.konfirmasi || ""));
+  if (!k || k.sampai < Date.now()) throw new HttpError(401, "Konfirmasi kedaluwarsa — pindai wajah lagi");
+  const u = one("SELECT id, nama, aktif FROM users WHERE id = ? AND peran = 'admin'", [k.id]); if (!u || !u.aktif) throw new HttpError(401, "Akun tidak aktif");
+  buatSesi(ctx, u.id);
+  antreNotif(`🔐 Admin ${u.nama} masuk dengan wajah`, `Di ${k.tempat} · ${sekarang().tgl} ${sekarang().jam}. Bukan Anda? Ganti password di Pengaturan → Pengguna.`, "/#atur");
+  return { ok: true, nama: u.nama };
+});
 const wajahAbsen = b => { const d = Number(b.wajah); return isFinite(d) && d >= 0 && d < 5 ? { wajah: Math.round(d * 1000) / 1000, wajah_ok: b.wajah_ok ? 1 : 0 } : { wajah: null, wajah_ok: null }; };
 route("GET", "/api/absen/wajah", "admin", () => Object.fromEntries(Object.entries(dataWajah()).map(([id, x]) => [id, { jumlah: (x.d || []).length, tgl: x.t || "" }])));
 route("PUT", "/api/absen/wajah", "admin", ({ body }) => {

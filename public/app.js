@@ -690,8 +690,20 @@ function masukWajah(){
           const g = c.getContext("2d"); g.translate(w, 0); g.scale(-1, 1); g.drawImage(v, 0, 0, w, h);
           const ciri = await ciriWajah(c);
           if (ciri && !selesai) {
-            try { const r = await api("POST", "/api/login-wajah", { alat: LOKAL ? undefined : tokenHpAbsen(), ciri }); matikan(); closeModal(); toast(`Selamat datang, ${toTitle(r.nama)} 👋`); await mulai(); return; }
-            catch (e) { if (/admin|tidak aktif|diizinkan|Terlalu/i.test(e.message)) { ket.textContent = e.message; matikan(); return; } if (++gagal >= 4) { ket.textContent = e.message; matikan(); return; } }
+            try {
+              const r = await api("POST", "/api/login-wajah", { alat: LOKAL ? undefined : tokenHpAbsen(), ciri });
+              if (r.konfirmasi) { // akun admin: tanya dulu Ya / Tidak
+                matikan();
+                $(".sheet", m).innerHTML = `<h3>🔐 Masuk sebagai admin?</h3><p style="font-size:18px;margin:0">Wajah dikenali: <b>${esc(toTitle(r.nama))}</b> (admin)</p>
+                  <p class="small muted" style="margin:0">Masuk ke akun admin? Pemberitahuan dikirim ke HP admin setiap masuk dengan wajah.</p>
+                  <div class="actions"><button class="btn" id="mwTidak" type="button">Tidak</button><button class="btn pri" id="mwYa" type="button">Ya, masuk</button></div>`;
+                $("#mwTidak", m).onclick = () => { closeModal(); toast("Dibatalkan"); };
+                $("#mwYa", m).onclick = e2 => coba(async () => { const k = await api("POST", "/api/login-wajah/konfirmasi", { konfirmasi: r.konfirmasi }); closeModal(); toast(`Selamat datang, ${toTitle(k.nama)} 👋`); await mulai(); }, e2.target);
+                return;
+              }
+              matikan(); closeModal(); toast(`Selamat datang, ${toTitle(r.nama)} 👋`); await mulai(); return;
+            }
+            catch (e) { if (/tidak aktif|diizinkan|Terlalu/i.test(e.message)) { ket.textContent = e.message; matikan(); return; } if (++gagal >= 4) { ket.textContent = e.message; matikan(); return; } }
           }
           await new Promise(r => setTimeout(r, 700));
         }

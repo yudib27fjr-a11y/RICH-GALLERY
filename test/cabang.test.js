@@ -516,6 +516,15 @@ test("absen PIN + selfie: hanya perangkat yang diizinkan & di lokasi toko", asyn
   assert.equal((await tamuP("POST", "/api/login-wajah", { alat: hp.token, ciri: LAIN })).status, 401, "wajah lain ditolak");
   const lw = await tamuP("POST", "/api/login-wajah", { alat: hp.token, ciri: V2 });
   assert.equal(lw.status, 200, JSON.stringify(lw.data)); assert.equal(lw.data.nama, "IZA");
+  // Admin: wajah dikenali → harus dikonfirmasi dulu
+  const adm = (await pusat("GET", "/api/bootstrap")).data.me, VA = V.map((x, i) => x + (i % 3 ? 0.2 : -0.2));
+  assert.equal((await pusat("PUT", "/api/absen/wajah", { user_id: adm.id, data: [VA, VA] })).status, 200);
+  const la = await tamuP("POST", "/api/login-wajah", { alat: hp.token, ciri: VA });
+  assert.equal(la.status, 200, JSON.stringify(la.data)); assert.ok(la.data.konfirmasi && la.data.admin);
+  assert.equal((await tamuP("POST", "/api/login-wajah/konfirmasi", { konfirmasi: "salah" })).status, 401);
+  assert.equal((await tamuP("POST", "/api/login-wajah/konfirmasi", { konfirmasi: la.data.konfirmasi })).status, 200);
+  assert.equal((await tamuP("POST", "/api/login-wajah/konfirmasi", { konfirmasi: la.data.konfirmasi })).status, 401, "konfirmasi sekali pakai");
+  await pusat("DELETE", "/api/absen/wajah", { user_id: adm.id });
   const wOff = (await pusat("GET", "/api/cabang/perangkat")).data.find(x => x.kode === hp.kode);
   assert.equal((await pusat("PUT", `/api/cabang/perangkat/${wOff.id}`, { absen: false })).status, 200);
   assert.equal((await absenHp({})).status, 403, "sakelar absen dimatikan");
