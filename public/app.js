@@ -654,9 +654,12 @@ function tampilLogin(pesan = ""){
     <div class="err" id="lErr">${esc(pesan)}</div>
     <button class="btn pri big" type="submit">Masuk</button>
     <p class="small muted" style="margin:0">Lupa PIN? Minta admin menggantinya di Pengaturan → Pengguna.</p>
+    <div id="lWajah"></div>
     <div id="lAbsen"></div>
     <p class="small muted" style="margin:0;text-align:center;opacity:.7">${(() => { try { const i = JSON.parse(NATIVE.info()); return `Aplikasi ${esc(i.versi || "?")} · tampilan #${esc(String(i.web || "?"))}`; } catch { return ""; } })()}</p>${TAG_PEMBUAT}</form></div>`;
   // Perangkat kasir: karyawan bisa absen tanpa masuk
+  if (LOKAL || tokenHpAbsen()) cekKiosk().then(K => { const w = $("#lWajah");
+    if (w && K && K.boleh && K.wajah && Object.keys(K.wajah).length) { w.innerHTML = `<button class="btn big" id="lWajahBtn" type="button" style="width:100%">😊 Masuk dengan wajah</button>`; $("#lWajahBtn").onclick = masukWajah; } });
   if (LOKAL || tokenHpAbsen()) cekKiosk().then(K => { const d = $("#lAbsen"); if (!d || !K || !K.aktif) return;
     d.innerHTML = `<hr class="sep">` + panelAbsen(K, true);
     pasangJam(d);
@@ -667,6 +670,34 @@ function tampilLogin(pesan = ""){
     try { await api("POST", "/api/login", { nama: $("#lNama").value, password: $("#lPw").value }); await mulai(); }
     catch (err) { $("#lErr").textContent = err.message; btn.disabled = false; btn.textContent = label; }
   };
+}
+/** Masuk dengan wajah (karyawan, di perangkat yang diizinkan absen): kamera memindai, wajah dicocokkan di server. */
+function masukWajah(){
+  let stream = null, selesai = false;
+  modal(`<h3>😊 Masuk dengan wajah</h3><div class="absen-kamera"><video id="mwV" autoplay playsinline muted></video><div id="mwKet" class="small muted">Menyalakan kamera & AI…</div></div>
+    <div class="actions"><button class="btn" id="mwBatal" type="button">Batal</button></div>`, m => {
+    const v = $("#mwV", m), ket = $("#mwKet", m);
+    const matikan = () => { selesai = true; try { stream && stream.getTracks().forEach(t => t.stop()); } catch {} stream = null; };
+    $("#mwBatal", m).onclick = () => { matikan(); closeModal(); };
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+        v.srcObject = stream; await v.play().catch(() => {}); await muatWajahAI();
+        ket.textContent = "🤖 Hadapkan wajah ke kamera…";
+        let gagal = 0;
+        while (!selesai && document.body.contains(v)) {
+          const w = 360, h = Math.round(w * (v.videoHeight || 480) / (v.videoWidth || 640)), c = document.createElement("canvas"); c.width = w; c.height = h;
+          const g = c.getContext("2d"); g.translate(w, 0); g.scale(-1, 1); g.drawImage(v, 0, 0, w, h);
+          const ciri = await ciriWajah(c);
+          if (ciri && !selesai) {
+            try { const r = await api("POST", "/api/login-wajah", { alat: LOKAL ? undefined : tokenHpAbsen(), ciri }); matikan(); closeModal(); toast(`Selamat datang, ${toTitle(r.nama)} 👋`); await mulai(); return; }
+            catch (e) { if (/admin|tidak aktif|diizinkan|Terlalu/i.test(e.message)) { ket.textContent = e.message; matikan(); return; } if (++gagal >= 4) { ket.textContent = e.message; matikan(); return; } }
+          }
+          await new Promise(r => setTimeout(r, 700));
+        }
+      } catch (e) { ket.textContent = e.name === "NotAllowedError" ? "Izin kamera ditolak." : "Kamera / AI tidak bisa dipakai: " + e.message; matikan(); }
+    })();
+  });
 }
 /** Perangkat kasir baru / habis dipasang ulang: langsung sambungkan ke server toko, semua data (barang, akun, stok) diambil dari server. */
 function tampilSetupKasir(){

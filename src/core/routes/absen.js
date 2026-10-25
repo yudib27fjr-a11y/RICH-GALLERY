@@ -9,7 +9,7 @@ import { platform } from "../platform.js";
 import { HttpError, bad, notFound, teks, tanggal, sekarang } from "../util.js";
 import { periodeDari, tambahHari } from "../../../public/shared.js";
 import { cabangAktif, mintaPusat } from "../cabang-perangkat.js";
-import { cekPassword, cekBatasLogin, catatGagal, resetGagal } from "../auth.js";
+import { cekPassword, cekBatasLogin, catatGagal, resetGagal, buatSesi } from "../auth.js";
 import { antreNotif } from "../notif.js";
 
 /* ================= Absen PIN + foto selfie dari perangkat kasir di lokasi toko =================
@@ -79,6 +79,22 @@ function jarakWajahTerdaftar(userId, ciri){
   if (!Array.isArray(d) || !d.length || !Array.isArray(ciri) || ciri.length !== 128 || !ciri.every(n => typeof n === "number" && isFinite(n))) return null;
   return Math.min(...d.map(v => Math.sqrt(v.reduce((s, x, i) => s + (x - ciri[i]) ** 2, 0))));
 }
+/** Masuk aplikasi dengan wajah — hanya di perangkat yang diizinkan absen, hanya akun karyawan (admin tetap pakai password). */
+route("POST", "/api/login-wajah", false, ({ body, ctx }) => {
+  const st = statusKiosk(body.alat);
+  if (!st.boleh) throw new HttpError(403, "Masuk dengan wajah hanya bisa di perangkat yang diizinkan absen");
+  const kunci = (ctx.ip || "") + "|login-wajah";
+  cekBatasLogin(kunci);
+  const hasil = Object.keys(dataWajah()).map(id => ({ id: +id, d: jarakWajahTerdaftar(+id, body.ciri) })).filter(x => x.d != null).sort((a, b) => a.d - b.d);
+  const [satu, dua] = hasil;
+  if (!satu || satu.d >= BATAS_WAJAH - 0.05 || (dua && dua.d - satu.d < 0.08)) { catatGagal(kunci); throw new HttpError(401, "Wajah tidak dikenali — masuk dengan nama & PIN"); }
+  const u = one("SELECT id, nama, peran, aktif FROM users WHERE id = ?", [satu.id]);
+  if (!u || !u.aktif) throw new HttpError(401, "Akun tidak aktif");
+  if (u.peran === "admin") throw new HttpError(401, `Wajah dikenali: ${u.nama}. Akun admin tetap masuk dengan password.`);
+  resetGagal(kunci);
+  buatSesi(ctx, u.id);
+  return { ok: true, nama: u.nama };
+}, { batas: 20_000 });
 const wajahAbsen = b => { const d = Number(b.wajah); return isFinite(d) && d >= 0 && d < 5 ? { wajah: Math.round(d * 1000) / 1000, wajah_ok: b.wajah_ok ? 1 : 0 } : { wajah: null, wajah_ok: null }; };
 route("GET", "/api/absen/wajah", "admin", () => Object.fromEntries(Object.entries(dataWajah()).map(([id, x]) => [id, { jumlah: (x.d || []).length, tgl: x.t || "" }])));
 route("PUT", "/api/absen/wajah", "admin", ({ body }) => {

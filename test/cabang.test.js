@@ -511,6 +511,11 @@ test("absen PIN + selfie: hanya perangkat yang diizinkan & di lokasi toko", asyn
   assert.equal((await absenHp({ pin: "", ciri: LAIN })).status, 401, "wajah lain ditolak tanpa PIN");
   assert.equal((await absenHp({ pin: "" })).status, 401, "tanpa PIN & tanpa wajah ditolak");
   const wj = await absenHp({ pin: "", ciri: V2 }); assert.equal(wj.status, 200, JSON.stringify(wj.data));
+  // Masuk aplikasi dengan wajah (hanya dari perangkat yang diizinkan absen)
+  assert.equal((await tamuP("POST", "/api/login-wajah", { ciri: V2 })).status, 403, "tanpa perangkat absen ditolak");
+  assert.equal((await tamuP("POST", "/api/login-wajah", { alat: hp.token, ciri: LAIN })).status, 401, "wajah lain ditolak");
+  const lw = await tamuP("POST", "/api/login-wajah", { alat: hp.token, ciri: V2 });
+  assert.equal(lw.status, 200, JSON.stringify(lw.data)); assert.equal(lw.data.nama, "IZA");
   const wOff = (await pusat("GET", "/api/cabang/perangkat")).data.find(x => x.kode === hp.kode);
   assert.equal((await pusat("PUT", `/api/cabang/perangkat/${wOff.id}`, { absen: false })).status, 200);
   assert.equal((await absenHp({})).status, 403, "sakelar absen dimatikan");
