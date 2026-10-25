@@ -72,6 +72,13 @@ route("POST", "/api/absen/daftar-hp", "admin", ({ body, user }) => {
 const FOTO = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
 /* ---- Wajah karyawan (untuk mencocokkan selfie absen; dihitung & dicocokkan di HP, server hanya menyimpan angka ciri wajah) ---- */
 const dataWajah = () => { const w = getSettings().wajah; return w && typeof w === "object" && !Array.isArray(w) ? w : {}; };
+const BATAS_WAJAH = 0.5;
+/** Jarak ciri wajah (128 angka) ke wajah terdaftar karyawan; null bila tidak bisa dicek. */
+function jarakWajahTerdaftar(userId, ciri){
+  const d = (dataWajah()[userId] || {}).d;
+  if (!Array.isArray(d) || !d.length || !Array.isArray(ciri) || ciri.length !== 128 || !ciri.every(n => typeof n === "number" && isFinite(n))) return null;
+  return Math.min(...d.map(v => Math.sqrt(v.reduce((s, x, i) => s + (x - ciri[i]) ** 2, 0))));
+}
 const wajahAbsen = b => { const d = Number(b.wajah); return isFinite(d) && d >= 0 && d < 5 ? { wajah: Math.round(d * 1000) / 1000, wajah_ok: b.wajah_ok ? 1 : 0 } : { wajah: null, wajah_ok: null }; };
 route("GET", "/api/absen/wajah", "admin", () => Object.fromEntries(Object.entries(dataWajah()).map(([id, x]) => [id, { jumlah: (x.d || []).length, tgl: x.t || "" }])));
 route("PUT", "/api/absen/wajah", "admin", ({ body }) => {
@@ -89,8 +96,14 @@ route("POST", "/api/absen/pin", false, ({ body, ctx }) => {
   if (!u || !u.aktif) throw bad("Pilih nama karyawan");
   const kunci = (ctx.ip || "") + "|absen|" + u.nama_key;
   cekBatasLogin(kunci);
-  if (!cekPassword(String(body.pin ?? ""), u.pass_hash)) { catatGagal(kunci); throw new HttpError(401, "PIN salah"); }
+  // Tanpa PIN bila wajah dikenali: ciri wajah dari HP dicocokkan di sini dengan wajah terdaftar karyawan itu.
+  const dWajah = jarakWajahTerdaftar(u.id, body.ciri);
+  if (String(body.pin ?? "") === "") {
+    if (dWajah == null) throw new HttpError(401, dataWajah()[u.id] ? "Wajah belum terbaca — ulangi foto, atau ketik PIN" : "Wajah belum didaftarkan admin — ketik PIN");
+    if (dWajah >= BATAS_WAJAH) { catatGagal(kunci); throw new HttpError(401, "Wajah tidak dikenali — ulangi foto, atau ketik PIN"); }
+  } else if (!cekPassword(String(body.pin), u.pass_hash)) { catatGagal(kunci); throw new HttpError(401, "PIN salah"); }
   resetGagal(kunci);
+  if (dWajah != null) Object.assign(body, { wajah: dWajah, wajah_ok: dWajah < BATAS_WAJAH });
   const foto = String(body.foto || "");
   if (!FOTO.test(foto) || foto.length < 2000) throw bad("Ambil foto selfie dulu");
   if (foto.length > 400_000) throw bad("Foto terlalu besar");
@@ -261,6 +274,16 @@ export function rekapAbsen(dari, sampai){
     r.hadir++; if (h.hari_libur) r.masukLibur++; if (h.terlambat) r.terlambat++; if (!h.pulang) r.tanpaPulang++; r.lembur += h.lembur;
     ringkas.set(h.user_id, r);
   }
+  // Keterangan karyawan (telat / izin / sakit / absen error)
+  const keterangan = all("SELECT k.id, k.tgl, k.user_id, u.nama, k.jenis, k.arah, k.jam, k.alasan, k.status, k.oleh, k.putus_oleh FROM absen_ket k JOIN users u ON u.id = k.user_id WHERE k.tgl BETWEEN ? AND ? ORDER BY k.tgl DESC, k.id DESC", [dari, sampai]);
+  for (const k of keterangan) {
+    const h = harian.find(x => x.tgl === k.tgl && x.user_id === k.user_id); if (h) (h.keterangan = h.keterangan || []).push(k);
+    if (k.status === "diterima" && (k.jenis === "izin" || k.jenis === "sakit")) {
+      const u = perId.get(k.user_id); if (!u) continue;
+      const r = ringkas.get(k.user_id) || { user_id: k.user_id, nama: u.nama, nama_key: u.nama_key, hadir: 0, terlambat: 0, tanpaPulang: 0, lembur: 0, lembur_rp: 0, masukLibur: 0 };
+      r[k.jenis] = (r[k.jenis] || 0) + 1; ringkas.set(k.user_id, r);
+    }
+  }
   for (const r of ringkas.values()) r.lembur_rp = nilaiLembur(r.lembur, s.lembur_per_jam);
   // Karyawan yang libur pada tanggal itu (untuk tampilan satu hari) & jam toko khusus hari itu
   const satuHari = dari === sampai;
@@ -269,7 +292,7 @@ export function rekapAbsen(dari, sampai){
     dari, sampai, aktif: !!(s.absen_aktif || s.absen_pin_aktif), shifts, jam_buka: s.jam_buka, jam_tutup: s.jam_tutup,
     libur, jam_hari: s.jam_hari || {}, jam_khusus: satuHari ? jamKhusus(dari, s) : null, hari: satuHari ? NAMA_HARI[hariKe(dari)] : null,
     lembur_per_jam: Number(s.lembur_per_jam) || 0, lembur_bulat: Number(s.lembur_bulat) || 0,
-    harian, ringkas: [...ringkas.values()].sort((a, b) => a.nama.localeCompare(b.nama)), takDikenal: [...takDikenal.values()],
+    harian, ringkas: [...ringkas.values()].sort((a, b) => a.nama.localeCompare(b.nama)), takDikenal: [...takDikenal.values()], keterangan,
   };
 }
 
@@ -388,6 +411,53 @@ route("PUT", "/api/jam-kerja", "admin", ({ body }) => tx(() => {
   }
   return { ok: true };
 }));
+
+/* ================= Keterangan absen: telat, izin, sakit, absen error =================
+   Diajukan karyawan (atau admin atas nama karyawan), lalu diterima / ditolak admin.
+   "Absen error" yang diterima menjadi catatan absen manual pada jam yang diajukan. */
+export const JENIS_KET = { telat: "Terlambat", izin: "Izin tidak masuk", sakit: "Sakit", error: "Absen error / lupa absen", lain: "Lainnya" };
+const AKSI_KET = {
+  ajukan: (b, user) => tx(() => {
+    if (!JENIS_KET[b.jenis]) throw bad("Pilih jenis keterangan");
+    const u = one("SELECT id, nama FROM users WHERE id = ? AND aktif = 1", [+(b.user_id || user.id)]); if (!u) throw bad("Pilih nama karyawan");
+    const tgl = tanggal(b.tgl || sekarang().tgl), alasan = teks(b.alasan, { wajib: true, max: 300, nama: "Alasan" });
+    const arah = b.jenis === "error" ? (b.arah === "pulang" ? "pulang" : "masuk") : null;
+    const jam = b.jenis === "error" ? jamValid(b.jam, "Jam absen yang seharusnya") : null;
+    const id = Number(run("INSERT INTO absen_ket(tgl, user_id, jenis, arah, jam, alasan, oleh) VALUES (?,?,?,?,?,?,?)", [tgl, u.id, b.jenis, arah, jam, alasan, user.nama]).lastInsertRowid);
+    antreNotif(`📝 Keterangan absen · ${u.nama}`, `${JENIS_KET[b.jenis]}${jam ? " (" + arah + " " + jam + ")" : ""} · ${tgl}\n${alasan}`, `/#absen?tgl=${tgl}&u=${u.id}`);
+    return { id };
+  }),
+  daftar: ({ dari, sampai }, user) => all(`SELECT k.*, u.nama FROM absen_ket k JOIN users u ON u.id = k.user_id WHERE k.tgl BETWEEN ? AND ?${user.peran === "admin" ? "" : " AND (k.user_id = " + Number(user.id) + ")"} ORDER BY k.tgl DESC, k.id DESC LIMIT 300`, [tanggal(dari), tanggal(sampai || dari)]),
+  putus: ({ id, status }, user) => tx(() => {
+    if (user.peran !== "admin") throw new HttpError(403, "Hanya admin");
+    const k = one("SELECT * FROM absen_ket WHERE id = ?", [+id]); if (!k) throw notFound("Keterangan tidak ditemukan");
+    if (!["diterima", "ditolak", "menunggu"].includes(status)) throw bad("Status tidak valid");
+    let absenId = k.absen_id;
+    if (k.absen_id && status !== "diterima") { run("UPDATE absen SET dihapus = datetime('now'), oleh = ? WHERE id = ?", [user.nama, k.absen_id]); absenId = null; }
+    if (status === "diterima" && k.jenis === "error" && k.jam && !k.absen_id)
+      absenId = Number(run("INSERT INTO absen(tgl, jam, user_id, sumber, jenis, ket, oleh) VALUES (?,?,?, 'manual', ?, ?, ?)", [k.tgl, k.jam + ":00", k.user_id, k.arah || "masuk", `Absen error: ${k.alasan}`.slice(0, 120), user.nama]).lastInsertRowid);
+    run("UPDATE absen_ket SET status = ?, putus_oleh = ?, putus_at = datetime('now'), absen_id = ? WHERE id = ?", [status, user.nama, absenId, k.id]);
+    return { ok: true };
+  }),
+};
+const jalankanKet = async (aksi, data, user) => {
+  if (!cabangAktif()) return AKSI_KET[aksi](data, user);
+  const nk = (one("SELECT nama_key FROM users WHERE id = ?", [user.id]) || {}).nama_key || "";
+  const u = data && data.user_id ? (one("SELECT nama_key FROM users WHERE id = ?", [+data.user_id]) || {}).nama_key : null;
+  return mintaPusat("/api/cabang/absen-ket", { aksi, data: { ...data, user_nk: u }, user: { nama_key: nk } });
+};
+/** Di server pusat untuk permintaan dari perangkat kasir (pengguna dicocokkan dengan nama). */
+export function aksiKetDariPerangkat(aksi, data, u){
+  if (!AKSI_KET[aksi]) throw bad("Aksi tidak dikenal");
+  const user = one("SELECT id, nama, peran FROM users WHERE nama_key = ? AND aktif = 1", [String((u && u.nama_key) || "")]);
+  if (!user) throw new HttpError(403, "Pengguna perangkat tidak dikenal di server");
+  const d = { ...(data || {}) };
+  if (d.user_nk) { const t = one("SELECT id FROM users WHERE nama_key = ?", [d.user_nk]); d.user_id = t ? t.id : null; }
+  return AKSI_KET[aksi](d, user);
+}
+route("POST", "/api/absen/keterangan", "semua", ({ body, user }) => jalankanKet("ajukan", body, user));
+route("GET", "/api/absen/keterangan", "semua", ({ query, user }) => jalankanKet("daftar", { dari: query.dari || sekarang().tgl, sampai: query.sampai }, user));
+route("POST", "/api/absen/keterangan/:id/putus", "admin", ({ params, body, user }) => jalankanKet("putus", { id: +params.id, status: body.status }, user));
 
 /* Absen oleh admin (mis. HP karyawan rusak / mesin mati) dan hapus scan yang keliru.
    Jam absen selalu jam saat itu juga (tidak bisa diisi manual); admin hanya memilih masuk atau pulang. */

@@ -2687,6 +2687,11 @@ async function vAbsen(){
     ${satuHari ? `<div class="note" style="margin:0 0 12px"><b>${esc(R.hari || "")}</b>: ${R.jam_khusus ? `toko buka <b>${esc(R.jam_khusus.buka)}–${esc(R.jam_khusus.tutup)}</b> (jam kerja semua karyawan hari ini)` : `jam toko biasa ${esc(R.jam_buka || "")}–${esc(R.jam_tutup || "")}, shift biasa`}${(R.libur || []).length ? ` · 🏖️ Libur: <b>${R.libur.map(x => esc(x.nama)).join(", ")}</b>` : ""}</div>` : ""}
     <p class="small muted" style="margin:0 0 12px">${(R.shifts || []).map(x => `${esc(x.nama)} ${esc(x.masuk)}–${esc(x.pulang)}`).join(" · ")}${Object.entries(R.jam_hari || {}).map(([h, x]) => ` · ${["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"][+h]} ${esc(x.buka)}–${esc(x.tutup)}`).join("")}. Masuk = absen masuk pertama, pulang = absen pulang terakhir. Datang sebelum jam masuk shift & pulang setelah jam pulang shift dihitung <b>lembur</b>${R.lembur_bulat > 1 ? ` (dibulatkan per ${R.lembur_bulat} menit)` : ""}.</p>
     ${R.takDikenal.length ? `<p class="note" style="margin:0 0 12px">Ada scan dari PIN mesin yang belum dihubungkan ke karyawan: <b>${R.takDikenal.map(t => esc(t.pin) + " (" + t.jumlah + "×)").join(", ")}</b>. Hubungkan di Pengaturan → Absensi sidik jari.</p>` : ""}
+    ${(R.keterangan || []).length ? `<section class="panel" style="margin-bottom:12px"><h3 style="font-size:16px;margin:0 0 8px">📝 Keterangan karyawan</h3><div class="list">${R.keterangan.map(k => `<div class="li"><div class="main">
+        <div class="t">${esc(k.nama)} · ${esc(JENIS_KET[k.jenis] || k.jenis)}${k.jam ? ` <span class="small">(${esc(k.arah)} ${esc(k.jam)})</span>` : ""} <span class="pill ${k.status === "diterima" ? "ok" : k.status === "ditolak" ? "bad" : "warn"}">${esc(k.status)}</span></div>
+        <div class="small">${esc(k.alasan)}</div><div class="small muted">${esc(tglID(k.tgl))} · diajukan ${esc(k.oleh)}${k.putus_oleh ? " · diputus " + esc(k.putus_oleh) : ""}</div></div>
+        ${k.status === "menunggu" ? `<div class="row" style="gap:6px"><button class="btn sm pri" data-kput="${k.id}" data-v="diterima" type="button">Terima</button><button class="btn sm ghost" data-kput="${k.id}" data-v="ditolak" type="button">Tolak</button></div>`
+          : `<button class="btn sm ghost" data-kput="${k.id}" data-v="menunggu" type="button">Ubah</button>`}</div>`).join("")}</div></section>` : ""}
     ${!satuHari ? `<section class="panel" style="margin-bottom:12px"><h3 style="font-size:16px;margin:0 0 8px">Ringkasan ${esc(tglID(aDari))} – ${esc(tglID(aSampai))}</h3>
       ${R.ringkas.length ? `<div class="list">${R.ringkas.map(r => `<div class="li"><div class="main"><div class="t">${esc(r.nama)}</div><div class="small muted">${r.tanpaPulang ? r.tanpaPulang + " hari tanpa absen pulang" : "Lengkap"}${r.lembur ? ` · lembur <b>${jamMenit(r.lembur)}</b>${r.lembur_rp ? " = " + rp(r.lembur_rp) : ""}` : ""}</div></div>
         <div style="text-align:right"><div class="num" style="font-weight:700">${r.hadir} hari</div>${r.terlambat ? `<span class="pill warn">${r.terlambat}× terlambat</span>` : `<span class="pill ok">tepat waktu</span>`}${r.masukLibur ? ` <span class="pill">${r.masukLibur}× masuk hari libur</span>` : ""}</div></div>`).join("")}</div>` : `<div class="empty">Belum ada data.</div>`}</section>` : ""}
@@ -2701,6 +2706,8 @@ async function vAbsen(){
   $("#aCsv").onclick = () => unduhCSV(`absensi-${aDari}_${aSampai}.csv`, [["Tanggal", "Nama", "Shift", "Masuk", "Pulang", "Jumlah scan", "Terlambat", "Pulang cepat", "Lembur (menit)"],
     ...R.harian.slice().reverse().map(h => [h.tgl, h.nama, h.shift || "", h.masuk, h.pulang, h.scan.length, h.terlambat ? "YA" : "", h.pulangCepat ? "YA" : "", h.lembur || 0])]);
   const man = $("#aManual"); if (man) man.onclick = () => absenManual();
+  $$("[data-kput]").forEach(b => b.onclick = () => coba(async () => { await api("POST", `/api/absen/keterangan/${b.dataset.kput}/putus`, { status: b.dataset.v });
+    toast(b.dataset.v === "diterima" ? "Keterangan diterima" : b.dataset.v === "ditolak" ? "Keterangan ditolak" : "Dikembalikan ke menunggu"); vAbsen(); }, b));
   $$("#aIsi .li.click").forEach(el => el.onclick = () => {
     const h = R.harian.find(x => `${x.tgl}|${x.user_id}` === el.dataset.k); if (!h) return;
     modal(`<h3>${esc(h.nama)} · ${esc(tglID(h.tgl))}</h3>
@@ -2954,18 +2961,44 @@ function panelAbsen(K, ringkas = false){
     </div>
     ${ringkas ? "" : `<ol class="absen-langkah">
       <li><span class="n">1</span><div>Tekan <b>Absen Masuk</b> atau <b>Absen Pulang</b></div></li>
-      <li><span class="n">2</span><div>Pilih <b>nama</b> kamu, lalu ketik <b>PIN</b></div></li>
-      <li><span class="n">3</span><div>Hadap kamera, tekan <b>Ambil foto</b></div></li>
-      <li><span class="n">4</span><div>Tekan <b>Simpan</b> — selesai ✅</div></li>
+      <li><span class="n">2</span><div><b>Hadap kamera</b> — AI mengenali wajahmu</div></li>
+      <li><span class="n">3</span><div>Absen <b>tersimpan otomatis</b> ✅ (tanpa PIN)</div></li>
+      <li><span class="n">4</span><div>Wajah tidak dikenali? Pilih nama, ketik <b>PIN</b>, lalu Simpan</div></li>
     </ol>
     ${(() => { const h = new Date(today() + "T00:00:00Z").getUTCDay(), k = B && B.toko && B.toko.jam_hari && B.toko.jam_hari[h];
       return k ? `<div class="absen-shift"><span><b>Hari ini (${["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"][h]})</b> ${esc(k.buka)}–${esc(k.tutup)}</span></div>`
         : shifts.length ? `<div class="absen-shift">${shifts.map(x => `<span><b>${esc(x.nama)}</b> ${esc(x.masuk)}–${esc(x.pulang)}</span>`).join("")}</div>` : ""; })()}
     <p class="small muted" style="margin:0;text-align:center">Jam absen tercatat otomatis. Absen hanya bisa di toko, dari perangkat ini.</p>`}
+    <button type="button" class="btn" data-ket style="width:100%;margin-top:6px">📝 Keterangan: telat · izin · sakit · absen error</button>
   </div>`;
 }
+const JENIS_KET = { telat: "Terlambat", izin: "Izin tidak masuk", sakit: "Sakit", error: "Absen error / lupa absen", lain: "Lainnya" };
+/** Karyawan mengajukan keterangan: telat, izin, sakit, absen error (jam yang seharusnya), lainnya — diputus admin. */
+function ajukanKeterangan(){
+  const staf = (B && B.staf) || [], saya = B && B.me ? B.me.id : null;
+  let jenis = "telat", arah = "masuk";
+  modal(`<h3>📝 Keterangan absen</h3><div class="stack">
+    <label class="f">Nama<select id="kN"><option value="">— pilih nama —</option>${staf.map(u => `<option value="${u.id}" ${u.id === saya && B.me.peran !== "admin" ? "selected" : ""}>${esc(u.nama)}</option>`).join("")}</select></label>
+    <div class="chip-pilih" id="kJ">${Object.entries(JENIS_KET).map(([k, l]) => `<button type="button" data-j="${k}" class="${k === jenis ? "on" : ""}">${l}</button>`).join("")}</div>
+    <label class="f">Tanggal<input type="date" id="kT" value="${today()}"></label>
+    <div id="kErr" class="row" hidden><div class="seg" id="kA" style="display:flex;flex:1"><button type="button" data-a="masuk" style="flex:1" class="on">Masuk</button><button type="button" data-a="pulang" style="flex:1">Pulang</button></div>
+      <label class="f" style="width:120px">Jam sebenarnya<input type="time" id="kJam"></label></div>
+    <label class="f">Alasan *<textarea id="kAl" rows="3" maxlength="300" placeholder="Mis. ban motor bocor; absen error, kamera tidak mau terbuka"></textarea></label>
+    <p class="small muted" style="margin:0">Keterangan dikirim ke admin untuk disetujui. <b>Absen error</b> yang disetujui dicatat sebagai absen pada jam yang diisi.</p></div>
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="kOk" type="button">Kirim</button></div>`, m => {
+    $$("#kJ button", m).forEach(b => b.onclick = () => { jenis = b.dataset.j; $$("#kJ button", m).forEach(x => x.classList.toggle("on", x === b)); $("#kErr", m).hidden = jenis !== "error"; });
+    $$("#kA button", m).forEach(b => b.onclick = () => { arah = b.dataset.a; $$("#kA button", m).forEach(x => x.classList.toggle("on", x === b)); });
+    $("#kOk", m).onclick = e => coba(async () => {
+      if (!$("#kN", m).value) throw new Error("Pilih nama");
+      if (jenis === "error" && !$("#kJam", m).value) throw new Error("Isi jam absen yang sebenarnya");
+      await api("POST", "/api/absen/keterangan", { user_id: +$("#kN", m).value, jenis, tgl: $("#kT", m).value, alasan: $("#kAl", m).value.trim(), arah, jam: $("#kJam", m).value || undefined });
+      closeModal(); toast("Keterangan terkirim — menunggu persetujuan admin");
+    }, e.target);
+  });
+}
 function pasangJam(el){
-  $$("[data-absen]", el).forEach(b => b.onclick = () => bukaAbsen(b.dataset.absen));
+  $$("[data-absen]", el).forEach(b => b.onclick = () => { siapkanSuara(); bukaAbsen(b.dataset.absen); });
+  const kb = $("[data-ket]", el); if (kb) kb.onclick = ajukanKeterangan;
   const j = $("[data-jam]", el); if (!j) return;
   const t = setInterval(() => { if (!document.body.contains(j)) return clearInterval(t); j.textContent = jamSekarang(); }, 5000);
 }
@@ -3087,7 +3120,7 @@ async function bukaAbsen(jenisAwal){
     <div class="stack">
       <div class="seg" id="akJ" style="display:flex"><button type="button" data-j="masuk" style="flex:1" class="${jenis === "masuk" ? "on" : ""}">Masuk</button><button type="button" data-j="pulang" style="flex:1" class="${jenis === "pulang" ? "on" : ""}">Pulang</button></div>
       <label class="f">1. Nama kamu<select id="akU"><option value="">— pilih nama —</option>${K.staf.map(s => `<option value="${s.id}" ${s.id === saya ? "selected" : ""}>${esc(s.nama)}</option>`).join("")}</select></label>
-      <label class="f">2. PIN<input type="password" id="akP" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="PIN / password yang sama untuk masuk aplikasi"></label>
+      <label class="f">2. PIN <span class="small muted">(tidak perlu bila wajah dikenali)</span><input type="password" id="akP" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="PIN / password yang sama untuk masuk aplikasi"></label>
       <div class="small" style="font-weight:700;margin-bottom:-6px">3. Foto selfie</div>
       <div class="absen-kamera"><video id="akV" autoplay playsinline muted></video><img id="akF" alt="Foto selfie" hidden><div id="akKet" class="small muted">Menyalakan kamera…</div></div>
       <div class="row"><button class="btn" id="akAmbil" type="button" disabled>📸 Ambil foto</button><button class="btn ghost" id="akUlang" type="button" hidden>Ulangi foto</button></div>
@@ -3096,7 +3129,10 @@ async function bukaAbsen(jenisAwal){
     <div class="actions"><button class="btn" id="akBatal" type="button">Batal</button><button class="btn pri" id="akKirim" type="button" disabled>Simpan absen</button></div>`, m => {
     const v = $("#akV", m), img = $("#akF", m), ket = $("#akKet", m);
     const matikan = () => { try { stream && stream.getTracks().forEach(t => t.stop()); } catch {} stream = null; };
-    const siap = () => { $("#akKirim", m).disabled = !(foto && lokasi && lokasi.ok && $("#akU", m).value && $("#akP", m).value && ["ok", "tanpa"].includes(cekWajah)); };
+    const dikenali = () => cekWajah === "ok" && $("#akU", m).value && (d => d != null && d < BATAS_WAJAH)(jarakKe(ciri, WJ[$("#akU", m).value]));
+    const siap = () => { $("#akKirim", m).disabled = !(foto && lokasi && lokasi.ok && $("#akU", m).value && ($("#akP", m).value || dikenali()) && ["ok", "tanpa"].includes(cekWajah)); };
+    let terkirim = false, otomatis = false;
+    const cobaOtomatis = () => { if (otomatis && !terkirim && dikenali() && lokasi && lokasi.ok) { terkirim = true; $("#akKirim", m).click(); } };
     const hasilWajah = () => {
       if (cekWajah !== "ok") return { wajah: undefined, wajah_ok: undefined };
       const d = jarakKe(ciri, WJ[$("#akU", m).value]); return d == null ? {} : { wajah: d, wajah_ok: d < BATAS_WAJAH };
@@ -3123,9 +3159,34 @@ async function bukaAbsen(jenisAwal){
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
         if (!document.body.contains(v)) return matikan();
         v.srcObject = stream; await v.play().catch(() => {});
-        ket.textContent = "Arahkan wajah ke kamera, lalu tekan Ambil foto"; $("#akAmbil", m).disabled = false;
+        ket.textContent = Object.keys(WJ).length ? "🤖 Hadapkan wajah ke kamera…" : "Arahkan wajah ke kamera, lalu tekan Ambil foto"; $("#akAmbil", m).disabled = false;
+        if (Object.keys(WJ).length) pindaiOtomatis();
       } catch (e) { ket.textContent = e.name === "NotAllowedError" ? "Izin kamera ditolak. Izinkan kamera untuk aplikasi ini." : e.name === "NotFoundError" ? "Kamera tidak ditemukan di perangkat ini." : e.message; }
     })();
+    // Pindai wajah otomatis dari kamera: begitu wajah karyawan terdaftar dikenali, foto diambil & absen tersimpan sendiri.
+    const pindaiOtomatis = async () => {
+      let coba = 0;
+      while (document.body.contains(v) && !foto && stream) {
+        try {
+          const w = 360, h = Math.round(w * (v.videoHeight || 480) / (v.videoWidth || 640)), c = document.createElement("canvas"); c.width = w; c.height = h;
+          const g = c.getContext("2d"); g.translate(w, 0); g.scale(-1, 1); g.drawImage(v, 0, 0, w, h);
+          const x = await ciriWajah(c);
+          if (foto || !document.body.contains(v)) return;
+          if (x) {
+            let terbaik = null; for (const sx of K.staf) { const d = jarakKe(x, WJ[sx.id]); if (d != null && d < BATAS_WAJAH - 0.05 && (!terbaik || d < terbaik.d)) terbaik = { id: sx.id, d }; }
+            if (terbaik) {
+              foto = c.toDataURL("image/jpeg", 0.6); ciri = x; cekWajah = "ok"; otomatis = true;
+              img.src = foto; img.hidden = false; v.hidden = true; $("#akAmbil", m).hidden = true; $("#akUlang", m).hidden = false;
+              $("#akU", m).value = String(terbaik.id); tulisWajah(); siap();
+              if (!(lokasi && lokasi.ok)) ket.insertAdjacentHTML("beforeend", "<br><span class='small'>Menunggu lokasi…</span>");
+              return cobaOtomatis();
+            }
+            if (++coba >= 6) ket.textContent = "Wajah belum dikenali — pilih nama & ketik PIN, lalu Ambil foto";
+          }
+        } catch { ket.textContent = "Pengenal wajah belum bisa dipakai — pilih nama, ketik PIN, lalu Ambil foto"; return; }
+        await new Promise(r => setTimeout(r, 600));
+      }
+    };
     $("#akAmbil", m).onclick = () => {
       const w = 360, h = Math.round(w * (v.videoHeight || 480) / (v.videoWidth || 640));
       const c = document.createElement("canvas"); c.width = w; c.height = h;
@@ -3144,7 +3205,7 @@ async function bukaAbsen(jenisAwal){
         tulisWajah(); siap();
       }).catch(() => { cekWajah = "tanpa"; ket.textContent = "Pengenal wajah belum bisa dipakai di perangkat ini — absen tetap bisa disimpan."; siap(); });
     };
-    $("#akUlang", m).onclick = () => { foto = ""; ciri = null; cekWajah = "belum"; img.hidden = true; v.hidden = false; ket.textContent = "Arahkan wajah ke kamera, lalu tekan Ambil foto"; $("#akAmbil", m).hidden = false; $("#akUlang", m).hidden = true; siap(); };
+    $("#akUlang", m).onclick = () => { foto = ""; ciri = null; cekWajah = "belum"; otomatis = false; terkirim = false; img.hidden = true; v.hidden = false; ket.textContent = "Arahkan wajah ke kamera, lalu tekan Ambil foto"; $("#akAmbil", m).hidden = false; $("#akUlang", m).hidden = true; siap(); if (Object.keys(WJ).length) pindaiOtomatis(); };
     muatWajahAI().catch(() => {}); // siapkan model AI sambil karyawan mengisi nama & PIN
     // Lokasi
     const bacaLokasi = async () => {
@@ -3160,11 +3221,11 @@ async function bukaAbsen(jenisAwal){
           : `📍 <b style="color:var(--bad)">Di luar toko</b> — ±${Math.round(jarak)} m (batas ${K.radius} m). <button class="btn sm" id="akLokUlang" type="button">Cek ulang</button>`;
         const u = $("#akLokUlang", m); if (u) u.onclick = bacaLokasi;
       } catch (e) { lokasi = null; $("#akLok", m).innerHTML = `📍 ${esc(e.message)} <button class="btn sm" id="akLokUlang" type="button">Coba lagi</button>`; $("#akLokUlang", m).onclick = bacaLokasi; }
-      siap();
+      siap(); cobaOtomatis();
     };
     bacaLokasi();
     $("#akKirim", m).onclick = e => { siapkanSuara(); coba(async () => {
-      const r = await api("POST", "/api/absen/pin", { alat: LOKAL ? undefined : tokenHpAbsen(), user_id: +$("#akU", m).value, pin: $("#akP", m).value, jenis, foto, lat: lokasi.lat, lng: lokasi.lng, akurasi: lokasi.akurasi, ...hasilWajah() });
+      const r = await api("POST", "/api/absen/pin", { alat: LOKAL ? undefined : tokenHpAbsen(), user_id: +$("#akU", m).value, pin: $("#akP", m).value, jenis, foto, lat: lokasi.lat, lng: lokasi.lng, akurasi: lokasi.akurasi, ...hasilWajah(), ciri: ciri || undefined }).catch(e => { terkirim = false; otomatis = false; throw e; });
       matikan(); closeModal();
       ucapkan(`Terima kasih, ${toTitle(r.nama)}. Absen ${r.jenis} berhasil.`);
       modal(`<h3>✅ Absen ${r.jenis} tercatat</h3><p style="font-size:18px;margin:0"><b>${esc(r.nama)}</b> — jam <b>${esc(r.jam)}</b></p><p class="small muted">±${r.jarak} m dari titik toko</p><div class="actions"><button class="btn pri" data-close>Selesai</button></div>`);

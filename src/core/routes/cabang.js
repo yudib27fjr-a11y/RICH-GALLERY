@@ -13,6 +13,7 @@ import { rekapGaji, daftarKasbon } from "./gaji.js";
 import { simpanKurir, simpanMitra, simpanPaket } from "./kurir.js";
 import { aksiBelanjaDariPerangkat } from "./belanja.js";
 import { aksiPromosiDariPerangkat } from "./promosi.js";
+import { aksiKetDariPerangkat } from "./absen.js";
 import { statusCabang, sinkronCabang, sambungCabang, sambungUlangCabang, putusCabang, gantiNamaPerangkat, kirimUlangDitolak, cabangAktif, mintaPusat } from "../cabang-perangkat.js";
 
 /* ================= di perangkat ================= */
@@ -389,6 +390,7 @@ route("DELETE", "/api/cabang/perangkat/:id", "admin", ({ params }) => cabangAkti
 /* Admin di perangkat kasir mengubah daftar kurir offline (disimpan di server). */
 route("POST", "/api/cabang/kurir", false, ({ body }) => { perangkatDariToken(body.token); return simpanKurir(body.daftar); });
 route("POST", "/api/cabang/belanja", false, ({ body }) => { perangkatDariToken(body.token); return aksiBelanjaDariPerangkat(body.aksi, body.data, body.user); }, { batas: 300_000 });
+route("POST", "/api/cabang/absen-ket", false, ({ body }) => { perangkatDariToken(body.token); return aksiKetDariPerangkat(body.aksi, body.data, body.user); });
 route("POST", "/api/cabang/promosi", false, ({ body }) => { perangkatDariToken(body.token); return aksiPromosiDariPerangkat(body.aksi, body.data, body.user); });
 route("POST", "/api/cabang/paket-jasa", false, ({ body }) => { perangkatDariToken(body.token); return simpanPaket(body.paket); });
 route("POST", "/api/cabang/mitra", false, ({ body }) => { perangkatDariToken(body.token); return simpanMitra(body.daftar); });

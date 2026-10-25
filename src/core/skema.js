@@ -451,6 +451,23 @@ CREATE INDEX promosi_mulai ON promosi(mulai);`,
 /* 19: pencocokan wajah saat absen (jarak wajah: makin kecil makin mirip; wajah_ok 1 cocok / 0 tidak cocok / NULL tidak dicek). */
 `ALTER TABLE absen ADD COLUMN wajah REAL;
 ALTER TABLE absen ADD COLUMN wajah_ok INTEGER;`,
+/* 20: keterangan absen dari karyawan (telat, izin, sakit, absen error) — disetujui / ditolak admin. */
+`CREATE TABLE absen_ket(
+  id INTEGER PRIMARY KEY,
+  tgl TEXT NOT NULL,
+  user_id INTEGER NOT NULL,
+  jenis TEXT NOT NULL,
+  arah TEXT,
+  jam TEXT,
+  alasan TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'menunggu',
+  oleh TEXT NOT NULL DEFAULT '',
+  putus_oleh TEXT,
+  putus_at TEXT,
+  absen_id INTEGER,
+  dibuat TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX absen_ket_tgl ON absen_ket(tgl);`,
 ];
 
 export const DEFAULT_SETTINGS = {

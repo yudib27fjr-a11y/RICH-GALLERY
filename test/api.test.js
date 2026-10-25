@@ -647,3 +647,22 @@ test("wajah karyawan: admin daftar ciri wajah, absen menyimpan hasil cocok/tidak
   assert.equal((await admin("DELETE", "/api/absen/wajah", { user_id: k.id })).status, 200);
   assert.ok(!(await admin("GET", "/api/absen/wajah")).data[k.id]);
 });
+
+test("keterangan absen: karyawan ajukan (telat / izin / absen error), admin terima → absen error jadi catatan absen", async () => {
+  const b = (await admin("GET", "/api/bootstrap")).data, hari = b.hariIni, me = (await kasir("GET", "/api/bootstrap")).data.me;
+  assert.equal((await kasir("POST", "/api/absen/keterangan", { jenis: "telat", alasan: "" })).status, 400, "alasan wajib");
+  assert.equal((await kasir("POST", "/api/absen/keterangan", { jenis: "telat", alasan: "Ban bocor" })).status, 200);
+  assert.equal((await kasir("POST", "/api/absen/keterangan", { jenis: "error", alasan: "Kamera error", arah: "masuk", jam: "09:05" })).status, 200);
+  const L = (await kasir("GET", `/api/absen/keterangan?dari=${hari}`)).data;
+  assert.ok(L.length >= 2 && L.every(x => x.user_id === me.id && x.status === "menunggu"));
+  const err = L.find(x => x.jenis === "error");
+  assert.equal((await kasir("POST", `/api/absen/keterangan/${err.id}/putus`, { status: "diterima" })).status, 403);
+  assert.equal((await admin("POST", `/api/absen/keterangan/${err.id}/putus`, { status: "diterima" })).status, 200);
+  const R = (await admin("GET", `/api/absen?dari=${hari}&sampai=${hari}`)).data;
+  assert.ok(R.keterangan.some(k => k.id === err.id && k.status === "diterima"));
+  const h = R.harian.find(x => x.user_id === me.id);
+  assert.ok(h && h.scan.some(x => x.sumber === "manual" && x.jam === "09:05"), "absen error yang diterima jadi catatan absen");
+  assert.equal((await admin("POST", `/api/absen/keterangan/${err.id}/putus`, { status: "ditolak" })).status, 200);
+  const R2 = (await admin("GET", `/api/absen?dari=${hari}&sampai=${hari}`)).data;
+  assert.ok(!(R2.harian.find(x => x.user_id === me.id)?.scan || []).some(x => x.jam === "09:05"), "ditolak → catatan absen dihapus");
+});
