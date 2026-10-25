@@ -67,7 +67,7 @@ export class Toko {
         if (panjang > r.batas) return json(413, { error: "Data terlalu besar" });
         const teks = await req.text();
         if (teks.length > r.batas) return json(413, { error: "Data terlalu besar" });
-        if (teks) { try { body = JSON.parse(teks); } catch { return json(400, { error: "Format data tidak valid" }); } }
+        if (teks) { try { body = JSON.parse(teks); } catch { if (/^[\w%.-]+=/.test(teks)) body = Object.fromEntries(new URLSearchParams(teks)); else return json(400, { error: "Format data tidak valid" }); } }
       }
       let cookieKeluar = null;
       const hasil = await jalankan({

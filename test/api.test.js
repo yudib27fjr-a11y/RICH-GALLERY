@@ -666,3 +666,14 @@ test("keterangan absen: karyawan ajukan (telat / izin / absen error), admin teri
   const R2 = (await admin("GET", `/api/absen?dari=${hari}&sampai=${hari}`)).data;
   assert.ok(!(R2.harian.find(x => x.user_id === me.id)?.scan || []).some(x => x.jam === "09:05"), "ditolak → catatan absen dihapus");
 });
+
+test("panggilan balik Meta (cabut izin / hapus data Instagram) diperiksa tanda tangannya", async () => {
+  const { createHmac } = await import("node:crypto");
+  assert.equal((await admin("PUT", "/api/konten/setelan", { ig_app: { id: "123", secret: "rahasia-uji" } })).status, 200);
+  const isi = Buffer.from(JSON.stringify({ user_id: "1", algorithm: "HMAC-SHA256" })).toString("base64url");
+  const sig = createHmac("sha256", "rahasia-uji").update(isi).digest("base64url");
+  assert.equal((await admin("POST", "/api/konten/ig/hapus-data", { signed_request: "salah." + isi })).status, 403);
+  const r = await admin("POST", "/api/konten/ig/hapus-data", { signed_request: sig + "." + isi });
+  assert.equal(r.status, 200, JSON.stringify(r.data)); assert.ok(r.data.confirmation_code && r.data.url);
+  assert.equal((await admin("POST", "/api/konten/ig/cabut", { signed_request: sig + "." + isi })).status, 200);
+});

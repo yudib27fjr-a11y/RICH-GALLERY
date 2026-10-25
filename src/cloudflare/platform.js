@@ -1,5 +1,5 @@
 /* Kemampuan platform untuk server Cloudflare (Worker + Durable Object, mode nodejs_compat). */
-import { randomBytes, pbkdf2Sync, timingSafeEqual, createHash } from "node:crypto";
+import { randomBytes, pbkdf2Sync, timingSafeEqual, createHash, createHmac } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { pasangPlatform } from "../core/platform.js";
 import { eksporData, imporData } from "../core/ekspor.js";
@@ -31,6 +31,7 @@ export function pasangPlatformCF(){
     sesiHari: 30,
     hashPassword, cekPassword,
     sha256: t => createHash("sha256").update(t).digest("hex"),
+    hmac256: (kunci, teks) => createHmac("sha256", kunci).update(teks).digest(),
     token: () => randomBytes(32).toString("base64url"),
     http,
     // Di Cloudflare tidak ada file .db: cadangan berupa JSON berisi seluruh data, dan bisa dipulihkan lagi di sini.

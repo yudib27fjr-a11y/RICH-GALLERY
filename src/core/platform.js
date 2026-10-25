@@ -6,6 +6,7 @@ export const platform = {
   hashPassword: null,            // (pw) => string
   cekPassword: null,             // (pw, simpan) => boolean
   sha256: null,                  // (teks) => hex
+  hmac256: null,                 // (kunci, teks) => Uint8Array (HMAC-SHA256; hanya server)
   token: null,                   // () => string acak aman
   http: null,                    // async ({ method, url, body, headers }) => { status, text }
   cadangan: null,                // async () => { unduh: { nama, tipe, isi } } | { disimpan: "lokasi" }

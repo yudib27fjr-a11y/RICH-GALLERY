@@ -1,4 +1,4 @@
-import { randomBytes, scryptSync, pbkdf2Sync, timingSafeEqual, createHash } from "node:crypto";
+import { randomBytes, scryptSync, pbkdf2Sync, timingSafeEqual, createHash, createHmac } from "node:crypto";
 import { config } from "./config.js";
 import { pasangPlatform } from "../core/platform.js";
 import { salinDb, gantiDb } from "./driver.js";
@@ -32,6 +32,7 @@ export function pasangPlatformNode(){
     perangkat: process.env.RG_UJI_PERANGKAT === "1", // hanya untuk tes: server Node berperan sebagai perangkat kasir
     hashPassword, cekPassword,
     sha256: t => createHash("sha256").update(t).digest("hex"),
+    hmac256: (kunci, teks) => createHmac("sha256", kunci).update(teks).digest(),
     token: () => randomBytes(32).toString("base64url"),
     http,
     cadangan: async () => ({ unduh: { nama: `rich-gallery-${hariIni()}.db`, tipe: "application/octet-stream", isi: salinDb() } }),

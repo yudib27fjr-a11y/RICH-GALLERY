@@ -241,6 +241,23 @@ route("POST", "/api/konten/sambung", "admin", async ({ body }) => {
   return status();
 }, { pusatSaja: true });
 
+/* Panggilan balik dari Meta (diisi di Pengaturan login bisnis Instagram): akun mencabut izin / meminta hapus data.
+   Isinya signed_request yang ditandatangani App Secret Instagram — diperiksa dulu sebelum dipakai. */
+function bacaSignedRequest(sr){
+  const k = getSettings().konten || {}, rahasia = k.ig_app && k.ig_app.secret;
+  const [sig, isi] = String(sr || "").split(".");
+  if (!rahasia || !sig || !isi || !platform.hmac256) throw bad("Permintaan tidak valid");
+  const b64 = s => s.replace(/-/g, "+").replace(/_/g, "/");
+  const harus = Buffer.from(platform.hmac256(rahasia, isi)).toString("base64").replace(/=+$/, "");
+  if (harus !== b64(sig).replace(/=+$/, "")) throw new HttpError(403, "Tanda tangan tidak cocok");
+  return JSON.parse(Buffer.from(b64(isi), "base64").toString("utf8"));
+}
+route("POST", "/api/konten/ig/cabut", false, ({ body }) => { bacaSignedRequest(body.signed_request); simpanK({ ig: null }); antreNotif("📸 Instagram terputus", "Izin aplikasi dicabut dari akun Instagram. Sambungkan lagi di menu Konten bila perlu.", "/#konten?baru=1"); return { ok: true }; }, { tanpaRG: true, pusatSaja: true });
+route("POST", "/api/konten/ig/hapus-data", false, ({ body }) => {
+  bacaSignedRequest(body.signed_request); simpanK({ ig: null });
+  const kode = "RG" + Date.now().toString(36).toUpperCase();
+  return { url: "https://pos.richgallery.my.id/", confirmation_code: kode };
+}, { tanpaRG: true, pusatSaja: true });
 route("POST", "/api/konten/putus", "admin", ({ body }) => { simpanK(body.platform === "tiktok" ? { tt: null } : { ig: null }); return status(); }, { pusatSaja: true });
 
 /* ---------- pengaturan & daftar ---------- */

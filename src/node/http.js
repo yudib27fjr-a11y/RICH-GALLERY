@@ -26,8 +26,12 @@ async function bacaBody(req, batas){
   const chunks = []; let n = 0;
   for await (const c of req) { n += c.length; if (n > batas) { const e = new Error("Data terlalu besar"); e.status = 413; throw e; } chunks.push(c); }
   if (!n) return {};
-  try { return JSON.parse(Buffer.concat(chunks).toString("utf8")); }
-  catch { const e = new Error("Format data tidak valid"); e.status = 400; throw e; }
+  const teks = Buffer.concat(chunks).toString("utf8");
+  try { return JSON.parse(teks); }
+  catch {
+    if (/^[\w%.-]+=/.test(teks)) return Object.fromEntries(new URLSearchParams(teks)); // formulir (mis. panggilan balik Meta)
+    const e = new Error("Format data tidak valid"); e.status = 400; throw e;
+  }
 }
 function ipDari(req){
   if (config.trustProxy) { const f = req.headers["x-forwarded-for"]; if (f) return String(f).split(",")[0].trim(); }
