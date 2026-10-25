@@ -3,7 +3,7 @@
   "short_name": "RG POS",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f1f4f1",
+  "background_color": "#fbf2f6",
   "theme_color": "#8e1d4b",
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
