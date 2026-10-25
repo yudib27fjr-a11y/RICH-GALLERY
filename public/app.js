@@ -2766,7 +2766,8 @@ async function aturAbsen(){
     <button class="btn" id="abLokasiSaya" type="button">📍 Pakai lokasi saya sekarang</button>
     <p class="small muted" style="margin:0" id="abLokasiInfo">Tekan saat sedang berada <b>di dalam toko</b>, lalu tekan <b>Simpan pengaturan absen</b>.</p>
     <label class="f">Radius (meter dari titik toko)<input type="number" id="abRadius" value="${A.radius}" min="20" max="2000" step="10"></label>
-    <p class="small muted" style="margin:0">Izinkan perangkat kasir mana yang boleh dipakai absen di bagian <b>Server pusat → Perangkat cabang</b> (tombol "Izinkan absen").</p>
+    <h4 style="margin:8px 0 0">📱 Perangkat yang boleh dipakai absen</h4>
+    <div id="abPerangkat" class="stack"><p class="small muted" style="margin:0">Memuat daftar perangkat…</p></div>
     <button class="btn pri" id="abSimpanUmum" type="button">Simpan pengaturan absen</button>
 
     <hr class="sep"><h4 style="margin:4px 0 0">📱 Absen dari HP ini (mis. iPhone)</h4>
@@ -2797,6 +2798,7 @@ async function aturAbsen(){
     $("#abLokasiInfo").innerHTML = `Lokasi terbaca: <b>${p.lat.toFixed(7)}, ${p.lng.toFixed(7)}</b> (akurasi ±${Math.round(p.akurasi)} m)${p.akurasi > 100 ? " — kurang akurat, coba lagi di dekat pintu/jendela" : ""}. <a href="https://www.google.com/maps?q=${p.lat},${p.lng}" target="_blank" rel="noopener">Cek di peta</a>, lalu tekan <b>Simpan pengaturan absen</b>.`;
   }, e.target);
   const bw = $("#abWajah"); if (bw) bw.onclick = daftarWajah;
+  perangkatAbsen();
   $("#abSimpanUmum").onclick = e => coba(async () => {
     const k = $("#abKoord").value.trim(), m = k.match(/^\s*(-?\d+(?:\.\d+)?)\s*[,; ]\s*(-?\d+(?:\.\d+)?)\s*$/);
     if (k && !m) throw new Error("Format koordinat: lintang, bujur — contoh -6.3274, 108.3247");
@@ -2988,6 +2990,22 @@ async function ciriWajah(src){
 const BATAS_WAJAH = 0.5; // jarak < 0,5 = orang yang sama
 const jarakWajah = (a, b) => Math.sqrt(a.reduce((s, x, i) => s + (x - b[i]) ** 2, 0));
 const jarakKe = (ciri, data) => data && data.d && data.d.length ? Math.min(...data.d.map(v => jarakWajah(ciri, v))) : null;
+/** Daftar perangkat (iMin kasir, HP/iPhone absen) dengan sakelar izin absen on/off. */
+async function perangkatAbsen(){
+  const el = $("#abPerangkat"); if (!el) return;
+  let L; try { L = (await api("GET", "/api/cabang/perangkat")).filter(d => !d.dicabut); } catch (e) { el.innerHTML = `<p class="small muted" style="margin:0">${esc(e.message)}</p>`; return; }
+  const ini = tokenHpAbsen() && kioskInfo && kioskInfo.hp;
+  el.innerHTML = L.length ? `<div class="list">${L.map(d => `<div class="li"><div class="main"><div class="t">${/^W/.test(d.kode) ? "📱" : "🖥️"} ${esc(d.nama)} <span class="code">${esc(d.kode)}</span>${ini && ini === d.nama ? ` <span class="pill mut">HP ini</span>` : ""}</div>
+      <div class="small muted">${/^W/.test(d.kode) ? "HP tempat absen" : "Perangkat kasir"}${d.terakhir ? " · terakhir aktif " + esc(waktuLokal(String(d.terakhir).replace(" ", "T") + "Z")) : ""}</div></div>
+      <label class="row small" style="gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" data-pabs="${d.id}" ${d.absen ? "checked" : ""}> <b>${d.absen ? "Boleh absen" : "Tidak boleh"}</b></label></div>`).join("")}</div>
+    <p class="small muted" style="margin:0">Matikan sakelar untuk melarang absen dari perangkat itu (tanpa mencabut sambungannya). Absen tetap hanya bisa di lokasi toko.</p>`
+    : `<p class="small muted" style="margin:0">Belum ada perangkat. Daftarkan HP ini lewat menu <b>Absen → Jadikan HP ini tempat absen</b>, atau sambungkan iMin kasir ke server pusat.</p>`;
+  $$("[data-pabs]", el).forEach(x => x.onchange = async () => {
+    try { await api("PUT", `/api/cabang/perangkat/${x.dataset.pabs}`, { absen: x.checked }); toast(x.checked ? "Perangkat diizinkan absen ✅" : "Perangkat tidak boleh absen lagi"); }
+    catch (e) { x.checked = !x.checked; toast(e.message); }
+    await cekKiosk().catch(() => {}); perangkatAbsen();
+  });
+}
 /** Admin: daftarkan wajah tiap karyawan (3–5 foto) untuk dicocokkan saat absen. Disimpan di server sebagai angka ciri wajah, bukan foto. */
 async function daftarWajah(){
   const W = await coba(() => api("GET", "/api/absen/wajah")); if (!W) return;

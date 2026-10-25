@@ -43,9 +43,9 @@ function statusKiosk(token){
   const alasan = !s.absen_pin_aktif ? "Absen PIN belum diaktifkan admin"
     : platform.perangkat ? (
         !cabangAktif() ? "Perangkat ini belum tersambung ke server pusat"
-        : !s.cabang_absen ? "Perangkat ini belum diizinkan untuk absen (admin: Pengaturan → Server pusat → Perangkat cabang)" : "")
+        : !s.cabang_absen ? "Perangkat ini belum diizinkan untuk absen (admin: Pengaturan → Absensi → Perangkat yang boleh dipakai absen)" : "")
     : !hp ? "HP ini belum didaftarkan untuk absen (admin: masuk di HP ini → Pengaturan → Absensi → Jadikan HP ini tempat absen)"
-    : !hp.absen ? "HP ini belum diizinkan untuk absen (admin: Pengaturan → Server pusat → Perangkat)" : "";
+    : !hp.absen ? "HP ini belum diizinkan untuk absen (admin: Pengaturan → Absensi → Perangkat yang boleh dipakai absen)" : "";
   const lokasiAda = isFinite(parseFloat(s.absen_lat)) && isFinite(parseFloat(s.absen_lng));
   const alasan2 = alasan || (!lokasiAda ? "Lokasi toko untuk absen belum diatur" : "");
   return { aktif: !!s.absen_pin_aktif, boleh: !alasan2, alasan: alasan2, hp: hp ? hp.nama : null, hpId: hp ? hp.id : null,
