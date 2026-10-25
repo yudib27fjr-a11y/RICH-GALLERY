@@ -22,15 +22,20 @@ export function jarakMeter(lat1, lng1, lat2, lng2){
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 /** Periksa lokasi terhadap lokasi toko. Mengembalikan jarak (m) atau melempar galat yang jelas. */
+/** Semua titik lokasi absen: lokasi toko utama + lokasi lain (mis. toko kedua). */
+export function titikAbsen(s = getSettings()){
+  const L = [{ nama: "Toko", lat: parseFloat(s.absen_lat), lng: parseFloat(s.absen_lng) },
+    ...(Array.isArray(s.absen_lokasi_lain) ? s.absen_lokasi_lain : []).map(x => ({ nama: String(x.nama || "Lokasi lain"), lat: parseFloat(x.lat), lng: parseFloat(x.lng) }))];
+  return L.filter(x => isFinite(x.lat) && isFinite(x.lng));
+}
 export function cekLokasi(lat, lng, akurasi){
-  const s = getSettings();
-  const tLat = parseFloat(s.absen_lat), tLng = parseFloat(s.absen_lng), radius = Number(s.absen_radius) || 100;
-  if (!isFinite(tLat) || !isFinite(tLng)) throw bad("Lokasi toko untuk absen belum diatur admin (Pengaturan → Absensi)");
+  const s = getSettings(), titik = titikAbsen(s), radius = Number(s.absen_radius) || 100;
+  if (!titik.length) throw bad("Lokasi toko untuk absen belum diatur admin (Pengaturan → Absensi)");
   lat = Number(lat); lng = Number(lng); akurasi = Math.max(0, Number(akurasi) || 0);
   if (!isFinite(lat) || !isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) throw bad("Lokasi perangkat tidak terbaca. Nyalakan GPS / lokasi lalu coba lagi.");
   if (akurasi > 500) throw bad(`Lokasi kurang akurat (±${Math.round(akurasi)} m). Tunggu sebentar di dekat pintu/jendela lalu coba lagi.`);
-  const jarak = jarakMeter(lat, lng, tLat, tLng);
-  if (jarak > radius + Math.min(akurasi, 50)) throw bad(`Absen hanya bisa di toko. Perangkat berjarak ±${Math.round(jarak)} m dari lokasi toko (batas ${radius} m).`);
+  const dekat = titik.map(t => ({ ...t, jarak: jarakMeter(lat, lng, t.lat, t.lng) })).sort((a, b) => a.jarak - b.jarak)[0], jarak = dekat.jarak;
+  if (jarak > radius + Math.min(akurasi, 50)) throw bad(`Absen hanya bisa di toko. Perangkat berjarak ±${Math.round(jarak)} m dari ${titik.length > 1 ? "lokasi terdekat (" + dekat.nama + ")" : "lokasi toko"} (batas ${radius} m).`);
   return Math.round(jarak);
 }
 /* HP (browser, mis. iPhone) yang didaftarkan admin untuk absen. Tanda pengenalnya disimpan di HP itu
@@ -46,10 +51,10 @@ function statusKiosk(token){
         : !s.cabang_absen ? "Perangkat ini belum diizinkan untuk absen (admin: Pengaturan → Absensi → Perangkat yang boleh dipakai absen)" : "")
     : !hp ? "HP ini belum didaftarkan untuk absen (admin: masuk di HP ini → Pengaturan → Absensi → Jadikan HP ini tempat absen)"
     : !hp.absen ? "HP ini belum diizinkan untuk absen (admin: Pengaturan → Absensi → Perangkat yang boleh dipakai absen)" : "";
-  const lokasiAda = isFinite(parseFloat(s.absen_lat)) && isFinite(parseFloat(s.absen_lng));
+  const titik = titikAbsen(s), lokasiAda = titik.length > 0;
   const alasan2 = alasan || (!lokasiAda ? "Lokasi toko untuk absen belum diatur" : "");
   return { aktif: !!s.absen_pin_aktif, boleh: !alasan2, alasan: alasan2, hp: hp ? hp.nama : null, hpId: hp ? hp.id : null,
-    radius: Number(s.absen_radius) || 100, lat: parseFloat(s.absen_lat), lng: parseFloat(s.absen_lng) };
+    radius: Number(s.absen_radius) || 100, lat: titik[0] ? titik[0].lat : NaN, lng: titik[0] ? titik[0].lng : NaN, titik };
 }
 route("GET", "/api/absen/kiosk", false, ({ query }) => {
   const { hpId, ...st } = statusKiosk(query.alat);
@@ -289,7 +294,7 @@ route("GET", "/api/absen/pengaturan", "admin", () => {
   return {
     aktif: !!s.absen_aktif, alamat: s.absen_token ? `/api/absen/mesin/${s.absen_token}` : "", mesin: s.absen_mesin,
     shifts: daftarShift(s), terakhir,
-    pin_aktif: !!s.absen_pin_aktif, lat: s.absen_lat, lng: s.absen_lng, radius: Number(s.absen_radius) || 100,
+    pin_aktif: !!s.absen_pin_aktif, lat: s.absen_lat, lng: s.absen_lng, radius: Number(s.absen_radius) || 100, lokasi_lain: Array.isArray(s.absen_lokasi_lain) ? s.absen_lokasi_lain : [],
     karyawan: all("SELECT id, nama, peran, aktif, pin_absen, shift FROM users ORDER BY aktif DESC, peran DESC, nama"),
   };
 });
@@ -309,6 +314,11 @@ route("PUT", "/api/absen/pengaturan", "admin", ({ body }) => tx(() => {
     if (!kosong && !(isFinite(lat) && isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180)) throw bad("Koordinat toko tidak valid. Contoh: -6.3274, 108.3247");
     setSetting("absen_lat", kosong ? "" : String(lat)); setSetting("absen_lng", kosong ? "" : String(lng));
   }
+  if (Array.isArray(body.lokasi_lain)) setSetting("absen_lokasi_lain", body.lokasi_lain.slice(0, 5).map((x, i) => {
+    const lat = Number(x && x.lat), lng = Number(x && x.lng);
+    if (!(isFinite(lat) && isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180)) throw bad(`Koordinat lokasi ke-${i + 2} tidak valid. Contoh: -6.3274, 108.3247`);
+    return { nama: teks(x.nama, { max: 40, nama: "Nama lokasi" }) || `Lokasi ${i + 2}`, lat, lng };
+  }));
   if (Array.isArray(body.pin)) {
     const dipakai = new Map();
     for (const x of body.pin) {

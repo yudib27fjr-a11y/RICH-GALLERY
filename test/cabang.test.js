@@ -501,6 +501,14 @@ test("absen PIN + selfie: hanya perangkat yang diizinkan & di lokasi toko", asyn
   const absenHp = b => tamuP("POST", "/api/absen/pin", { alat: hp.token, user_id: izaP.id, pin: "1234", jenis: "pulang", foto: FOTO, akurasi: 10, ...LOK, ...b });
   assert.equal((await absenHp({ alat: "palsu" })).status, 403, "token salah");
   assert.equal((await absenHp(JAUH)).status, 400, "di luar toko");
+  // Lokasi absen kedua: di lokasi lain itu boleh absen, sakelar perangkat off → ditolak
+  assert.equal((await pusat("PUT", "/api/absen/pengaturan", { lokasi_lain: [{ nama: "Toko 2", lat: JAUH.lat, lng: JAUH.lng }] })).status, 200);
+  const dua = await absenHp({ ...JAUH, jenis: "masuk" }); assert.equal(dua.status, 200, JSON.stringify(dua.data));
+  assert.equal((await pusat("PUT", "/api/absen/pengaturan", { lokasi_lain: [] })).status, 200);
+  const wOff = (await pusat("GET", "/api/cabang/perangkat")).data.find(x => x.kode === hp.kode);
+  assert.equal((await pusat("PUT", `/api/cabang/perangkat/${wOff.id}`, { absen: false })).status, 200);
+  assert.equal((await absenHp({})).status, 403, "sakelar absen dimatikan");
+  assert.equal((await pusat("PUT", `/api/cabang/perangkat/${wOff.id}`, { absen: true })).status, 200);
   assert.equal((await pusat("POST", "/api/notif/langganan", { endpoint: "https://fcm.googleapis.com/fcm/send/uji-absen", nama: "HP admin" })).status, 200);
   const okHp = await absenHp({});
   assert.equal(okHp.status, 200, JSON.stringify(okHp.data)); assert.equal(okHp.data.jenis, "pulang");

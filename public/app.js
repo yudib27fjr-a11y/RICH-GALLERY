@@ -2765,6 +2765,8 @@ async function aturAbsen(){
     <p class="small muted" style="margin:0">Cara termudah: di iMin (saat di toko) buka Pengaturan → Absensi → <b>Pakai lokasi perangkat ini</b>. Atau <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(B.toko.alamat || "")}" target="_blank" rel="noopener">buka alamat toko di Google Maps</a>, tekan lama titik toko, salin angka koordinatnya, lalu tempel di sini.</p>
     <button class="btn" id="abLokasiSaya" type="button">📍 Pakai lokasi saya sekarang</button>
     <p class="small muted" style="margin:0" id="abLokasiInfo">Tekan saat sedang berada <b>di dalam toko</b>, lalu tekan <b>Simpan pengaturan absen</b>.</p>
+    <div class="f"><span>Lokasi absen lain (mis. toko kedua) — absen boleh di salah satu lokasi</span><div id="abLain" class="stack" style="gap:6px"></div>
+      <button class="btn sm" id="abLainTambah" type="button" style="align-self:flex-start">+ Tambah lokasi</button></div>
     <label class="f">Radius (meter dari titik toko)<input type="number" id="abRadius" value="${A.radius}" min="20" max="2000" step="10"></label>
     <h4 style="margin:8px 0 0">📱 Perangkat yang boleh dipakai absen</h4>
     <div id="abPerangkat" class="stack"><p class="small muted" style="margin:0">Memuat daftar perangkat…</p></div>
@@ -2799,11 +2801,24 @@ async function aturAbsen(){
   }, e.target);
   const bw = $("#abWajah"); if (bw) bw.onclick = daftarWajah;
   perangkatAbsen();
+  let lain = (A.lokasi_lain || []).map(x => ({ nama: x.nama, koord: `${x.lat}, ${x.lng}` }));
+  const gambarLain = () => {
+    $("#abLain").innerHTML = lain.map((x, i) => `<div class="row" style="align-items:flex-end;gap:6px;flex-wrap:wrap"><label class="f" style="width:130px">Nama<input type="text" data-ln="${i}" data-f="nama" value="${esc(x.nama || "")}" placeholder="Toko 2" maxlength="40"></label>
+      <label class="f grow">Koordinat<input type="text" data-ln="${i}" data-f="koord" value="${esc(x.koord || "")}" placeholder="-6.3274, 108.3247" inputmode="decimal"></label>
+      <button class="btn sm" data-lsaya="${i}" type="button" title="Pakai lokasi saya">📍</button><button class="btn sm ghost" data-lhapus="${i}" type="button" aria-label="Hapus">✕</button></div>`).join("") || `<p class="small muted" style="margin:0">Belum ada lokasi lain.</p>`;
+    $$("#abLain [data-ln]").forEach(x => x.oninput = () => { lain[+x.dataset.ln][x.dataset.f] = x.value; });
+    $$("#abLain [data-lhapus]").forEach(b => b.onclick = () => { lain.splice(+b.dataset.lhapus, 1); gambarLain(); });
+    $$("#abLain [data-lsaya]").forEach(b => b.onclick = e => coba(async () => { toast("Membaca lokasi…"); const p = await ambilLokasi(); lain[+b.dataset.lsaya].koord = `${p.lat.toFixed(7)}, ${p.lng.toFixed(7)}`; gambarLain(); toast(`Lokasi terbaca (±${Math.round(p.akurasi)} m)`); }, e.target));
+  };
+  gambarLain();
+  $("#abLainTambah").onclick = () => { if (lain.length >= 5) return toast("Maksimal 6 lokasi"); lain.push({ nama: `Toko ${lain.length + 2}`, koord: "" }); gambarLain(); };
   $("#abSimpanUmum").onclick = e => coba(async () => {
     const k = $("#abKoord").value.trim(), m = k.match(/^\s*(-?\d+(?:\.\d+)?)\s*[,; ]\s*(-?\d+(?:\.\d+)?)\s*$/);
     if (k && !m) throw new Error("Format koordinat: lintang, bujur — contoh -6.3274, 108.3247");
+    const lokasi_lain = lain.filter(x => String(x.koord || "").trim()).map(x => { const mm = String(x.koord).match(/^\s*(-?\d+(?:\.\d+)?)\s*[,; ]\s*(-?\d+(?:\.\d+)?)\s*$/);
+      if (!mm) throw new Error(`Format koordinat ${x.nama || "lokasi lain"}: lintang, bujur — contoh -6.3274, 108.3247`); return { nama: x.nama, lat: mm[1], lng: mm[2] }; });
     await api("PUT", "/api/absen/pengaturan", { pin_aktif: $("#abPinAktif").checked,
-      radius: $("#abRadius").value, lat: m ? m[1] : "", lng: m ? m[2] : "" });
+      radius: $("#abRadius").value, lat: m ? m[1] : "", lng: m ? m[2] : "", lokasi_lain });
     await muatUlang(); renderNav(); toast("Pengaturan absen disimpan"); aturAbsen();
   }, e.target);
   $("#abAktif").onchange = e => coba(async () => { await api("PUT", "/api/absen/pengaturan", { aktif: e.target.checked }); await muatUlang(); renderNav(); toast(e.target.checked ? "Mesin sidik jari diaktifkan" : "Mesin sidik jari dimatikan"); aturAbsen(); });
@@ -3136,7 +3151,8 @@ async function bukaAbsen(jenisAwal){
       $("#akLok", m).textContent = "📍 Membaca lokasi…";
       try {
         const p = await ambilLokasi();
-        const jarak = isFinite(K.lat) && isFinite(K.lng) ? jarakM(p.lat, p.lng, K.lat, K.lng) : null;
+        const T = Array.isArray(K.titik) && K.titik.length ? K.titik : isFinite(K.lat) && isFinite(K.lng) ? [{ nama: "Toko", lat: K.lat, lng: K.lng }] : [];
+        const jarak = T.length ? Math.min(...T.map(t => jarakM(p.lat, p.lng, t.lat, t.lng))) : null;
         const ok = jarak == null || jarak <= K.radius + Math.min(p.akurasi, 50);
         lokasi = { ...p, ok };
         $("#akLok", m).innerHTML = jarak == null ? `📍 Lokasi terbaca (±${Math.round(p.akurasi)} m)`
