@@ -53,8 +53,8 @@ const AKSI = {
     const t = setelanTugas(), L = [], tgl = sekarang().tgl, [a, b] = mingguDari(tgl);
     const saya = t.wajib.find(w => w.id === user.id);
     if (saya) { const n = kontenMinggu(user.id, tgl); L.push({ jenis: "konten", n, min: saya.min, selesai: n >= saya.min, dari: a, sampai: b }); }
-    if (bolehPromosi(user, t)) { const n = jumlahPromosiBulan(bulanIni()); L.push({ jenis: "promosi", n, min: t.minPromosi, selesai: n >= t.minPromosi, bulan: bulanIni(), pic: t.pic ? t.pic.nama : "" }); }
-    if (user.peran === "admin") for (const w of t.wajib) if (w.id !== user.id) { const n = kontenMinggu(w.id, tgl); L.push({ jenis: "konten_karyawan", nama: w.nama, n, min: w.min, selesai: n >= w.min }); }
+    // Jendela pengingat hanya untuk karyawan yang ditugasi (wajib konten / penanggung jawab promosi), tidak untuk admin.
+    if (t.pic && t.pic.id === user.id) { const n = jumlahPromosiBulan(bulanIni()); L.push({ jenis: "promosi", n, min: t.minPromosi, selesai: n >= t.minPromosi, bulan: bulanIni(), pic: t.pic.nama }); }
     return L;
   },
   daftar: ({ bulan }, user) => {
