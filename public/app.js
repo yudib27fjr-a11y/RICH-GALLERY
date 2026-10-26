@@ -858,9 +858,25 @@ async function cekSync(){
     d.className = "sync-dot " + (!s.aktif ? "" : s.galat && s.menunggu ? "pending" : s.menunggu ? "pending" : "ok");
     d.title = !s.aktif ? "Sinkron Google Sheet belum diatur" : s.menunggu ? `${s.menunggu} baris menunggu dikirim${s.galat ? " · galat: " + s.galat : ""}` : "Semua data sudah terkirim ke Google Sheet"; } catch {}
 }
+/* Warna tiap menu (ala Shopee: ikon berwarna di kotak lembut, mudah dibedakan). */
+const WARNA_MENU = { kasir: "#ee4d2d", absenku: "#16a34a", pesanan: "#2563eb", jasa: "#9333ea", buketuang: "#059669", kurir: "#0d9488", mitra: "#4f46e5",
+  belanja: "#f97316", riwayat: "#d97706", produksi: "#db2777", stok: "#a16207", mutasi: "#0891b2", opname: "#65a30d", biaya: "#dc2626", laporan: "#1d4ed8",
+  absen: "#7c3aed", gaji: "#047857", konten: "#e11d48", promosi: "#c026d3", atur: "#64748b", menu: "#8e1d4b" };
+ICON.menu = '<rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/>';
+const ikonMenu = k => `<span class="ic" style="--c:${WARNA_MENU[k] || "#8e1d4b"};--cs:${WARNA_MENU[k] || "#8e1d4b"}1f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[k] || ""}</svg></span>`;
 function renderNav(){
-  $("#tabs").innerHTML = daftarView().map(([k, l]) => `<button type="button" data-v="${k}" class="${view === k ? "on" : ""}" aria-label="${l}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICON[k]}</svg>${l}</button>`).join("");
-  $$("#tabs button").forEach(b => b.onclick = () => pindah(b.dataset.v));
+  $("#tabs").innerHTML = `<button type="button" data-semua class="semua" aria-label="Semua menu">${ikonMenu("menu")}Menu</button>`
+    + daftarView().map(([k, l]) => `<button type="button" data-v="${k}" class="${view === k ? "on" : ""}" aria-label="${l}" style="--c:${WARNA_MENU[k] || "#8e1d4b"}">${ikonMenu(k)}${l}</button>`).join("");
+  $$("#tabs button[data-v]").forEach(b => b.onclick = () => pindah(b.dataset.v));
+  $("#tabs [data-semua]").onclick = semuaMenu;
+  const on = $("#tabs button.on"); if (on && on.scrollIntoView) try { on.scrollIntoView({ block: "nearest", inline: "center" }); } catch {}
+}
+/** Semua menu dalam satu layar (kotak-kotak berwarna seperti pintasan di Shopee). */
+function semuaMenu(){
+  modal(`<h3>Semua menu</h3><div class="menu-grid">${daftarView().map(([k, l]) => `<button type="button" data-g="${k}" class="${view === k ? "on" : ""}">${ikonMenu(k)}<span>${esc(l)}</span></button>`).join("")}</div>
+    <div class="actions"><button class="btn" data-close>Tutup</button></div>`, m => {
+    $$("[data-g]", m).forEach(b => b.onclick = () => { closeModal(); pindah(b.dataset.g); });
+  });
 }
 function pindah(v){ view = v; try { history.replaceState(null, "", "#" + v); } catch {} render(); $("#main").scrollTop = 0; }
 function render(){
