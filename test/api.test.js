@@ -620,9 +620,11 @@ test("promosi & pengingat tugas: PJ promosi, minimal per bulan, dana jadi pengel
   const peng = (await admin("GET", `/api/pengeluaran?dari=${hari}&sampai=${hari}`)).data;
   assert.ok(JSON.stringify(peng).includes("Promosi: Diskon 10% buket wisuda"));
   // klaim konten dari link
+  const pendek = await kasir("POST", "/api/konten/klaim", { url: "Lihat video ini https://vt.tiktok.com/ZSgCvSAPW/ 👀" });
+  assert.equal(pendek.status, 200, "link bagikan TikTok pendek diterima: " + JSON.stringify(pendek.data));
   const kl = await kasir("POST", "/api/konten/klaim", { url: "https://www.instagram.com/reel/KLAIM01/?igsh=abc" });
   assert.equal(kl.status, 200, JSON.stringify(kl.data));
-  assert.equal((await kasir("GET", "/api/tugas-saya")).data.find(x => x.jenis === "konten").n, 1);
+  assert.equal((await kasir("GET", "/api/tugas-saya")).data.find(x => x.jenis === "konten").n, 2);
   // bila PJ dikosongkan, karyawan tidak bisa membuka promosi
   await admin("PUT", "/api/tugas/setelan", { pic_promosi_id: null });
   assert.equal((await kasir("GET", "/api/promosi")).status, 403);

@@ -68,7 +68,10 @@ function cariKembaran(platformnya, waktuMs, caption, manual = false){
 
 /* ---------- mencatat satu unggahan ---------- */
 /** Kode video dari link (Instagram: kode setelah /reel/ /p/ /tv/, TikTok: nomor setelah /video/) — untuk mencocokkan link manual dengan hasil otomatis. */
-export const kodeLink = url => ((String(url || "").match(/\/(?:reel|reels|p|tv)\/([\w-]+)/) || String(url || "").match(/\/video\/(\d+)/) || [])[1] || "");
+/* Juga link bagikan pendek: vt.tiktok.com/XXXX, vm.tiktok.com/XXXX, tiktok.com/t/XXXX, instagram.com/share/reel/XXXX. */
+export const kodeLink = url => { const u = String(url || "").trim();
+  return ((u.match(/\/(?:reel|reels|p|tv)\/([\w-]+)/) || u.match(/\/video\/(\d+)/) || u.match(/(?:vt|vm)\.tiktok\.com\/([\w-]+)/i) || u.match(/tiktok\.com\/t\/([\w-]+)/i) || u.match(/instagram\.com\/share\/(?:\w+\/)?([\w-]+)/i) || [])[1] || ""); };
+const platformLink = url => /instagram\.com|instagr\.am/i.test(url) ? "instagram" : /tiktok\.com/i.test(url) ? "tiktok" : null;
 const cariLink = (pf, url) => { const k = kodeLink(url); return k ? one("SELECT * FROM konten WHERE platform = ? AND (pid = ? OR url LIKE ?)", [pf, k, `%/${k}%`]) : null; };
 /** Catat video baru. Hasil: baris konten (status: hitung | kembar | batas | lama). */
 export function catatKonten({ platform: pf, pid, url = "", caption = "", waktuMs, thumb = "", lama = false, oleh = "otomatis", userId = null }){
@@ -123,8 +126,9 @@ export function gantiPembuat(id, userId){
 /** Karyawan: "Saya yang buat konten ini" — dari link. Bila video sudah tercatat otomatis, pembuatnya diganti; bila belum, dicatat. */
 export function klaimKonten(url, user){
   url = teks(url, { wajib: true, max: 400, nama: "Link video" });
-  const pf = /instagram\.com/i.test(url) ? "instagram" : /tiktok\.com/i.test(url) ? "tiktok" : null;
-  if (!pf || !kodeLink(url)) throw bad("Tempel link video Instagram (reel/post) atau TikTok (…/video/…)");
+  url = url.match(/https?:\/\/\S+/) ? url.match(/https?:\/\/\S+/)[0] : url; // teks bagikan kadang berisi kalimat + link
+  const pf = platformLink(url);
+  if (!pf || !kodeLink(url)) throw bad("Tempel link video Instagram atau TikTok (bisa link bagikan, mis. https://vt.tiktok.com/…)");
   const ada = cariLink(pf, url);
   if (ada) { if (ada.user_id !== user.id && ada.status !== "batal") gantiPembuat(ada.id, user.id); return { ...one("SELECT * FROM konten WHERE id = ?", [ada.id]), baru: false }; }
   return catatKonten({ platform: pf, pid: kodeLink(url), url, waktuMs: Date.parse(sekarang().tgl + "T12:00:00+08:00"), oleh: "manual", userId: user.id });
@@ -289,7 +293,7 @@ route("POST", "/api/konten/cek", "admin", async () => ({ ...(await cekKontenBaru
 /** Catat manual dari link (bila akun belum disambungkan atau unggahan terlewat). */
 route("POST", "/api/konten", "admin", ({ body }) => {
   const url = teks(body.url, { wajib: true, max: 400, nama: "Link video" });
-  const pf = /instagram\.com/i.test(url) ? "instagram" : /tiktok\.com/i.test(url) ? "tiktok" : null;
+  const pf = platformLink(url);
   if (!pf) throw bad("Tempel link video Instagram atau TikTok");
   const tgl = /^\d{4}-\d{2}-\d{2}$/.test(body.tgl || "") ? body.tgl : sekarang().tgl;
   const waktuMs = Date.parse(tgl + "T12:00:00+08:00");
