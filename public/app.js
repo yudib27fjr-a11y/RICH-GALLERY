@@ -279,20 +279,26 @@ function lunasiDariStruk(s, setelah){
   });
 }
 function lihatStruk(s, setelahBatal){
-  modal(`<h3>Struk ${esc(s.no)}</h3>
-    <pre class="receipt-prev">${esc(strukText(s))}</pre>
-    ${s.kartu ? `<div class="pesanan-isi stack" style="margin-bottom:8px"><b>Kartu ucapan</b><div style="white-space:pre-wrap">${esc(s.kartu)}</div>${tombolKartu(s.id)}</div>` : ""}
+  const tile = (id, kelas, k, label, href) => href
+    ? `<a class="aksi-tile ${kelas}" href="${href}" target="_blank" rel="noopener"><span class="ik">${ikon(k, 22)}</span>${label}</a>`
+    : `<button class="aksi-tile ${kelas}" id="${id}" type="button"><span class="ik">${ikon(k, 22)}</span>${label}</button>`;
+  modal(`<div class="struk-kertas"><div class="struk-kepala">
+      <button class="struk-ib b-struk" id="printBtn" type="button" title="Cetak struk" aria-label="Cetak struk">${ikon("cetak", 22)}</button>
+      <h3>Struk<br><small>${esc(s.no)}</small></h3>
+      <button class="struk-ib tutup" data-close type="button" title="Tutup" aria-label="Tutup"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <pre class="receipt-prev">${esc(strukText(s))}</pre></div>
+    ${s.kartu ? `<div class="pesanan-isi stack" style="margin:8px 0"><b>Kartu ucapan</b><div style="white-space:pre-wrap">${esc(s.kartu)}</div>${tombolKartu(s.id)}</div>` : ""}
     ${s.batal_at ? `<p class="small muted">Dibatalkan oleh ${esc(s.batal_oleh || "-")}${s.batal_alasan ? ": " + esc(s.batal_alasan) : ""}</p>` : ""}
-    ${!s.batal_at && sisaTagihan(s) > 0 ? `<button class="btn pri" id="lunasBtn" type="button" style="width:100%;margin-bottom:8px">💵 Lunasi sisa ${rp(sisaTagihan(s))}</button>` : ""}
-    <div class="actions">
-      ${!s.batal_at && isAdmin() ? `<button class="btn bk b-batal" id="voidBtn" type="button">${ikon("batal", 18)}Batalkan</button>` : ""}
-      ${isAdmin() ? `<button class="btn bk b-koreksi" id="koreksiBtn" type="button">${ikon("koreksi", 18)}Koreksi</button><button class="btn bk b-hapus" id="hapusBtn" type="button">${ikon("hapus", 18)}Hapus</button>` : ""}
-      <button class="btn bk b-nota" id="notaBtn" type="button">${ikon("nota", 18)}Nota</button>
-      <button class="btn bk b-pdf" id="pdfStrukBtn" type="button">${ikon("pdf", 18)}PDF struk</button>
-      <a class="btn bk b-wa" href="${waLink(s)}" target="_blank" rel="noopener">${ikon("wa", 18)}Kirim WA</a>
-      ${perluStiker(s) ? `<button class="btn" id="stikerBtn" type="button">✂️ Pesan stiker</button>` : ""}
-      <button class="btn" data-close type="button">Tutup</button>
-      <button class="btn bk b-struk" id="printBtn" type="button">${ikon("struk", 18)}Cetak struk</button>
+    ${!s.batal_at && sisaTagihan(s) > 0 ? `<button class="btn pri" id="lunasBtn" type="button" style="width:100%;margin-top:10px">💵 Lunasi sisa ${rp(sisaTagihan(s))}</button>` : ""}
+    <div class="aksi-grid">
+      ${tile("notaBtn", "b-nota", "nota", "Nota")}
+      ${tile("pdfStrukBtn", "b-pdf", "pdf", "PDF")}
+      ${tile("", "b-wa", "wa", "WA", waLink(s))}
+      ${perluStiker(s) ? `<button class="aksi-tile b-stiker" id="stikerBtn" type="button"><span class="ik" style="font-size:20px">✂️</span>Stiker</button>` : ""}
+      ${isAdmin() ? tile("koreksiBtn", "b-koreksi", "koreksi", "Koreksi") : ""}
+      ${!s.batal_at && isAdmin() ? tile("voidBtn", "b-batal", "batal", "Batalkan") : ""}
+      ${isAdmin() ? tile("hapusBtn", "b-hapus", "hapus", "Hapus") : ""}
     </div>`, m => {
       $("#printBtn", m).onclick = () => cetak(s);
       $("#notaBtn", m).onclick = () => bukaNota(s);

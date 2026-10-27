@@ -435,3 +435,21 @@ nav.tabs button:active .ic{transform:scale(.92)}
 .menu-grid button.on .ic{background:var(--c);color:#fff}
 .menu-grid button:active .ic{transform:scale(.94)}
 @media (min-width:900px){ nav.tabs button.semua{border-right:0;border-bottom:1px solid var(--line)} nav.tabs button{height:74px} }
+
+/* jendela struk: cetak (kiri) & tutup (kanan) sejajar di atas kertas, aksi lain berupa ikon */
+.struk-kertas{width:max-content;max-width:100%;margin:0 auto}
+.struk-kertas .receipt-prev{width:auto}
+.struk-kepala{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.struk-kepala h3{flex:1;margin:0;text-align:center;font-size:16px;line-height:1.2}
+.struk-kepala h3 small{font-size:13px;font-weight:600;color:var(--muted);font-family:var(--mono)}
+.struk-ib{width:44px;height:44px;border-radius:12px;border:0;display:grid;place-items:center;cursor:pointer;color:#fff;flex:0 0 auto}
+.struk-ib.tutup{background:transparent;color:var(--ink,currentColor);border:1.5px solid var(--line)}
+.struk-ib:hover{filter:brightness(1.1)}
+.aksi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(50px,1fr));gap:6px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.aksi-tile{display:flex;flex-direction:column;align-items:center;gap:5px;background:transparent;border:0;padding:4px 0;font:inherit;font-size:12px;font-weight:600;color:inherit;text-decoration:none;cursor:pointer}
+.aksi-tile .ik{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;color:#fff}
+.aksi-tile.b-nota,.aksi-tile.b-pdf,.aksi-tile.b-wa,.aksi-tile.b-koreksi,.aksi-tile.b-hapus,.aksi-tile.b-batal,.aksi-tile.b-stiker{background:transparent}
+.aksi-tile.b-nota .ik{background:#1d4ed8}.aksi-tile.b-pdf .ik{background:#c2410c}.aksi-tile.b-wa .ik{background:#15803d}
+.aksi-tile.b-koreksi .ik{background:#b45309}.aksi-tile.b-hapus .ik{background:#b91c1c}.aksi-tile.b-stiker .ik{background:#7c3aed}
+.aksi-tile.b-batal .ik{background:transparent;color:#b91c1c;border:2px solid #b91c1c}
+.aksi-tile:hover .ik{filter:brightness(1.1)}
