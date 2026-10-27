@@ -3235,7 +3235,7 @@ async function bukaAbsen(jenisAwal){
       const id = $("#akU", m).value, nama = (K.staf.find(x => String(x.id) === id) || {}).nama || "";
       if (!id) { ket.innerHTML = "🤖 Wajah terbaca. Pilih nama kamu."; return; }
       const d = jarakKe(ciri, WJ[id]);
-      ket.innerHTML = d == null ? `🤖 Wajah ${esc(nama)} belum didaftarkan admin — absen tetap tersimpan.`
+      ket.innerHTML = d == null ? `🤖 Wajah ${esc(nama)} belum terdaftar — ketik PIN, wajah ini akan otomatis didaftarkan saat absen disimpan.`
         : d < BATAS_WAJAH ? `<b style="color:var(--ok)">✅ Wajah cocok: ${esc(nama)}</b>`
         : `<b style="color:var(--bad)">⚠️ Wajah tidak cocok dengan ${esc(nama)}</b><br><span class="small">Ulangi foto dengan wajah jelas & terang. Bila tetap disimpan, admin akan melihat tanda ⚠️.</span>`;
     };
@@ -3321,7 +3321,7 @@ async function bukaAbsen(jenisAwal){
       const r = await api("POST", "/api/absen/pin", { alat: LOKAL ? undefined : tokenHpAbsen(), user_id: +$("#akU", m).value, pin: $("#akP", m).value, jenis, foto, lat: lokasi.lat, lng: lokasi.lng, akurasi: lokasi.akurasi, ...hasilWajah(), ciri: ciri || undefined }).catch(e => { terkirim = false; otomatis = false; throw e; });
       matikan(); closeModal();
       ucapkan(`Terima kasih, ${toTitle(r.nama)}. Absen ${r.jenis} berhasil.`);
-      modal(`<h3>✅ Absen ${r.jenis} tercatat</h3><p style="font-size:18px;margin:0"><b>${esc(r.nama)}</b> — jam <b>${esc(r.jam)}</b></p><p class="small muted">±${r.jarak} m dari titik toko</p><div class="actions"><button class="btn pri" data-close>Selesai</button></div>`);
+      modal(`<h3>✅ Absen ${r.jenis} tercatat</h3><p style="font-size:18px;margin:0"><b>${esc(r.nama)}</b> — jam <b>${esc(r.jam)}</b></p><p class="small muted">±${r.jarak} m dari titik toko</p>${r.wajahBaru ? `<p class="small" style="color:var(--ok)">😊 Wajah kamu sudah terdaftar. Absen berikutnya cukup hadapkan wajah ke kamera — tanpa PIN.</p>` : ""}<div class="actions"><button class="btn pri" data-close>Selesai</button></div>`);
     }, e.target); };
   });
 }

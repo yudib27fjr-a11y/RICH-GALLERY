@@ -472,10 +472,15 @@ test("absen PIN + selfie: hanya perangkat yang diizinkan & di lokasi toko", asyn
   assert.equal((await absen({ foto: "" })).status, 400, "foto wajib");
   const jauh = await absen(JAUH);
   assert.equal(jauh.status, 400); assert.match(jauh.data.error, /hanya bisa di toko/);
-  const ok = await absen({});
+  const C0 = Array.from({ length: 128 }, (_, i) => Math.sin(i * 3) / 10);
+  const ok = await absen({ ciri: C0 });
   assert.equal(ok.status, 200, JSON.stringify(ok.data)); assert.equal(ok.data.nama, "IZA"); assert.ok(ok.data.jarak < 5);
+  assert.equal(ok.data.wajahBaru, true, "wajah belum terdaftar → didaftarkan otomatis dari absen ber-PIN");
   const st = await sinkron();
   assert.equal(st.ditolak, 0, JSON.stringify(st.ditolakDaftar));
+  const izaId = (await pusat("GET", "/api/bootstrap")).data.staf.find(u => u.nama === "IZA").id;
+  assert.equal((await pusat("GET", "/api/absen/wajah")).data[izaId]?.jumlah, 1, "wajah dari absen perangkat sampai di server");
+  await pusat("DELETE", "/api/absen/wajah", { user_id: izaId });
   const R = (await pusat("GET", `/api/absen?dari=${hari}&sampai=${hari}`)).data;
   const h = R.harian.find(x => x.nama === "IZA");
   const sc = h.scan.find(x => x.sumber === "pin");
@@ -507,6 +512,11 @@ test("absen PIN + selfie: hanya perangkat yang diizinkan & di lokasi toko", asyn
   assert.equal((await pusat("PUT", "/api/absen/pengaturan", { lokasi_lain: [] })).status, 200);
   // Tanpa PIN: wajah dikenali (dicocokkan di server dengan wajah terdaftar)
   const V = Array.from({ length: 128 }, (_, i) => Math.cos(i) / 10), V2 = V.map(x => x + 0.001), LAIN = V.map((x, i) => (i % 2 ? 0.3 : -0.3));
+  // Absen ber-PIN pertama kali → wajah terdaftar otomatis; absen ber-PIN berikutnya dengan wajah lain tidak menambah
+  const oto = await absenHp({ ciri: V, jenis: "masuk" }); assert.equal(oto.status, 200, JSON.stringify(oto.data)); assert.equal(oto.data.wajahBaru, true);
+  assert.equal((await absenHp({ ciri: LAIN, jenis: "masuk" })).data.wajahBaru, false);
+  assert.equal((await absenHp({ ciri: V2, jenis: "masuk" })).data.wajahBaru, false);
+  assert.equal((await pusat("GET", "/api/absen/wajah")).data[izaP.id].jumlah, 2, "wajah yang cocok menambah contoh, wajah lain tidak");
   assert.equal((await pusat("PUT", "/api/absen/wajah", { user_id: izaP.id, data: [V, V] })).status, 200);
   assert.equal((await absenHp({ pin: "", ciri: LAIN })).status, 401, "wajah lain ditolak tanpa PIN");
   assert.equal((await absenHp({ pin: "" })).status, 401, "tanpa PIN & tanpa wajah ditolak");

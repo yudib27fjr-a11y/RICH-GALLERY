@@ -122,6 +122,18 @@ route("PUT", "/api/absen/wajah", "admin", ({ body }) => {
   const w = { ...dataWajah(), [u.id]: { d: d.map(v => v.map(n => Math.round(n * 10000) / 10000)), t: sekarang().tgl } };
   setSetting("wajah", w); return { ok: true, jumlah: d.length };
 }, { pusatSaja: true });
+/** Daftar wajah otomatis dari absen ber-PIN: wajah belum terdaftar → selfie ini jadi wajah awal; terdaftar < 5 foto & cocok → ditambah agar makin akurat. */
+const ciriValid = c => Array.isArray(c) && c.length === 128 && c.every(n => typeof n === "number" && isFinite(n) && Math.abs(n) < 5);
+function daftarWajahOtomatis(u, ciri, tgl, jam){
+  if (!ciriValid(ciri)) return false;
+  const W = dataWajah(), lama = (W[u.id] || {}).d || [];
+  if (lama.length >= 5) return false;
+  if (lama.length) { const d = jarakWajahTerdaftar(u.id, ciri); if (d == null || d >= BATAS_WAJAH) return false; }
+  setSetting("wajah", { ...W, [u.id]: { d: [...lama, ciri.map(n => Math.round(n * 10000) / 10000)], t: (W[u.id] || {}).t || tgl, oto: 1 } });
+  if (!lama.length) antreNotif(`😊 Wajah ${u.nama} terdaftar otomatis`, `Dari selfie absen ${tgl} ${String(jam).slice(0, 5)} (pakai PIN). Pastikan fotonya benar ${u.nama} — bila salah, hapus di Pengaturan → Absensi → Wajah karyawan.`, `/#absen?tgl=${tgl}&u=${u.id}`);
+  return true;
+}
+const antreCiri = new Map(); // absen di perangkat cabang: ciri wajah dibawa ke server pusat bersama absennya
 /** Foto selfie absen terbaru seorang karyawan (untuk mendaftarkan wajah dari absen sebelumnya). */
 route("GET", "/api/absen/foto-terakhir", "admin", ({ query }) => all(
   "SELECT id, tgl, jam, foto FROM absen WHERE user_id = ? AND foto IS NOT NULL AND dihapus IS NULL AND sumber = 'pin' ORDER BY tgl DESC, jam DESC LIMIT ?",
@@ -154,10 +166,16 @@ route("POST", "/api/absen/pin", false, ({ body, ctx }) => {
   if (st.hpId) run("UPDATE perangkat SET terakhir = datetime('now') WHERE id = ?", [st.hpId]);
   notifAbsen({ userId: u.id, tgl: w.tgl, jam: w.jam, jenis, tempat: st.hp || getSettings().cabang_nama || "" });
   if (wj.wajah_ok === 0) antreNotif(`⚠️ Wajah tidak cocok · ${u.nama}`, `Absen ${jenis} ${w.jam.slice(0, 5)} — cek foto selfie-nya di Rekap Absen`, `/#absen?tgl=${w.tgl}&u=${u.id}`);
-  return { ok: true, id, uid, nama: u.nama, jenis, jam: w.jam.slice(0, 5), jarak };
+  let wajahBaru = false;
+  if (String(body.pin ?? "") !== "" && ciriValid(body.ciri) && (((dataWajah()[u.id] || {}).d || []).length < 5)) {
+    if (cabangAktif()) { antreCiri.set(uid, body.ciri); wajahBaru = !dataWajah()[u.id]; }
+    else wajahBaru = daftarWajahOtomatis(u, body.ciri, w.tgl, w.jam) && ((dataWajah()[u.id] || {}).d || []).length === 1;
+  }
+  return { ok: true, id, uid, nama: u.nama, jenis, jam: w.jam.slice(0, 5), jarak, wajahBaru };
 }, { batas: 500_000, cabang: ({ hasil: h }) => {
   const a = one("SELECT a.tgl, a.jam, a.jenis, a.foto, a.lat, a.lng, a.wajah, a.wajah_ok, u.nama_key FROM absen a JOIN users u ON u.id = a.user_id WHERE a.uid = ?", [h.uid]);
-  return { aksi: "absen", data: { uid: h.uid, nama_key: a.nama_key, tgl: a.tgl, jam: a.jam.slice(0, 5), jenis: a.jenis, foto: a.foto, lat: a.lat, lng: a.lng, wajah: a.wajah, wajah_ok: a.wajah_ok } };
+  const ciri = antreCiri.get(h.uid); antreCiri.delete(h.uid);
+  return { aksi: "absen", data: { uid: h.uid, nama_key: a.nama_key, tgl: a.tgl, jam: a.jam.slice(0, 5), jenis: a.jenis, foto: a.foto, lat: a.lat, lng: a.lng, wajah: a.wajah, wajah_ok: a.wajah_ok, ciri } };
 } });
 
 /** Absen dari perangkat cabang diterima server (dipanggil dari /api/cabang/kirim). */
@@ -170,6 +188,7 @@ export function terimaAbsen(x, alat){
   const r = run(`INSERT OR IGNORE INTO absen(tgl, jam, user_id, sumber, jenis, foto, lat, lng, jarak, uid, mesin, oleh, wajah, wajah_ok) VALUES (?,?,?, 'pin', ?,?,?,?,?,?,?,?,?,?)`,
     [tanggal(x.tgl), String(x.jam || "00:00").slice(0, 5) + ":00", u.id, x.jenis === "pulang" ? "pulang" : "masuk", String(x.foto || "").slice(0, 400_000), +x.lat, +x.lng, jarak, String(x.uid), alat.nama, u.nama, wj.wajah, wj.wajah_ok]);
   if (Number(r.changes || 0) > 0 && wj.wajah_ok === 0) antreNotif(`⚠️ Wajah tidak cocok · ${u.nama}`, `Absen ${x.jenis === "pulang" ? "pulang" : "masuk"} ${String(x.jam || "").slice(0, 5)} di ${alat.nama} — cek foto selfie-nya`, `/#absen?tgl=${tanggal(x.tgl)}&u=${u.id}`);
+  if (Number(r.changes || 0) > 0 && x.ciri) daftarWajahOtomatis(u, x.ciri, tanggal(x.tgl), String(x.jam || "00:00"));
   if (Number(r.changes || 0) > 0) notifAbsen({ userId: u.id, tgl: tanggal(x.tgl), jam: String(x.jam || "00:00"), jenis: x.jenis === "pulang" ? "pulang" : "masuk", tempat: alat.nama });
   return { ok: true };
 }
