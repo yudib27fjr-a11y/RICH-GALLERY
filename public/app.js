@@ -3135,10 +3135,11 @@ async function daftarWajah(){
   modal(`<h3>😊 Wajah karyawan</h3>
     <p class="small muted" style="margin:0">Daftarkan wajah tiap karyawan sekali saja (3–5 foto, tempat terang, tanpa masker). Saat absen, AI di HP mencocokkan selfie dengan wajah ini. Yang disimpan hanya angka ciri wajah, bukan fotonya.</p>
     <div class="list">${B.staf.map(u => `<div class="li"><div class="main"><div class="t">${esc(u.nama)}</div><div class="small muted">${W[u.id] ? `✅ terdaftar · ${W[u.id].jumlah} foto · ${esc(tglID(W[u.id].tgl))}` : "Belum terdaftar"}</div></div>
-      <div class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="btn sm ${W[u.id] ? "" : "pri"}" data-fa="${u.id}" type="button">📷 Dari absen sebelumnya</button><button class="btn sm" data-dw="${u.id}" type="button">${W[u.id] ? "Ulangi (kamera)" : "Pakai kamera"}</button>${W[u.id] ? `<button class="btn sm ghost danger-teks" data-hw="${u.id}" type="button">Hapus</button>` : ""}</div></div>`).join("")}</div>
+      <div class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="btn sm ${W[u.id] ? "" : "pri"}" data-fa="${u.id}" type="button">📷 Dari absen sebelumnya</button><button class="btn sm" data-fg="${u.id}" type="button">🖼 Dari galeri</button><button class="btn sm" data-dw="${u.id}" type="button">${W[u.id] ? "Ulangi (kamera)" : "Pakai kamera"}</button>${W[u.id] ? `<button class="btn sm ghost danger-teks" data-hw="${u.id}" type="button">Hapus</button>` : ""}</div></div>`).join("")}</div>
     <div class="actions"><button class="btn" data-close>Tutup</button></div>`, m => {
     $$("[data-dw]", m).forEach(b => b.onclick = () => rekamWajah(B.staf.find(u => u.id === +b.dataset.dw)));
     $$("[data-fa]", m).forEach(b => b.onclick = () => wajahDariAbsen(B.staf.find(u => u.id === +b.dataset.fa)));
+    $$("[data-fg]", m).forEach(b => b.onclick = () => wajahDariGaleri(B.staf.find(u => u.id === +b.dataset.fg)));
     $$("[data-hw]", m).forEach(b => b.onclick = () => coba(async () => { await api("DELETE", "/api/absen/wajah", { user_id: +b.dataset.hw }); toast("Data wajah dihapus"); daftarWajah(); }, b));
   });
 }
@@ -3146,14 +3147,35 @@ async function daftarWajah(){
 async function wajahDariAbsen(u){
   const F = await coba(() => api("GET", `/api/absen/foto-terakhir?user_id=${u.id}&n=8`)); if (!F) return;
   if (!F.length) return toast(`Belum ada foto absen ${u.nama}. Pakai kamera untuk mendaftar.`);
-  modal(`<h3>📷 Wajah ${esc(u.nama)} dari absen sebelumnya</h3>
-    <p class="small muted" style="margin:0">Pastikan semua foto yang dicentang benar-benar <b>${esc(u.nama)}</b> (bukan titip absen). Minimal 2 foto.</p>
+  pilihFotoWajah(u, F.map(f => ({ foto: f.foto, ket: `${tglPendek(f.tgl)} ${f.jam}` })), "dari absen sebelumnya");
+}
+/** Daftarkan wajah dari foto di galeri HP / laptop (beberapa foto sekaligus, wajah menghadap depan paling bagus). */
+function wajahDariGaleri(u){
+  const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*"; inp.multiple = true;
+  inp.onchange = async () => {
+    const files = [...inp.files].slice(0, 8); if (!files.length) return;
+    const F = [];
+    for (const f of files) {
+      try {
+        const img = new Image(); const url = URL.createObjectURL(f); img.src = url; await img.decode(); URL.revokeObjectURL(url);
+        const sk = Math.min(1, 640 / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement("canvas");
+        c.width = Math.round(img.naturalWidth * sk); c.height = Math.round(img.naturalHeight * sk); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        F.push({ foto: c.toDataURL("image/jpeg", 0.8), ket: f.name.slice(0, 18) });
+      } catch { toast(`Foto ${f.name} tidak bisa dibaca`); }
+    }
+    if (F.length) pilihFotoWajah(u, F, "dari galeri");
+  };
+  inp.click();
+}
+function pilihFotoWajah(u, F, asal){
+  modal(`<h3>📷 Wajah ${esc(u.nama)} ${esc(asal)}</h3>
+    <p class="small muted" style="margin:0">Pastikan semua foto yang dicentang benar-benar <b>${esc(u.nama)}</b> (bukan titip absen). Paling bagus foto wajah menghadap depan, terang, tanpa masker.</p>
     <div id="faL" class="grid-foto" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px">${F.map((f, i) => `<label class="stack" style="gap:2px;font-size:12px;text-align:center">
-      <img src="${f.foto}" alt="Selfie ${esc(f.tgl)}" style="width:100%;border-radius:8px"><span><input type="checkbox" data-fi="${i}" disabled> ${esc(tglPendek(f.tgl))} ${esc(f.jam)}</span><span data-fs="${i}" class="muted">membaca…</span></label>`).join("")}</div>
+      <img src="${f.foto}" alt="Foto ${i + 1}" style="width:100%;border-radius:8px"><span><input type="checkbox" data-fi="${i}" disabled> ${esc(f.ket)}</span><span data-fs="${i}" class="muted">membaca…</span></label>`).join("")}</div>
     <div class="actions"><button class="btn" id="faBatal" type="button">Batal</button><button class="btn pri" id="faOk" type="button" disabled>Simpan wajah</button></div>`, async m => {
     $("#faBatal", m).onclick = daftarWajah;
     const ciri = [];
-    const hitung = () => { const n = $$("[data-fi]:checked", m).length; $("#faOk", m).disabled = n < 2; $("#faOk", m).textContent = `Simpan wajah (${n} foto)`; };
+    const hitung = () => { const n = $$("[data-fi]:checked", m).length; $("#faOk", m).disabled = n < 1; $("#faOk", m).textContent = `Simpan wajah (${n} foto)`; };
     try { await muatWajahAI(); } catch (e) { toast("AI belum bisa dipakai: " + e.message); return; }
     for (let i = 0; i < F.length; i++) {
       if (!document.body.contains(m)) return;
@@ -3166,12 +3188,12 @@ async function wajahDariAbsen(u){
     }
     // Tandai foto yang jauh berbeda dari kebanyakan (kemungkinan orang lain)
     const ada = ciri.map((x, i) => x ? i : -1).filter(i => i >= 0);
-    for (const i of ada) { const beda = ada.filter(j => j !== i && jarakWajah(ciri[i], ciri[j]) >= BATAS_WAJAH).length;
-      if (ada.length >= 3 && beda > (ada.length - 1) / 2) { $(`[data-fi="${i}"]`, m).checked = false; $(`[data-fs="${i}"]`, m).innerHTML = `<b style="color:var(--bad)">⚠️ beda orang?</b>`; } }
+    const curiga = ada.filter(i => ada.length >= 3 && ada.filter(j => j !== i && jarakWajah(ciri[i], ciri[j]) >= BATAS_WAJAH).length > (ada.length - 1) / 2);
+    if (curiga.length < ada.length) for (const i of curiga) { $(`[data-fi="${i}"]`, m).checked = false; $(`[data-fs="${i}"]`, m).innerHTML = `<b style="color:var(--bad)">⚠️ beda orang?</b>`; } // semua "beda" = pose berbeda-beda, bukan orang lain
     hitung();
     $("#faOk", m).onclick = e => coba(async () => {
       const data = $$("[data-fi]:checked", m).map(x => ciri[+x.dataset.fi]).filter(Boolean).slice(0, 8);
-      await api("PUT", "/api/absen/wajah", { user_id: u.id, data }); toast(`Wajah ${u.nama} terdaftar dari ${data.length} foto absen ✅`); daftarWajah();
+      await api("PUT", "/api/absen/wajah", { user_id: u.id, data }); toast(`Wajah ${u.nama} terdaftar dari ${data.length} foto ✅`); daftarWajah();
     }, e.target);
   });
 }
