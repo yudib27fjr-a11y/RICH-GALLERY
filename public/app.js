@@ -2466,8 +2466,8 @@ async function vBelanja(){
   $("#blL").innerHTML = L.length ? `<div class="stack">${L.map(b => {
     const lama = st === "kirim" && (Date.parse(today()) - Date.parse(b.tgl)) / 864e5;
     return `<div class="panel stack bl-kartu" style="gap:6px">
-      <div class="row" style="align-items:center;gap:6px"><span class="pill ${b.sumber === "shopee" ? "bl-shopee" : "mut"}">${b.sumber === "shopee" ? "🛒 Shopee" : "✍️ Manual"}</span><b style="flex:1">${esc(b.toko || "Belanja online")}</b>${totalBelanja(b) ? `<b class="num">${rp(totalBelanja(b))}</b>` : ""}</div>
-      <div class="small muted">${b.no_pesanan && b.sumber !== "manual" ? "#" + esc(b.no_pesanan) + " · " : ""}dipesan ${esc(tglID(b.tgl))}${b.metode ? " · " + esc(b.metode) : ""}${lama >= 5 ? ` · <b style="color:var(--warn)">sudah ${Math.round(lama)} hari</b>` : ""}${b.alasan ? " · " + esc(b.alasan) : ""}</div>
+      <div class="row" style="align-items:center;gap:6px"><span class="pill ${b.sumber === "shopee" ? "bl-shopee" : "mut"}">${b.sumber === "shopee" ? "🛒 Shopee" : "✍️ Manual"}</span><b style="flex:1">${b.sumber === "shopee" ? "Belanja Shopee" : "Belanja online"}${isAdmin() && (b.toko || b.no_pesanan) ? ` <button class="btn sm ghost bl-intip" type="button" title="Lihat nama toko (admin)" aria-label="Lihat nama toko">👁</button><span class="bl-rahasia muted" hidden> · ${esc(b.toko || "")}${b.no_pesanan && b.sumber !== "manual" ? " #" + esc(b.no_pesanan) : ""}</span>` : ""}</b>${totalBelanja(b) ? `<b class="num">${rp(totalBelanja(b))}</b>` : ""}</div>
+      <div class="small muted">dipesan ${esc(tglID(b.tgl))}${b.metode ? " · " + esc(b.metode) : ""}${lama >= 5 ? ` · <b style="color:var(--warn)">sudah ${Math.round(lama)} hari</b>` : ""}${b.alasan ? " · " + esc(b.alasan) : ""}</div>
       <div class="stack" style="gap:4px">${b.items.map(i => `<div class="small bl-item ${i.toko ? "" : "bukan"}"><b>${esc(i.nama)}</b>${i.variasi ? ` <span class="pill mut">${esc(i.variasi)}</span>` : ""} ×${fq(i.qty)}${i.harga != null && i.harga ? ` · ${rp(i.harga)}` : ""}
         ${i.masuk ? `<div class="ok-teks">✅ masuk stok: ${esc(i.masuk.nama)} +${fq(i.masuk.qty)}${i.datang !== i.qty ? ` (datang ${fq(i.datang)} dari ${fq(i.qty)})` : ""}</div>` : st === "datang" ? `<div class="muted">tidak masuk stok${i.datang != null && i.datang !== i.qty ? ` · datang ${fq(i.datang)} dari ${fq(i.qty)}` : ""}</div>`
           : i.barang ? `<div class="muted">↔ ${esc(i.barang.nama)} (${esc(i.barang.kode)})</div>` : i.toko ? `<div class="muted">barang toko${i.kata ? " (" + esc(i.kata.toLowerCase()) + ")" : ""} · pilih barangnya saat datang</div>` : `<div class="muted">bukan barang toko</div>`}</div>`).join("")}</div>
@@ -2475,6 +2475,7 @@ async function vBelanja(){
       <div class="row" style="gap:6px;flex-wrap:wrap">${st === "kirim" ? `<button class="btn pri" data-datang="${b.id}" type="button">📦 Barang datang</button>` : ""}
         ${isAdmin() && st !== "datang" ? `${st !== "kirim" ? `<button class="btn sm" data-st="${b.id}" data-v="kirim" type="button">Pindah ke dalam pengiriman</button>` : `<button class="btn sm ghost" data-st="${b.id}" data-v="abaikan" type="button">Abaikan</button><button class="btn sm ghost" data-st="${b.id}" data-v="batal" type="button">Batal</button>`}<button class="btn sm ghost danger-teks" data-hapus="${b.id}" type="button">Hapus</button>` : ""}</div></div>`; }).join("")}</div>`
     : `<div class="list"><div class="empty">${st === "kirim" ? "Tidak ada belanja yang sedang dikirim." : "Belum ada."}</div></div>`;
+  $$(".bl-intip").forEach(x => x.onclick = () => { const r = x.nextElementSibling; r.hidden = !r.hidden; x.textContent = r.hidden ? "👁" : "🙈"; });
   $$("[data-datang]").forEach(x => x.onclick = () => barangDatang(L.find(b => b.id === +x.dataset.datang)));
   $$("[data-st]").forEach(x => x.onclick = () => coba(async () => { await api("POST", `/api/belanja/${x.dataset.st}/status`, { status: x.dataset.v }); vBelanja(); }, x));
   $$("[data-hapus]").forEach(x => x.onclick = () => konfirmasi("Hapus catatan belanja ini?", "Hanya catatannya yang dihapus.", "Hapus", async () => { await api("DELETE", `/api/belanja/${x.dataset.hapus}`); vBelanja(); }));
@@ -2483,7 +2484,7 @@ async function vBelanja(){
 function barangDatang(b){
   const semua = [...B.bahan.map(x => ({ ...x, jenis: "bahan" })), ...B.produk.map(x => ({ ...x, jenis: "produk" }))];
   const opsi = it => `<option value="">— tidak masuk stok —</option>${["bahan", "produk"].map(j => `<optgroup label="${j === "bahan" ? "Bahan baku" : "Produk jadi"}">${semua.filter(x => x.jenis === j).map(x => `<option value="${j}|${esc(x.kode)}" ${it.barang && it.barang.kode === x.kode && it.barang.jenis === j ? "selected" : ""}>${esc(x.nama)} (${esc(x.kode)})${x.satuan ? " · " + esc(x.satuan) : ""}</option>`).join("")}</optgroup>`).join("")}`;
-  modal(`<h3>📦 Barang datang${b.toko ? " · " + esc(b.toko) : ""}</h3>
+  modal(`<h3>📦 Barang datang</h3>
     <p class="small muted" style="margin:0">Cek paketnya. Isi jumlah yang <b>benar-benar datang</b>, lalu pilih masuk ke stok barang apa. Bila satuannya beda (mis. 1 ikat = 7 tangkai), ubah jumlah masuk stok.</p>
     <div class="stack">${b.items.map((it, i) => `<div class="panel stack bl-cek" data-i="${i}" style="gap:6px">
       <b class="small">${esc(it.nama)}${it.variasi ? " · " + esc(it.variasi) : ""}</b>
@@ -2510,7 +2511,7 @@ function tempelEmail(){
     <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="teOk" type="button">Baca</button></div>`, m => {
     $("#teOk", m).onclick = e => coba(async () => {
       const r = await api("POST", "/api/belanja/tempel", { isi: $("#teI", m).value });
-      closeModal(); toast(!r.baru ? `Pesanan #${r.no} sudah tercatat sebelumnya` : r.status === "kirim" ? `Tercatat: ${r.toko} #${r.no} (${r.barang} barang) · dalam pengiriman` : `Pesanan #${r.no} diabaikan: tidak ada barang toko`);
+      closeModal(); toast(!r.baru ? "Pesanan ini sudah tercatat sebelumnya" : r.status === "kirim" ? `Tercatat: ${r.barang} barang · dalam pengiriman` : "Pesanan diabaikan: tidak ada barang toko");
       blStatus = r.status === "abaikan" ? "abaikan" : "kirim"; vBelanja();
     }, e.target);
   });
