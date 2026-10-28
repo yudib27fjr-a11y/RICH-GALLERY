@@ -3107,7 +3107,7 @@ function muatWajahAI(){
 /** Ciri wajah (128 angka) dari kanvas/gambar; null bila tidak ada wajah. */
 async function ciriWajah(src){
   const f = await muatWajahAI();
-  const r = await f.detectSingleFace(src, new f.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.45 })).withFaceLandmarks(true).withFaceDescriptor();
+  const r = await f.detectSingleFace(src, new f.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.35 })).withFaceLandmarks(true).withFaceDescriptor();
   return r ? Array.from(r.descriptor) : null;
 }
 const BATAS_WAJAH = 0.5; // jarak < 0,5 = orang yang sama
@@ -3174,7 +3174,7 @@ function pilihFotoWajah(u, F, asal){
       <img src="${f.foto}" alt="Foto ${i + 1}" style="width:100%;border-radius:8px"><span><input type="checkbox" data-fi="${i}" disabled> ${esc(f.ket)}</span><span data-fs="${i}" class="muted">membaca…</span></label>`).join("")}</div>
     <div class="actions"><button class="btn" id="faBatal" type="button">Batal</button><button class="btn pri" id="faOk" type="button" disabled>Simpan wajah</button></div>`, async m => {
     $("#faBatal", m).onclick = daftarWajah;
-    const ciri = [];
+    const ciri = [], cermin = [];
     const hitung = () => { const n = $$("[data-fi]:checked", m).length; $("#faOk", m).disabled = n < 1; $("#faOk", m).textContent = `Simpan wajah (${n} foto)`; };
     try { await muatWajahAI(); } catch (e) { toast("AI belum bisa dipakai: " + e.message); return; }
     for (let i = 0; i < F.length; i++) {
@@ -3182,18 +3182,23 @@ function pilihFotoWajah(u, F, asal){
       const img = new Image(); img.src = F[i].foto; await img.decode().catch(() => {});
       const c = document.createElement("canvas"); c.width = img.naturalWidth || 360; c.height = img.naturalHeight || 270; c.getContext("2d").drawImage(img, 0, 0);
       const x = await ciriWajah(c).catch(() => null); ciri[i] = x;
+      if (x) { // versi cermin juga: foto galeri / kamera belakang tidak dicerminkan, sedangkan kamera absen dicerminkan
+        const c2 = document.createElement("canvas"); c2.width = c.width; c2.height = c.height; const g2 = c2.getContext("2d"); g2.translate(c.width, 0); g2.scale(-1, 1); g2.drawImage(c, 0, 0);
+        cermin[i] = await ciriWajah(c2).catch(() => null);
+      }
       const cb = $(`[data-fi="${i}"]`, m), st = $(`[data-fs="${i}"]`, m);
       if (x) { cb.disabled = false; cb.checked = true; st.textContent = "✅ wajah terbaca"; } else st.textContent = "❌ tidak terbaca";
       cb.onchange = hitung; hitung();
     }
     // Tandai foto yang jauh berbeda dari kebanyakan (kemungkinan orang lain)
     const ada = ciri.map((x, i) => x ? i : -1).filter(i => i >= 0);
-    const curiga = ada.filter(i => ada.length >= 3 && ada.filter(j => j !== i && jarakWajah(ciri[i], ciri[j]) >= BATAS_WAJAH).length > (ada.length - 1) / 2);
+    const curiga = asal === "dari galeri" ? [] : ada.filter(i => ada.length >= 3 && ada.filter(j => j !== i && jarakWajah(ciri[i], ciri[j]) >= BATAS_WAJAH).length > (ada.length - 1) / 2);
     if (curiga.length < ada.length) for (const i of curiga) { $(`[data-fi="${i}"]`, m).checked = false; $(`[data-fs="${i}"]`, m).innerHTML = `<b style="color:var(--bad)">⚠️ beda orang?</b>`; } // semua "beda" = pose berbeda-beda, bukan orang lain
     hitung();
     $("#faOk", m).onclick = e => coba(async () => {
-      const data = $$("[data-fi]:checked", m).map(x => ciri[+x.dataset.fi]).filter(Boolean).slice(0, 8);
-      await api("PUT", "/api/absen/wajah", { user_id: u.id, data }); toast(`Wajah ${u.nama} terdaftar dari ${data.length} foto ✅`); daftarWajah();
+      const dipilih = $$("[data-fi]:checked", m).map(x => +x.dataset.fi);
+      const data = [...dipilih.map(i => ciri[i]), ...dipilih.map(i => cermin[i])].filter(Boolean).slice(0, 8);
+      await api("PUT", "/api/absen/wajah", { user_id: u.id, data }); toast(`Wajah ${u.nama} terdaftar dari ${dipilih.length} foto ✅`); daftarWajah();
     }, e.target);
   });
 }

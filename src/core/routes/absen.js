@@ -122,13 +122,14 @@ route("PUT", "/api/absen/wajah", "admin", ({ body }) => {
   const w = { ...dataWajah(), [u.id]: { d: d.map(v => v.map(n => Math.round(n * 10000) / 10000)), t: sekarang().tgl } };
   setSetting("wajah", w); return { ok: true, jumlah: d.length };
 }, { pusatSaja: true });
-/** Daftar wajah otomatis dari absen ber-PIN: wajah belum terdaftar → selfie ini jadi wajah awal; terdaftar < 5 foto & cocok → ditambah agar makin akurat. */
+/** Daftar wajah otomatis dari absen ber-PIN: wajah belum terdaftar → selfie ini jadi wajah awal; terdaftar < 8 contoh & cukup mirip → ditambah agar makin akurat. */
 const ciriValid = c => Array.isArray(c) && c.length === 128 && c.every(n => typeof n === "number" && isFinite(n) && Math.abs(n) < 5);
 function daftarWajahOtomatis(u, ciri, tgl, jam){
   if (!ciriValid(ciri)) return false;
   const W = dataWajah(), lama = (W[u.id] || {}).d || [];
-  if (lama.length >= 5) return false;
-  if (lama.length) { const d = jarakWajahTerdaftar(u.id, ciri); if (d == null || d >= BATAS_WAJAH) return false; }
+  if (lama.length >= 8) return false;
+  // PIN sudah benar → wajah yang agak mirip (pose / cahaya beda) ikut dipelajari agar absen berikutnya dikenali; wajah jauh beda (titip absen) tidak.
+  if (lama.length) { const d = jarakWajahTerdaftar(u.id, ciri); if (d == null || d >= BATAS_WAJAH + 0.1) return false; }
   setSetting("wajah", { ...W, [u.id]: { d: [...lama, ciri.map(n => Math.round(n * 10000) / 10000)], t: (W[u.id] || {}).t || tgl, oto: 1 } });
   if (!lama.length) antreNotif(`😊 Wajah ${u.nama} terdaftar otomatis`, `Dari selfie absen ${tgl} ${String(jam).slice(0, 5)} (pakai PIN). Pastikan fotonya benar ${u.nama} — bila salah, hapus di Pengaturan → Absensi → Wajah karyawan.`, `/#absen?tgl=${tgl}&u=${u.id}`);
   return true;
@@ -167,7 +168,7 @@ route("POST", "/api/absen/pin", false, ({ body, ctx }) => {
   notifAbsen({ userId: u.id, tgl: w.tgl, jam: w.jam, jenis, tempat: st.hp || getSettings().cabang_nama || "" });
   if (wj.wajah_ok === 0) antreNotif(`⚠️ Wajah tidak cocok · ${u.nama}`, `Absen ${jenis} ${w.jam.slice(0, 5)} — cek foto selfie-nya di Rekap Absen`, `/#absen?tgl=${w.tgl}&u=${u.id}`);
   let wajahBaru = false;
-  if (String(body.pin ?? "") !== "" && ciriValid(body.ciri) && (((dataWajah()[u.id] || {}).d || []).length < 5)) {
+  if (String(body.pin ?? "") !== "" && ciriValid(body.ciri) && (((dataWajah()[u.id] || {}).d || []).length < 8)) {
     if (cabangAktif()) { antreCiri.set(uid, body.ciri); wajahBaru = !dataWajah()[u.id]; }
     else wajahBaru = daftarWajahOtomatis(u, body.ciri, w.tgl, w.jam) && ((dataWajah()[u.id] || {}).d || []).length === 1;
   }
