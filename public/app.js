@@ -285,7 +285,7 @@ function lihatStruk(s, setelahBatal){
   modal(`<div class="struk-kertas"><div class="struk-kepala">
       <button class="struk-ib b-struk" id="printBtn" type="button" title="Cetak struk" aria-label="Cetak struk">${ikon("cetak", 22)}</button>
       <h3>Struk<br><small>${esc(s.no)}</small></h3>
-      <button class="struk-ib tutup" data-close type="button" title="Tutup" aria-label="Tutup"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      ${tombolTutup()}
     </div>
     <pre class="receipt-prev">${esc(strukText(s))}</pre></div>
     ${s.kartu ? `<div class="pesanan-isi stack" style="margin:8px 0"><b>Kartu ucapan</b><div style="white-space:pre-wrap">${esc(s.kartu)}</div>${tombolKartu(s.id)}</div>` : ""}
@@ -1622,6 +1622,14 @@ const IKON_AKSI = {
   cetak: '<path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/>',
 };
 const ikon = (k, ukuran = 20) => `<svg viewBox="0 0 24 24" width="${ukuran}" height="${ukuran}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IKON_AKSI[k]}</svg>`;
+const SVG_TUTUP = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
+const tombolTutup = () => `<button class="struk-ib tutup" data-close type="button" title="Tutup" aria-label="Tutup">${SVG_TUTUP}</button>`;
+/** Tombol aksi berupa ikon berwarna + label kecil. gambar: kunci IKON_AKSI / ICON, atau emoji. */
+function tileAksi({ id = "", warna, gambar, label, href = "", garis = false }){
+  const svg = IKON_AKSI[gambar] ? ikon(gambar, 22) : ICON[gambar] ? `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[gambar]}</svg>` : `<span style="font-size:20px">${gambar}</span>`;
+  const ik = `<span class="ik${garis ? " garis" : ""}" style="--c:${warna}">${svg}</span>`;
+  return href ? `<a class="aksi-tile" ${id ? `id="${id}"` : ""} href="${href}" target="_blank" rel="noopener">${ik}${label}</a>` : `<button class="aksi-tile" ${id ? `id="${id}"` : ""} type="button">${ik}${label}</button>`;
+}
 
 /** Setelah Bayar & Cetak: pilih cara mencetak (tidak langsung membuka dialog print). */
 function pilihCetak(s){
@@ -2672,7 +2680,7 @@ function sewaKembali(s, setelah = () => render()){
 function detailPesanan(s, setelah = () => render()){
   const sisa = sisaTagihan(s), lb = labelAmbil(s), bu = isianUang(s) > 0;
   const dt = s.detail || {}, sewaJalan = (s.jenis === "sewa" || (s.jenis === "seserahan" && dt.kembali_tgl)) && !dt.kembali_at;
-  modal(`<h3>${JENIS_PS[s.jenis] ? JENIS_PS[s.jenis].ikon + " " + JENIS_PS[s.jenis].label : "Pesanan"} ${esc(s.pelanggan)}</h3>
+  modal(`<div class="modal-kepala"><h3>${JENIS_PS[s.jenis] ? JENIS_PS[s.jenis].ikon + " " + JENIS_PS[s.jenis].label : "Pesanan"} ${esc(s.pelanggan)}</h3>${tombolTutup()}</div>
     <div class="stack">
       ${s.jenis ? `<div class="pesanan-isi stack" style="gap:4px">${lencanaJenis(s.jenis)}${ringkasDetail(s).map(x => `<div>${esc(x)}</div>`).join("")}${s.jenis === "dekorasi" && dt.insentif && dt.tim?.length ? `<div class="small muted">Insentif ${rp(dt.insentif)} × ${dt.tim.length} orang sudah dicatat</div>` : ""}</div>` : ""}
       <p style="margin:0"><span class="pill ${s.diambil_at ? "ok" : lb.kelas}">${s.diambil_at ? "Selesai" : esc(lb.teks)}</span> <b>${s.ambil_cara === "antar" ? "Diantar" : "Diambil"} ${esc(tglID(s.ambil_tgl))}${s.ambil_jam ? " jam " + esc(s.ambil_jam) : ""}</b></p>
@@ -2686,16 +2694,17 @@ function detailPesanan(s, setelah = () => render()){
       ${bu && sisa && !s.diambil_at ? `<label class="f">Nominal yang dibayar sekarang<input type="number" id="lsNom" value="${sisa}" min="1" max="${sisa}" step="1000" inputmode="numeric"></label>` : ""}
       ${sisa && !s.diambil_at ? `<div class="seg" id="lsM" style="display:flex">${B.metode.map(m => `<button type="button" data-m="${m}" class="${m === "Tunai" ? "on" : ""}" style="flex:1">${m}</button>`).join("")}</div>` : ""}
     </div>
-    <div class="actions" style="flex-wrap:wrap">
-      <button class="btn" data-close>Tutup</button>
-      <button class="btn" id="psStruk" type="button">Struk</button>
-      ${!s.diambil_at ? `<button class="btn" id="psKurir" type="button">🛵 Kirim kurir</button>` : ""}
-      ${perluStiker(s) && !s.diambil_at ? `<button class="btn" id="psStiker" type="button">✂️ Pesan stiker</button>` : ""}
-      ${sewaJalan && s.diambil_at ? `<button class="btn pri" id="psKembali" type="button">🔑 ${s.jenis === "seserahan" ? "Box / tray sudah kembali" : "Barang sewaan kembali"}</button>` : ""}
-      ${nomorWA(s.hp) && !s.diambil_at ? `<a class="btn" id="psWa" href="https://wa.me/${nomorWA(s.hp)}?text=${encodeURIComponent(`Halo ${toTitle(s.pelanggan)}, pesanan Anda di ${toTitle(B.toko.nama_toko)} (${s.no}) ${s.ambil_cara === "antar" ? "akan diantar" : "siap diambil"} ${tglID(s.ambil_tgl)}${s.ambil_jam ? " jam " + s.ambil_jam : ""}.${sisa ? ` Sisa pembayaran ${rp(sisa)}.` : ""} Terima kasih 🌸`)}" target="_blank" rel="noopener">WA pengingat</a>` : ""}
-      ${s.diambil_at ? `<button class="btn" id="psBuka" type="button">Kembalikan ke belum diambil</button>`
-        : sisa ? `<button class="btn" id="psLunas" type="button">${bu ? "Terima pembayaran" : "Lunasi " + rp(sisa)}</button><button class="btn pri" id="psSelesai" type="button">Lunasi &amp; ${s.ambil_cara === "antar" ? "sudah diantar" : "sudah diambil"}</button>`
-        : `<button class="btn pri" id="psSelesai" type="button">${s.ambil_cara === "antar" ? "Sudah diantar" : "Sudah diambil"}</button>`}
+    <div class="aksi-grid">
+      ${tileAksi({ id: "psStruk", warna: "#0f766e", gambar: "struk", label: "Struk" })}
+      ${nomorWA(s.hp) && !s.diambil_at ? tileAksi({ id: "psWa", warna: "#15803d", gambar: "wa", label: "WA ingatkan", href: `https://wa.me/${nomorWA(s.hp)}?text=${encodeURIComponent(`Halo ${toTitle(s.pelanggan)}, pesanan Anda di ${toTitle(B.toko.nama_toko)} (${s.no}) ${s.ambil_cara === "antar" ? "akan diantar" : "siap diambil"} ${tglID(s.ambil_tgl)}${s.ambil_jam ? " jam " + s.ambil_jam : ""}.${sisa ? ` Sisa pembayaran ${rp(sisa)}.` : ""} Terima kasih 🌸`)}` }) : ""}
+      ${!s.diambil_at ? tileAksi({ id: "psKurir", warna: "#0369a1", gambar: "kurir", label: "Kurir" }) : ""}
+      ${perluStiker(s) && !s.diambil_at ? tileAksi({ id: "psStiker", warna: "#7c3aed", gambar: "✂️", label: "Stiker" }) : ""}
+      ${s.diambil_at ? tileAksi({ id: "psBuka", warna: "#b45309", gambar: "riwayat", label: "Belum diambil" }) : ""}
+    </div>
+    <div class="stack" style="gap:8px;margin-top:12px">
+      ${sewaJalan && s.diambil_at ? `<button class="btn pri" id="psKembali" type="button" style="width:100%">🔑 ${s.jenis === "seserahan" ? "Box / tray sudah kembali" : "Barang sewaan kembali"}</button>` : ""}
+      ${s.diambil_at ? "" : sisa ? `<button class="btn" id="psLunas" type="button" style="width:100%">💵 ${bu ? "Terima pembayaran" : "Lunasi " + rp(sisa)}</button><button class="btn pri" id="psSelesai" type="button" style="width:100%">✅ Lunasi &amp; ${s.ambil_cara === "antar" ? "sudah diantar" : "sudah diambil"}</button>`
+        : `<button class="btn pri" id="psSelesai" type="button" style="width:100%">✅ ${s.ambil_cara === "antar" ? "Sudah diantar" : "Sudah diambil"}</button>`}
     </div>`, m => {
     let metode = "Tunai";
     $$("#lsM button", m).forEach(b => b.onclick = () => { metode = b.dataset.m; $$("#lsM button", m).forEach(x => x.classList.toggle("on", x === b)); });

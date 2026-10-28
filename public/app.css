@@ -453,3 +453,7 @@ nav.tabs button:active .ic{transform:scale(.92)}
 .aksi-tile.b-koreksi .ik{background:#b45309}.aksi-tile.b-hapus .ik{background:#b91c1c}.aksi-tile.b-stiker .ik{background:#7c3aed}
 .aksi-tile.b-batal .ik{background:transparent;color:#b91c1c;border:2px solid #b91c1c}
 .aksi-tile:hover .ik{filter:brightness(1.1)}
+.aksi-tile .ik{background:var(--c,#475569)}
+.aksi-tile .ik.garis{background:transparent;color:var(--c);border:2px solid var(--c)}
+.modal-kepala{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}
+.modal-kepala h3{flex:1;margin:0;padding-top:8px}
