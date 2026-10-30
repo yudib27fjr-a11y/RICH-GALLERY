@@ -458,3 +458,10 @@ nav.tabs button:active .ic{transform:scale(.92)}
 .modal-kepala{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}
 .modal-kepala h3{flex:1;margin:0;padding-top:8px}
 .pill.metode-tunai{background:#16a34a22;color:#16a34a}.pill.metode-tf{background:#2563eb22;color:#3b82f6}.pill.metode-qris{background:#9333ea22;color:#a855f7}
+/* pintasan Transaksi di bar atas (tampil di semua menu) */
+.tb-trx{display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:0;padding:0 2px;cursor:pointer;font:inherit;font-size:10.5px;font-weight:700;color:var(--muted);flex:0 0 auto}
+.tb-trx .ic{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:var(--c);color:#fff;box-shadow:0 3px 8px -4px var(--c)}
+.tb-trx .ic svg{width:19px;height:19px}
+.tb-trx.on{color:var(--c)}
+.tb-trx.on .ic{box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--c)}
+.tb-trx[hidden]{display:none}

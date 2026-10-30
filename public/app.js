@@ -820,12 +820,14 @@ function shell(){
       <div class="brand"><img src="/monogram.png" alt="" width="30" height="30"><h1>${esc(toTitle(B.toko.nama_toko))}</h1><small>POS</small></div>
       <span class="sp"></span>
       ${isAdmin() ? `<span class="sync-dot" id="syncDot" title="Status sinkron Google Sheet"></span>` : ""}${LOKAL ? `<button class="sync-chip" id="syncChip" type="button" hidden></button>` : ""}
+<button class="tb-trx" id="tbTrx" type="button" title="Transaksi" aria-label="Transaksi" style="--c:${WARNA_MENU.riwayat || "#d97706"}">${ikonMenu("riwayat")}<span>Transaksi</span></button>
       ${kioskInfo && kioskInfo.boleh ? `<button class="btn sm absen-masuk" id="tbAbsen" type="button">🕘 Absen</button>` : ""}
       <span class="userchip"><b>${esc(B.me.nama)}</b><span class="pill mut">${isAdmin() ? "ADMIN" : "KARYAWAN"}</span><button class="btn ghost sm" id="keluar" type="button">Keluar</button></span>
     </header>
     <nav class="tabs" id="tabs"></nav>
     <main id="main"></main></div>`;
   const ab = $("#tbAbsen"); if (ab) ab.onclick = () => pindah("absenku");
+  $("#tbTrx").onclick = () => pindah("riwayat");
   $("#keluar").onclick = async () => { await api("POST", "/api/logout").catch(() => {}); resetCart(); tampilLogin(); };
   if (isAdmin() || LOKAL) { cekSync(); clearInterval(window.__rgCekSync); window.__rgCekSync = setInterval(cekSync, 30_000); }
 }
@@ -872,9 +874,10 @@ ICON.menu = '<rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5"
 const ikonMenu = k => `<span class="ic" style="--c:${WARNA_MENU[k] || "#8e1d4b"};--cs:${WARNA_MENU[k] || "#8e1d4b"}1f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[k] || ""}</svg></span>`;
 function renderNav(){
   $("#tabs").innerHTML = `<button type="button" data-semua class="semua" aria-label="Semua menu">${ikonMenu("menu")}Menu</button>`
-    + daftarView().map(([k, l]) => `<button type="button" data-v="${k}" class="${view === k ? "on" : ""}" aria-label="${l}" style="--c:${WARNA_MENU[k] || "#8e1d4b"}">${ikonMenu(k)}${l}</button>`).join("");
+    + daftarView().filter(([k]) => k !== "riwayat").map(([k, l]) => `<button type="button" data-v="${k}" class="${view === k ? "on" : ""}" aria-label="${l}" style="--c:${WARNA_MENU[k] || "#8e1d4b"}">${ikonMenu(k)}${l}</button>`).join("");
   $$("#tabs button[data-v]").forEach(b => b.onclick = () => pindah(b.dataset.v));
   $("#tabs [data-semua]").onclick = semuaMenu;
+  const tr = $("#tbTrx"); if (tr) { tr.hidden = !daftarView().some(v => v[0] === "riwayat"); tr.classList.toggle("on", view === "riwayat"); } // Transaksi: pintasan di atas, tampil di semua menu
   const on = $("#tabs button.on"); if (on && on.scrollIntoView) try { on.scrollIntoView({ block: "nearest", inline: "center" }); } catch {}
 }
 /** Semua menu dalam satu layar (kotak-kotak berwarna seperti pintasan di Shopee). */
