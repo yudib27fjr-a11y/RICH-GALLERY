@@ -819,18 +819,19 @@ let view = "kasir";
 function shell(){
   $("#root").innerHTML = `<div class="app">
     <header class="topbar">
-      <div class="brand"><img src="/monogram.png" alt="" width="30" height="30"><h1>${esc(toTitle(B.toko.nama_toko))}</h1><small>POS</small></div>
+      <button class="brand" id="tbBrand" type="button" aria-haspopup="dialog" title="Akun, pengaturan & menu admin"><img src="/monogram.png" alt="" width="34" height="34"><span class="brand-teks"><h1>${esc(toTitle(B.toko.nama_toko))}<svg class="brand-panah" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></h1><small>${esc(toTitle(B.me.nama))} · ${isAdmin() ? "Admin" : "Karyawan"}</small></span></button>
       <span class="sp"></span>
       ${isAdmin() ? `<span class="sync-dot" id="syncDot" title="Status sinkron Google Sheet"></span>` : ""}${LOKAL ? `<button class="sync-chip" id="syncChip" type="button" hidden></button>` : ""}
       ${kioskInfo && kioskInfo.boleh ? `<button class="btn sm absen-masuk" id="tbAbsen" type="button">🕘 Absen</button>` : ""}
-      <span class="userchip"><b>${esc(B.me.nama)}</b><span class="pill mut">${isAdmin() ? "ADMIN" : "KARYAWAN"}</span><button class="btn ghost sm" id="keluar" type="button">Keluar</button></span>
-      <button class="tb-trx" id="tbTrx" type="button" title="Transaksi" aria-label="Transaksi" style="--c:${WARNA_MENU.riwayat || "#d97706"}"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON.struk}</svg></span><span>Transaksi</span></button>
+      <button class="tb-btn tb-trx" id="tbTrx" type="button" title="Transaksi" aria-label="Transaksi"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON.struk}</svg></span><span>Transaksi</span></button>
+      <button class="tb-btn tb-kasir" id="tbKasir" type="button" title="Kasir" aria-label="Kasir"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON.kasir}</svg></span><span>Kasir</span></button>
     </header>
     <nav class="tabs" id="tabs"></nav>
     <main id="main"></main></div>`;
   const ab = $("#tbAbsen"); if (ab) ab.onclick = () => pindah("absenku");
   $("#tbTrx").onclick = () => pindah("riwayat");
-  $("#keluar").onclick = async () => { await api("POST", "/api/logout").catch(() => {}); resetCart(); tampilLogin(); };
+  $("#tbKasir").onclick = () => pindah("kasir");
+  $("#tbBrand").onclick = menuAkun;
   if (isAdmin() || LOKAL) { cekSync(); clearInterval(window.__rgCekSync); window.__rgCekSync = setInterval(cekSync, 30_000); }
 }
 /** Perangkat kasir: tanda jelas bila ada transaksi yang belum terkirim / ditolak server pusat (untuk semua pengguna). */
@@ -874,12 +875,27 @@ const WARNA_MENU = { kasir: "#ee4d2d", absenku: "#16a34a", pesanan: "#2563eb", j
   absen: "#7c3aed", gaji: "#047857", konten: "#e11d48", promosi: "#c026d3", atur: "#64748b", menu: "#8e1d4b" };
 ICON.menu = '<rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/>';
 const ikonMenu = k => `<span class="ic" style="--c:${WARNA_MENU[k] || "#8e1d4b"};--cs:${WARNA_MENU[k] || "#8e1d4b"}1f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[k] || ""}</svg></span>`;
+const DI_ATAS = ["kasir", "riwayat", "atur"]; // ada di bar atas / menu akun, tidak diulang di deretan menu
+/** Ketuk nama toko: akun, menu khusus admin, pengaturan, keluar. */
+function menuAkun(){
+  const adminV = daftarView().filter(v => v[2]);
+  modal(`<div class="akun-kepala"><img src="/monogram.png" alt="" width="52" height="52"><div style="flex:1;min-width:0"><b>${esc(toTitle(B.toko.nama_toko))}</b><div class="small muted">${esc(toTitle(B.me.nama))} · <span class="pill ${isAdmin() ? "ok" : "mut"}">${isAdmin() ? "ADMIN" : "KARYAWAN"}</span></div></div>${tombolTutup()}</div>
+    ${adminV.length ? `<div class="small muted" style="font-weight:700;margin:4px 0 6px">🔒 Menu admin</div><div class="menu-grid">${adminV.map(([k, l]) => `<button type="button" data-g="${k}" class="${view === k ? "on" : ""}">${ikonMenu(k)}<span>${esc(l)}</span></button>`).join("")}</div>` : ""}
+    <div class="list" style="margin-top:12px">
+      <button class="li akun-baris" data-g="atur" type="button">${ikonMenu("atur")}<span style="flex:1">Pengaturan</span><span class="muted">›</span></button>
+      <button class="li akun-baris keluar" id="akKeluar" type="button"><span class="ic" style="--c:#dc2626"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h11"/></svg></span><span style="flex:1">Keluar (logout)</span></button></div>`, m => {
+    $$("[data-g]", m).forEach(b => b.onclick = () => { closeModal(); pindah(b.dataset.g); });
+    $("#akKeluar", m).onclick = () => konfirmasi("Keluar dari akun?", `Anda akan keluar dari akun ${toTitle(B.me.nama)}. Keranjang yang belum dibayar dikosongkan.`, "Keluar", async () => { await api("POST", "/api/logout").catch(() => {}); resetCart(); tampilLogin(); });
+  });
+}
 function renderNav(){
   $("#tabs").innerHTML = `<button type="button" data-semua class="semua" aria-label="Semua menu">${ikonMenu("menu")}Menu</button>`
-    + daftarView().filter(([k]) => k !== "riwayat").map(([k, l]) => `<button type="button" data-v="${k}" class="${view === k ? "on" : ""}" aria-label="${l}" style="--c:${WARNA_MENU[k] || "#8e1d4b"}">${ikonMenu(k)}${l}</button>`).join("");
+    + daftarView().filter(v => !DI_ATAS.includes(v[0]) && !v[2]).map(([k, l]) => `<button type="button" data-v="${k}" class="${view === k ? "on" : ""}" aria-label="${l}" style="--c:${WARNA_MENU[k] || "#8e1d4b"}">${ikonMenu(k)}${l}</button>`).join("");
   $$("#tabs button[data-v]").forEach(b => b.onclick = () => pindah(b.dataset.v));
   $("#tabs [data-semua]").onclick = semuaMenu;
-  const tr = $("#tbTrx"); if (tr) { tr.hidden = !daftarView().some(v => v[0] === "riwayat"); tr.classList.toggle("on", view === "riwayat"); } // Transaksi: pintasan di atas, tampil di semua menu
+  const tr = $("#tbTrx"); if (tr) { tr.hidden = !daftarView().some(v => v[0] === "riwayat"); tr.classList.toggle("on", view === "riwayat"); } // Transaksi & Kasir: pintasan di pojok kanan atas, tampil di semua menu
+  const ks = $("#tbKasir"); if (ks) ks.classList.toggle("on", view === "kasir");
+  const br = $("#tbBrand"); if (br) br.classList.toggle("on", view === "atur" || daftarView().some(v => v[2] && v[0] === view));
   const on = $("#tabs button.on"); if (on && on.scrollIntoView) try { on.scrollIntoView({ block: "nearest", inline: "center" }); } catch {}
 }
 /** Semua menu dalam satu layar (kotak-kotak berwarna seperti pintasan di Shopee). */

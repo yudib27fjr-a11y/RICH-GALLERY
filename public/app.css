@@ -458,19 +458,37 @@ nav.tabs button:active .ic{transform:scale(.92)}
 .modal-kepala{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}
 .modal-kepala h3{flex:1;margin:0;padding-top:8px}
 .pill.metode-tunai{background:#16a34a22;color:#16a34a}.pill.metode-tf{background:#2563eb22;color:#3b82f6}.pill.metode-qris{background:#9333ea22;color:#a855f7}
-/* pintasan Transaksi di pojok kanan atas (tampil di semua menu) */
-.tb-trx{display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:0;padding:0;margin-left:2px;cursor:pointer;font:inherit;font-size:10.5px;font-weight:800;letter-spacing:.2px;color:var(--ink);flex:0 0 auto;-webkit-tap-highlight-color:transparent}
-.tb-trx .ic{position:relative;width:48px;height:48px;border-radius:16px;display:grid;place-items:center;color:#fff;
-  background:radial-gradient(120% 120% at 20% 10%,#fde68a 0%,#fb923c 42%,#e11d48 100%);
-  box-shadow:0 10px 22px -10px #e11d48,0 2px 6px -2px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.55),inset 0 -6px 12px -6px rgba(120,0,40,.35);transition:transform .15s,box-shadow .15s}
-.tb-trx .ic::after{content:"";position:absolute;inset:3px 3px auto 3px;height:45%;border-radius:13px 13px 40% 40%;background:linear-gradient(rgba(255,255,255,.35),rgba(255,255,255,0));pointer-events:none}
-.tb-trx .ic svg{width:25px;height:25px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.25))}
-.tb-trx:hover .ic{transform:translateY(-1px) rotate(-3deg)}
-.tb-trx:active .ic{transform:scale(.93)}
-.tb-trx.on{color:#e11d48}
-.tb-trx.on .ic{box-shadow:0 0 0 2.5px var(--surface),0 0 0 4.5px #fb923c,0 10px 22px -10px #e11d48,inset 0 1px 0 rgba(255,255,255,.55)}
-.tb-trx[hidden]{display:none}
-@media (max-width:480px){.topbar{gap:8px;padding-right:10px}.brand h1{font-size:17px}.userchip{gap:4px}.userchip .pill{display:none}}
+/* pintasan Transaksi & Kasir di pojok kanan atas (tampil di semua menu) */
+.tb-btn{display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:0;padding:0;margin-left:2px;cursor:pointer;font:inherit;font-size:10.5px;font-weight:800;letter-spacing:.2px;color:var(--ink);flex:0 0 auto;-webkit-tap-highlight-color:transparent}
+.tb-btn .ic{position:relative;width:48px;height:48px;border-radius:16px;display:grid;place-items:center;color:#fff;
+  box-shadow:0 10px 22px -10px var(--g3),0 2px 6px -2px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.55),inset 0 -6px 12px -6px rgba(60,0,30,.35);transition:transform .15s,box-shadow .15s;
+  background:radial-gradient(120% 120% at 20% 10%,var(--g1) 0%,var(--g2) 42%,var(--g3) 100%)}
+.tb-trx{--g1:#fde68a;--g2:#fb923c;--g3:#e11d48}
+.tb-kasir{--g1:#fbcfe8;--g2:#ec4899;--g3:#9d174d}
+.tb-kasir .ic{width:56px;height:56px;border-radius:18px}
+.tb-kasir .ic svg{width:29px!important;height:29px!important}
+.tb-btn .ic::after{content:"";position:absolute;inset:3px 3px auto 3px;height:45%;border-radius:13px 13px 40% 40%;background:linear-gradient(rgba(255,255,255,.35),rgba(255,255,255,0));pointer-events:none}
+.tb-btn .ic svg{width:25px;height:25px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.25))}
+.tb-btn:hover .ic{transform:translateY(-1px) rotate(-3deg)}
+.tb-btn:active .ic{transform:scale(.93)}
+.tb-btn.on{color:var(--g2)}
+.tb-btn.on .ic{box-shadow:0 0 0 2.5px var(--surface),0 0 0 4.5px var(--g2),0 10px 22px -10px var(--g3),inset 0 1px 0 rgba(255,255,255,.55)}
+.tb-btn[hidden]{display:none}
+/* nama toko = tombol menu akun */
+button.brand{background:none;border:0;padding:4px 8px 4px 4px;margin-left:-4px;border-radius:14px;cursor:pointer;font:inherit;color:inherit;text-align:left;display:flex;align-items:center;gap:10px;min-width:0;-webkit-tap-highlight-color:transparent}
+button.brand:hover,button.brand.on{background:var(--surface-2)}
+.brand-teks{display:flex;flex-direction:column;min-width:0;line-height:1.15}
+.brand-teks h1{display:flex;align-items:center;gap:4px}
+.brand-teks small{display:block!important;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand-panah{flex:0 0 auto;opacity:.7;transition:transform .2s}
+button.brand:active .brand-panah{transform:translateY(2px)}
+.akun-kepala{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.akun-kepala img{border-radius:50%}
+.akun-baris{display:flex;align-items:center;gap:12px;width:100%;background:none;border:0;font:inherit;color:inherit;text-align:left;cursor:pointer;padding:10px 12px}
+.akun-baris .ic{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;background:var(--c);color:#fff}
+.akun-baris .ic svg{width:20px;height:20px}
+.akun-baris.keluar{color:#dc2626;font-weight:700}
+@media (max-width:480px){.topbar{gap:8px;padding-right:10px}.brand h1{font-size:17px}}
 /* ide & jadwal konten */
 .ide-target{background:linear-gradient(135deg,color-mix(in srgb,#eab308 14%,var(--surface)),var(--surface))}
 .ide-bar{height:8px;border-radius:99px;background:var(--surface-2);overflow:hidden;margin-top:10px}.ide-bar span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#eab308,#f97316,#e11d48)}
