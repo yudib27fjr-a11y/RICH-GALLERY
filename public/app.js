@@ -794,6 +794,8 @@ const ICON = {
   buketuang: '<rect x="3" y="6.5" width="13" height="8" rx="1.2"/><circle cx="9.5" cy="10.5" r="2"/><path d="M16 9l3.5-3.5M17.5 12.5L21 9M14 17.5l3 3.5M10 17.5l-3 3.5M8 21h8"/>',
   promosi: '<path d="M4 10v4h3l6 4V6L7 10H4z"/><path d="M16.5 9a4 4 0 0 1 0 6M19 6.5a7.5 7.5 0 0 1 0 11"/>',
   konten: '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.5v5l4.5-2.5z"/>',
+  idekonten: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.8.6 1.1 1.4 1.1 2.2h5c0-.8.3-1.6 1.1-2.2A6 6 0 0 0 12 3z"/>',
+  struk: '<path d="M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 21z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
   belanja: '<path d="M3 4h2l2.2 11h10.6L20 7H6.2"/><circle cx="9" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/><path d="M11 10.5l2 2 3.5-3.5"/>',
   mitra: '<path d="M2.5 12.5l4-4 3 1 2.5-2 2.5 1 4-1.5 3 4"/><path d="M6.5 8.5l5 5.5c.8.8 2 .8 2.6 0l2.4-2.6"/><path d="M9.5 15.5l1.5 1.5c.7.7 1.8.7 2.4 0"/><path d="M2.5 12.5l3 3M21.5 13l-3 3"/>',
   kurir: '<circle cx="6" cy="16.5" r="2.8"/><circle cx="18" cy="16.5" r="2.8"/><path d="M8.8 16.5h5.4l2.3-5H12l-2 3"/><path d="M14.5 7.5h2.2l1.3 4"/><path d="M5 11.5h4"/>',
@@ -809,7 +811,7 @@ const ICON = {
   gaji: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/><path d="M16 3.5l-4 2.5-4-2.5"/>',
   atur: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
 };
-const SEMUA_VIEW = [["kasir", "Kasir"], ["absenku", "Absen"], ["pesanan", "Pesanan"], ["jasa", "Jasa"], ["buketuang", "Buket uang"], ["kurir", "Kurir"], ["mitra", "Mitra"], ["belanja", "Belanja"], ["riwayat", "Transaksi"], ["produksi", "Produksi"], ["stok", "Stok"], ["mutasi", "Masuk/Keluar"], ["opname", "Opname"], ["biaya", "Pengeluaran", 1], ["laporan", "Laporan", 1], ["absen", "Rekap Absen", 1], ["gaji", "Gaji", 1], ["konten", "Konten", 1], ["promosi", "Promosi"], ["atur", "Pengaturan"]];
+const SEMUA_VIEW = [["kasir", "Kasir"], ["absenku", "Absen"], ["pesanan", "Pesanan"], ["jasa", "Jasa"], ["buketuang", "Buket uang"], ["kurir", "Kurir"], ["mitra", "Mitra"], ["belanja", "Belanja"], ["riwayat", "Transaksi"], ["produksi", "Produksi"], ["stok", "Stok"], ["mutasi", "Masuk/Keluar"], ["opname", "Opname"], ["biaya", "Pengeluaran", 1], ["laporan", "Laporan", 1], ["absen", "Rekap Absen", 1], ["gaji", "Gaji", 1], ["konten", "Konten", 1], ["idekonten", "Ide konten"], ["promosi", "Promosi"], ["atur", "Pengaturan"]];
 const daftarView = () => SEMUA_VIEW.filter(v => (!v[2] || isAdmin()) && (v[0] !== "absen" || (B && B.toko.absen_aktif))
   && (v[0] !== "absenku" || (kioskInfo && kioskInfo.aktif))
   && (v[0] !== "promosi" || isAdmin() || (B && B.toko.promosi_pic && B.toko.promosi_pic === B.me.id)));
@@ -820,9 +822,9 @@ function shell(){
       <div class="brand"><img src="/monogram.png" alt="" width="30" height="30"><h1>${esc(toTitle(B.toko.nama_toko))}</h1><small>POS</small></div>
       <span class="sp"></span>
       ${isAdmin() ? `<span class="sync-dot" id="syncDot" title="Status sinkron Google Sheet"></span>` : ""}${LOKAL ? `<button class="sync-chip" id="syncChip" type="button" hidden></button>` : ""}
-<button class="tb-trx" id="tbTrx" type="button" title="Transaksi" aria-label="Transaksi" style="--c:${WARNA_MENU.riwayat || "#d97706"}">${ikonMenu("riwayat")}<span>Transaksi</span></button>
       ${kioskInfo && kioskInfo.boleh ? `<button class="btn sm absen-masuk" id="tbAbsen" type="button">🕘 Absen</button>` : ""}
       <span class="userchip"><b>${esc(B.me.nama)}</b><span class="pill mut">${isAdmin() ? "ADMIN" : "KARYAWAN"}</span><button class="btn ghost sm" id="keluar" type="button">Keluar</button></span>
+      <button class="tb-trx" id="tbTrx" type="button" title="Transaksi" aria-label="Transaksi" style="--c:${WARNA_MENU.riwayat || "#d97706"}"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON.struk}</svg></span><span>Transaksi</span></button>
     </header>
     <nav class="tabs" id="tabs"></nav>
     <main id="main"></main></div>`;
@@ -868,7 +870,7 @@ async function cekSync(){
 }
 /* Warna tiap menu (ala Shopee: ikon berwarna di kotak lembut, mudah dibedakan). */
 const WARNA_MENU = { kasir: "#ee4d2d", absenku: "#16a34a", pesanan: "#2563eb", jasa: "#9333ea", buketuang: "#059669", kurir: "#0d9488", mitra: "#4f46e5",
-  belanja: "#f97316", riwayat: "#d97706", produksi: "#db2777", stok: "#a16207", mutasi: "#0891b2", opname: "#65a30d", biaya: "#dc2626", laporan: "#1d4ed8",
+  belanja: "#f97316", riwayat: "#d97706", idekonten: "#eab308", produksi: "#db2777", stok: "#a16207", mutasi: "#0891b2", opname: "#65a30d", biaya: "#dc2626", laporan: "#1d4ed8",
   absen: "#7c3aed", gaji: "#047857", konten: "#e11d48", promosi: "#c026d3", atur: "#64748b", menu: "#8e1d4b" };
 ICON.menu = '<rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/>';
 const ikonMenu = k => `<span class="ic" style="--c:${WARNA_MENU[k] || "#8e1d4b"};--cs:${WARNA_MENU[k] || "#8e1d4b"}1f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[k] || ""}</svg></span>`;
@@ -893,7 +895,7 @@ function render(){
   if (!daftarView().some(v => v[0] === view)) view = "kasir";
   renderNav();
   $("#cartbar").hidden = view !== "kasir";
-  return ({ kasir: vKasir, pesanan: vPesanan, riwayat: vRiwayat, produksi: vProduksi, stok: vStok, mutasi: vMutasi, opname: vOpname, biaya: vBiaya, laporan: vLaporan, absen: vAbsen, absenku: vAbsenku, gaji: vGaji, atur: vAtur, kurir: vKurir, mitra: vMitra, jasa: vJasa, buketuang: vBuketUang, belanja: vBelanja, konten: vKonten, promosi: vPromosi })[view]();
+  return ({ kasir: vKasir, pesanan: vPesanan, riwayat: vRiwayat, produksi: vProduksi, stok: vStok, mutasi: vMutasi, opname: vOpname, biaya: vBiaya, laporan: vLaporan, absen: vAbsen, absenku: vAbsenku, gaji: vGaji, atur: vAtur, kurir: vKurir, mitra: vMitra, jasa: vJasa, buketuang: vBuketUang, belanja: vBelanja, konten: vKonten, idekonten: vIdeKonten, promosi: vPromosi })[view]();
 }
 
 /* ================= KASIR ================= */
@@ -1870,14 +1872,17 @@ async function pengingatTugas(){
   if ($("#modalRoot .modal")) { setTimeout(pengingatTugas, 3000); return; }
   try { sessionStorage.setItem("rg_tugas", today()); } catch {}
   if (!belum.length) return;
-  const baris = t => t.jenis === "konten" ? `<div class="li"><div class="main"><div class="t">🎬 Buat konten minggu ini</div><div class="small muted">Sudah <b>${t.n}</b> dari minimal <b>${t.min}</b> video (Senin–Minggu). Upload di Instagram / TikTok toko.</div></div></div>`
+  const baris = t => t.jenis === "jadwal" ? `<div class="li ide-pemicu"><div class="main"><div class="t">💡 ${t.besok ? "Besok" : "Hari ini"} jadwal konten (${esc(t.hari)})</div><div class="small"><b>${esc(t.judul)}</b></div><div class="small muted">“${esc(t.hook)}”</div></div></div>`
+    : t.jenis === "konten" ? `<div class="li"><div class="main"><div class="t">🎬 Buat konten minggu ini</div><div class="small muted">Sudah <b>${t.n}</b> dari minimal <b>${t.min}</b> video (Senin–Minggu). Upload di Instagram / TikTok toko.</div></div></div>`
     : t.jenis === "promosi" ? `<div class="li"><div class="main"><div class="t">📣 Promosi bulan ini</div><div class="small muted">Sudah <b>${t.n}</b> dari minimal <b>${t.min}</b> promosi. Rencanakan promosi & dananya di menu Promosi.</div></div></div>`
     : `<div class="li"><div class="main"><div class="t">🎬 Konten ${esc(toTitle(t.nama))}</div><div class="small muted">Baru ${t.n} dari minimal ${t.min} video minggu ini</div></div></div>`;
   modal(`<h3>🔔 Pengingat tugas</h3><div class="list">${belum.map(baris).join("")}</div>
     <div class="actions" style="flex-wrap:wrap"><button class="btn" data-close>Nanti</button>
       ${belum.some(t => t.jenis === "konten") ? `<button class="btn" id="tgKonten" type="button">+ Konten saya (tempel link)</button>` : ""}
+      ${belum.some(t => t.jenis === "jadwal" || t.jenis === "konten") ? `<button class="btn pri" id="tgIde" type="button">💡 Lihat ide konten</button>` : ""}
       ${belum.some(t => t.jenis === "promosi") ? `<button class="btn pri" id="tgPromo" type="button">Buka Promosi</button>` : ""}</div>`, m => {
     const k = $("#tgKonten", m); if (k) k.onclick = () => { closeModal(); kontenSaya(); };
+    const ig = $("#tgIde", m); if (ig) ig.onclick = () => { closeModal(); pindah("idekonten"); };
     const p = $("#tgPromo", m); if (p) p.onclick = () => { closeModal(); pindah("promosi"); };
   });
 }
@@ -1886,7 +1891,92 @@ function kontenSaya(){
   modal(`<h3>🎬 Konten saya</h3><label class="f">Link video Instagram / TikTok yang kamu buat<input type="url" id="ksU" placeholder="https://www.instagram.com/reel/… atau https://www.tiktok.com/@…/video/…"></label>
     <p class="small muted" style="margin:0">Video yang sama di Instagram & TikTok cukup dicatat sekali.</p>
     <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="ksOk" type="button">Catat</button></div>`, m => {
-    $("#ksOk", m).onclick = e => coba(async () => { await api("POST", "/api/konten/klaim", { url: $("#ksU", m).value.trim() }); closeModal(); toast("Konten dicatat atas namamu ✅"); }, e.target);
+    $("#ksOk", m).onclick = e => coba(async () => { await api("POST", "/api/konten/klaim", { url: $("#ksU", m).value.trim() }); closeModal(); toast("Konten dicatat atas namamu ✅"); if (view === "idekonten") vIdeKonten(); }, e.target);
+  });
+}
+
+/* ================= IDE & JADWAL KONTEN (TikTok / Reels) ================= */
+let ikTgl = "", ikUser = 0;
+async function vIdeKonten(){
+  if (!ikTgl) ikTgl = today();
+  $("#main").innerHTML = `<div class="view-head"><h2>💡 Ide & jadwal konten</h2></div><div id="ikIsi"><div class="empty">Memuat…</div></div>`;
+  const D = await api("GET", `/api/konten/rencana?tgl=${ikTgl}${ikUser ? "&user_id=" + ikUser : ""}`).catch(e => { $("#ikIsi").innerHTML = `<div class="empty">${esc(e.message)}${LOKAL ? " (butuh internet)" : ""}</div>`; return null; });
+  if (!D || view !== "idekonten") return;
+  const geserMinggu = n => { const d = new Date(D.dari + "T00:00:00"); d.setDate(d.getDate() + 7 * n); ikTgl = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; vIdeKonten(); };
+  const pct = Math.min(100, Math.round(D.n / Math.max(1, D.min) * 100));
+  const kartu = (x, i) => {
+    const st = x.selesai ? ["ok", "✅ Sudah"] : x.tgl === today() ? ["warn", "⏰ Hari ini"] : x.tgl < today() ? ["bad", "Terlewat"] : ["mut", "Nanti"];
+    const capt = `${x.ide.caption}\n\n${x.ide.tag}`.trim();
+    return `<div class="panel ide-kartu ${x.tgl === today() && !x.selesai ? "hari-ini" : ""}">
+      <div class="row" style="align-items:center;gap:8px"><div class="ide-tgl"><b>${esc(x.hari)}</b><span>${esc(tglPendek(x.tgl))}</span></div>
+        <div style="flex:1;min-width:0"><div class="small muted">${esc(x.ide.kategori || "")}${x.ide.momen ? ` · 🎉 ${esc(x.ide.momen.nama)} ${esc(tglPendek(x.ide.momen.tgl))}` : ""}${x.ide.sendiri ? " · ide toko" : ""}</div><b>${esc(x.ide.judul)}</b></div>
+        <span class="pill ${st[0]}">${st[1]}</span></div>
+      ${x.ide.hook ? `<div class="ide-hook">🎬 3 detik pertama: “${esc(x.ide.hook)}”</div>` : ""}
+      ${x.ide.langkah && x.ide.langkah.length ? `<details><summary class="small"><b>Urutan shot (${x.ide.langkah.length})</b></summary><ol class="small" style="margin:6px 0 0;padding-left:20px">${x.ide.langkah.map(l => `<li>${esc(l)}</li>`).join("")}</ol></details>` : ""}
+      ${capt ? `<div class="ide-capt small">${esc(capt)}</div>` : ""}
+      <div class="row" style="gap:6px;flex-wrap:wrap">
+        ${capt ? `<button class="btn sm" data-salin="${i}" type="button">📋 Salin caption</button>` : ""}
+        <a class="btn sm ide-tt" href="${esc(x.ide.ref.tiktok)}" target="_blank" rel="noopener">🎵 Contoh TikTok</a>
+        <a class="btn sm ide-ig" href="${esc(x.ide.ref.reels)}" target="_blank" rel="noopener">📸 Contoh Reels</a>
+        ${x.ide.ref.lain ? `<a class="btn sm" href="${esc(x.ide.ref.lain)}" target="_blank" rel="noopener">🔗 Referensi</a>` : ""}
+        ${!x.selesai && !D.admin ? `<button class="btn sm pri" data-upload type="button">✅ Sudah upload</button>` : ""}</div></div>`;
+  };
+  $("#ikIsi").innerHTML = `
+    ${D.admin && D.pembuat.length ? `<label class="f" style="max-width:320px">Pembuat konten<select id="ikU">${D.pembuat.map(u => `<option value="${u.id}" ${u.id === D.user_id ? "selected" : ""}>${esc(u.nama)}</option>`).join("")}</select></label>` : ""}
+    <div class="panel ide-target">
+      <div class="row" style="align-items:center;gap:10px"><div style="font-size:30px">🎯</div><div style="flex:1">
+        <b>Target minggu ini${D.nama ? " · " + esc(toTitle(D.nama)) : ""}</b>
+        <div class="small muted">Minimal <b>${D.min}</b> video (Senin–Minggu)${D.target_views ? ` · target <b>${angka(D.target_views)}</b> tayangan per video` : ""} · jadwal ${D.slot.map(x => esc(x.hari)).join(" & ")}</div></div>
+        <b class="num" style="font-size:20px">${D.n}/${D.min}</b></div>
+      <div class="ide-bar"><span style="width:${pct}%"></span></div></div>
+    <div class="row" style="align-items:center;gap:6px;margin:12px 0 8px"><button class="btn sm" id="ikPrev" type="button">‹</button><b style="flex:1;text-align:center">${tglID(D.dari)} – ${tglID(D.sampai)}</b><button class="btn sm" id="ikNext" type="button">›</button></div>
+    <div class="stack">${D.slot.map(kartu).join("")}</div>
+    <p class="small muted">💡 Tips: tonton 2–3 contoh di TikTok / Reels dulu, pakai <b>audio yang sedang ramai</b>, rekam vertikal (9:16), 15–30 detik, tulisan besar di 3 detik pertama. Setelah upload, tekan <b>Sudah upload</b> & tempel link-nya.</p>
+    ${D.admin ? `<div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn" id="ikAtur" type="button">⚙️ Jadwal & target</button><button class="btn" id="ikIde" type="button">+ Ide sendiri</button></div>` : ""}`;
+  $("#ikPrev").onclick = () => geserMinggu(-1); $("#ikNext").onclick = () => geserMinggu(1);
+  const su = $("#ikU"); if (su) su.onchange = () => { ikUser = +su.value; vIdeKonten(); };
+  $$("[data-salin]").forEach(b => b.onclick = async () => { const x = D.slot[+b.dataset.salin]; const t = `${x.ide.caption}\n\n${x.ide.tag}`.trim(); try { await navigator.clipboard.writeText(t); toast("Caption & hashtag disalin"); } catch { toast("Tidak bisa menyalin otomatis — tahan teks caption untuk menyalin"); } });
+  $$("[data-upload]").forEach(b => b.onclick = kontenSaya);
+  const ia = $("#ikAtur"); if (ia) ia.onclick = aturJadwalKonten;
+  const ii = $("#ikIde"); if (ii) ii.onclick = () => ideSendiri();
+}
+async function aturJadwalKonten(){
+  const J = await coba(() => api("GET", "/api/konten/jadwal")); if (!J) return;
+  const NAMA = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+  modal(`<h3>⚙️ Jadwal & target konten</h3><div class="stack">
+    <div class="f"><span>Hari jadwal upload (ide muncul di pengingat pembuat konten pada hari itu & sehari sebelumnya)</span>
+      <div class="row" style="gap:6px;flex-wrap:wrap">${NAMA.map((n, i) => `<label class="pill ${J.hari.includes(i + 1) ? "ok" : "mut"}" style="cursor:pointer;padding:6px 10px"><input type="checkbox" data-h="${i + 1}" ${J.hari.includes(i + 1) ? "checked" : ""} style="margin-right:4px">${n}</label>`).join("")}</div></div>
+    <label class="f">Target tayangan per video<input type="number" id="ajV" value="${J.target_views}" min="0" step="100" inputmode="numeric"></label>
+    <p class="small muted" style="margin:0">Minimal video per minggu diatur di menu Konten → ⚙️ Pengaturan konten (Wajib buat konten).</p>
+    ${J.ide.length ? `<div class="f"><span>Ide sendiri (${J.ide.length})</span><div class="list">${J.ide.map((x, i) => `<div class="li"><div class="main"><div class="t">${esc(x.judul)}</div><div class="small muted">${esc(x.hook || "")}</div></div><button class="btn sm ghost" data-ie="${i}" type="button">Ubah</button><button class="btn sm ghost danger-teks" data-ih="${i}" type="button">Hapus</button></div>`).join("")}</div></div>` : ""}</div>
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="ajOk" type="button">Simpan</button></div>`, m => {
+    $$("[data-h]", m).forEach(c => c.onchange = () => c.parentElement.className = "pill " + (c.checked ? "ok" : "mut"));
+    $$("[data-ie]", m).forEach(b => b.onclick = () => ideSendiri(J, +b.dataset.ie));
+    $$("[data-ih]", m).forEach(b => b.onclick = () => coba(async () => { const ide = J.ide.filter((_, i) => i !== +b.dataset.ih); await api("PUT", "/api/konten/jadwal", { ide }); toast("Ide dihapus"); aturJadwalKonten(); vIdeKonten(); }, b));
+    $("#ajOk", m).onclick = e => coba(async () => {
+      await api("PUT", "/api/konten/jadwal", { hari: $$("[data-h]:checked", m).map(c => +c.dataset.h), target_views: num($("#ajV", m).value) });
+      closeModal(); toast("Jadwal konten disimpan"); vIdeKonten();
+    }, e.target);
+  });
+}
+async function ideSendiri(J, idx){
+  if (!J) { J = await coba(() => api("GET", "/api/konten/jadwal")); if (!J) return; }
+  const x = idx != null ? J.ide[idx] : {};
+  modal(`<h3>${idx != null ? "Ubah ide" : "+ Ide konten sendiri"}</h3><div class="stack">
+    <label class="f">Judul ide<input type="text" id="isJ" value="${esc(x.judul || "")}" maxlength="120" placeholder="Contoh: Review buket Thumbelina"></label>
+    <label class="f">Kalimat pembuka (3 detik pertama)<input type="text" id="isH" value="${esc(x.hook || "")}" maxlength="200"></label>
+    <label class="f">Urutan shot (1 baris = 1 shot)<textarea id="isL" rows="4">${esc((x.langkah || []).join("\n"))}</textarea></label>
+    <label class="f">Caption<textarea id="isC" rows="2" maxlength="600">${esc(x.caption || "")}</textarea></label>
+    <label class="f">Hashtag<input type="text" id="isT" value="${esc(x.tag || "#buketbunga #floristindramayu")}" maxlength="300"></label>
+    <label class="f">Link video referensi (TikTok / Reels, boleh kosong)<input type="url" id="isR" value="${esc(x.ref || "")}" placeholder="https://www.tiktok.com/@…/video/…"></label>
+    <label class="f">Kata kunci cari contoh<input type="text" id="isK" value="${esc(x.cari || "")}" maxlength="120" placeholder="Contoh: buket bunga aesthetic"></label></div>
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="isOk" type="button">Simpan ide</button></div>`, m => {
+    $("#isOk", m).onclick = e => coba(async () => {
+      const baru = { judul: $("#isJ", m).value.trim(), hook: $("#isH", m).value.trim(), langkah: $("#isL", m).value.split("\n").map(l => l.trim()).filter(Boolean), caption: $("#isC", m).value.trim(), tag: $("#isT", m).value.trim(), ref: $("#isR", m).value.trim(), cari: $("#isK", m).value.trim(), kategori: "Ide toko" };
+      if (!baru.judul) throw new Error("Isi judul ide");
+      const ide = [...J.ide]; if (idx != null) ide[idx] = baru; else ide.unshift(baru);
+      await api("PUT", "/api/konten/jadwal", { ide }); closeModal(); toast("Ide disimpan — masuk giliran jadwal berikutnya"); vIdeKonten();
+    }, e.target);
   });
 }
 

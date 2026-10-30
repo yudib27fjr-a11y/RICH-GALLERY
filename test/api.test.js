@@ -695,3 +695,21 @@ test("insentif produksi barang di bawah Rp50.000 hanya Rp500/pcs (kecuali tarif 
   const r = (L.rows || L).find(x => x.product_id === murah.id || x.kode === murah.kode);
   assert.equal(r.tarif, 500);
 });
+
+test("ide & jadwal konten: rencana mingguan berisi ide + referensi, jadwal hari ini memicu pengingat pembuat konten", async () => {
+  const me = (await kasir("GET", "/api/bootstrap")).data.me;
+  assert.equal((await admin("PUT", "/api/tugas/setelan", { wajib_konten: [{ user_id: me.id, min: 2 }] })).status, 200);
+  assert.equal((await kasir("PUT", "/api/konten/jadwal", { hari: [1] })).status, 403);
+  assert.equal((await admin("PUT", "/api/konten/jadwal", { hari: [] })).status, 400);
+  assert.equal((await admin("PUT", "/api/konten/jadwal", { hari: [1, 2, 3, 4, 5, 6, 7], target_views: 2000, ide: [{ judul: "Review buket Thumbelina", hook: "Buket paling laris!", langkah: "Shot 1\nShot 2", ref: "https://www.tiktok.com/@x/video/1" }] })).status, 200);
+  const R = (await kasir("GET", "/api/konten/rencana")).data;
+  assert.equal(R.slot.length, 7); assert.equal(R.target_views, 2000); assert.equal(R.wajib, true);
+  assert.ok(R.slot.every(x => x.ide.judul && /tiktok\.com\/search/.test(x.ide.ref.tiktok) && /instagram\.com/.test(x.ide.ref.reels)));
+  const T = (await kasir("GET", "/api/tugas-saya")).data;
+  assert.ok(T.some(t => t.jenis === "jadwal" && !t.besok && t.judul), "jadwal hari ini muncul di pengingat: " + JSON.stringify(T));
+  const J = (await admin("GET", "/api/konten/jadwal")).data;
+  assert.deepEqual(J.ide[0].langkah, ["Shot 1", "Shot 2"]);
+  assert.equal((await admin("GET", `/api/konten/rencana?user_id=${me.id}`)).data.user_id, me.id);
+  await admin("PUT", "/api/konten/jadwal", { hari: [2, 5], ide: [] });
+  await admin("PUT", "/api/tugas/setelan", { wajib_konten: [] });
+});

@@ -13,6 +13,7 @@ import { platform } from "../platform.js";
 import { cabangAktif, mintaPusat } from "../cabang-perangkat.js";
 import { mingguDari, klaimKonten } from "./konten.js";
 import { jamTutupToko } from "./produksi.js";
+import { rencanaMinggu, setelanJadwal } from "../ide-konten.js";
 
 export const JENIS_PROMO = ["Diskon", "Promo bundling", "Giveaway", "Iklan IG / TikTok", "Endorse / KOL", "Brosur / banner", "Promo hari besar", "Lainnya"];
 const STATUS_PROMO = ["rencana", "jalan", "selesai", "batal"];
@@ -52,7 +53,14 @@ const AKSI = {
   tugas: (_, user) => {
     const t = setelanTugas(), L = [], tgl = sekarang().tgl, [a, b] = mingguDari(tgl);
     const saya = t.wajib.find(w => w.id === user.id);
-    if (saya) { const n = kontenMinggu(user.id, tgl); L.push({ jenis: "konten", n, min: saya.min, selesai: n >= saya.min, dari: a, sampai: b }); }
+    if (saya) {
+      const n = kontenMinggu(user.id, tgl); L.push({ jenis: "konten", n, min: saya.min, selesai: n >= saya.min, dari: a, sampai: b });
+      // Pemicu ide konten: jadwal hari ini & besok yang belum dikerjakan
+      const besok = new Date(Date.parse(tgl + "T00:00:00Z") + 864e5).toISOString().slice(0, 10);
+      const R = rencanaMinggu(tgl, { min: saya.min, selesai: n }), R2 = rencanaMinggu(besok, { min: saya.min, selesai: besok < R.sampai || besok === R.sampai ? n : 0 });
+      const slot = [...R.slot, ...(R2.dari !== R.dari ? R2.slot : [])];
+      for (const x of slot) if (!x.selesai && (x.tgl === tgl || x.tgl === besok)) L.push({ jenis: "jadwal", tgl: x.tgl, hari: x.hari, besok: x.tgl === besok, judul: x.ide.judul, hook: x.ide.hook, selesai: false });
+    }
     // Jendela pengingat hanya untuk karyawan yang ditugasi (wajib konten / penanggung jawab promosi), tidak untuk admin.
     if (t.pic && t.pic.id === user.id) { const n = jumlahPromosiBulan(bulanIni()); L.push({ jenis: "promosi", n, min: t.minPromosi, selesai: n >= t.minPromosi, bulan: bulanIni(), pic: t.pic.nama }); }
     return L;
@@ -92,6 +100,15 @@ const AKSI = {
     return { ok: true, nominal: n };
   }),
   klaim: ({ url }, user) => klaimKonten(url, user),
+  /** Ide & jadwal konten minggu ini (pembuat konten: miliknya; admin: pilih pembuat). */
+  rencana: ({ tgl, user_id }, user) => {
+    const t = setelanTugas(), hari = /^\d{4}-\d{2}-\d{2}$/.test(tgl || "") ? tgl : sekarang().tgl;
+    const id = user.peran === "admin" ? (+user_id || (t.wajib[0] || {}).id || user.id) : user.id;
+    const w = t.wajib.find(x => x.id === id), nama = (one("SELECT nama FROM users WHERE id = ?", [id]) || {}).nama || "";
+    const n = kontenMinggu(id, hari);
+    return { ...rencanaMinggu(hari, { min: w ? w.min : 2, selesai: n }), user_id: id, nama, n, wajib: !!w, admin: user.peran === "admin",
+      pembuat: user.peran === "admin" ? t.wajib.map(x => ({ id: x.id, nama: x.nama })) : [] };
+  },
 };
 const jalankan = async (aksi, data, user) => {
   if (!cabangAktif()) return AKSI[aksi](data, user);
@@ -112,6 +129,22 @@ route("PUT", "/api/promosi/:id", "semua", ({ params, body, user }) => jalankan("
 route("DELETE", "/api/promosi/:id", "semua", ({ params, user }) => jalankan("hapus", { id: +params.id }, user));
 route("POST", "/api/promosi/:id/dana", "admin", ({ params, body, user }) => jalankan("dana", { id: +params.id, nominal: body.nominal, tgl: body.tgl }, user));
 route("POST", "/api/konten/klaim", "semua", ({ body, user }) => jalankan("klaim", { url: body.url }, user));
+route("GET", "/api/konten/rencana", "semua", ({ query, user }) => jalankan("rencana", { tgl: query.tgl, user_id: query.user_id }, user));
+route("GET", "/api/konten/jadwal", "admin", () => setelanJadwal(), { pusatSaja: true });
+route("PUT", "/api/konten/jadwal", "admin", ({ body }) => {
+  const j = { ...(getSettings().jadwal_konten || {}) };
+  if (Array.isArray(body.hari)) { const h = [...new Set(body.hari.map(Number).filter(x => x >= 1 && x <= 7))].sort(); if (!h.length) throw bad("Pilih minimal 1 hari jadwal konten"); j.hari = h; }
+  if (body.target_views != null) j.target_views = angka(body.target_views, { min: 0, max: 1e9, bulat: true, nama: "Target tayangan" });
+  if (body.jam != null) { if (!/^\d{2}:\d{2}$/.test(body.jam)) throw bad("Jam tidak valid"); j.jam = body.jam; }
+  if (Array.isArray(body.ide)) j.ide = body.ide.slice(0, 60).map(x => ({
+    judul: teks(x.judul, { wajib: true, max: 120, nama: "Judul ide" }), kategori: teks(x.kategori, { max: 40 }) || "Ide toko",
+    hook: teks(x.hook, { max: 200, nama: "Kalimat pembuka" }) || "", langkah: (Array.isArray(x.langkah) ? x.langkah : String(x.langkah || "").split("\n")).map(l => teks(l, { max: 200 })).filter(Boolean).slice(0, 10),
+    caption: teks(x.caption, { max: 600, nama: "Caption" }) || "", tag: teks(x.tag, { max: 300, nama: "Hashtag" }) || "", cari: teks(x.cari, { max: 120 }) || "",
+    ref: /^https?:\/\//i.test(String(x.ref || "")) ? teks(x.ref, { max: 500, nama: "Link referensi" }) : "",
+  }));
+  setSetting("jadwal_konten", j);
+  return { ok: true };
+}, { pusatSaja: true });
 
 /* ---------- pengaturan (admin) ---------- */
 route("GET", "/api/tugas/setelan", "admin", () => { const t = setelanTugas(); return { pic_promosi_id: t.pic ? t.pic.id : null, min_promosi_bulan: t.minPromosi, wajib_konten: t.wajib.map(w => ({ user_id: w.id, min: w.min })) }; }, { pusatSaja: true });
