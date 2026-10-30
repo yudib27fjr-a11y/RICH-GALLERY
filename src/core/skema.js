@@ -468,6 +468,9 @@ ALTER TABLE absen ADD COLUMN wajah_ok INTEGER;`,
   dibuat TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX absen_ket_tgl ON absen_ket(tgl);`,
+/* 21: insentif produksi barang murah (harga jual < Rp50.000) = Rp500/pcs — terapkan juga ke catatan yang belum dibayar. */
+`UPDATE produksi SET tarif = 500 WHERE product_id IN (SELECT id FROM products WHERE harga > 0 AND harga < 50000 AND insentif IS NULL)
+  AND NOT EXISTS (SELECT 1 FROM insentif_bayar b WHERE b.pembuat_id = produksi.pembuat_id AND produksi.tgl BETWEEN b.periode_dari AND b.periode_sampai);`,
 ];
 
 export const DEFAULT_SETTINGS = {
@@ -479,6 +482,8 @@ export const DEFAULT_SETTINGS = {
   no_berikutnya: 1180,
   hpp_persen: 45,
   insentif: 2500,
+  ins_murah: 500,          // insentif produksi per pcs bila harga jual di bawah batas
+  ins_murah_batas: 50000,
   periode_mulai: 15,
   sync_url: "",
   sheet_id: "1dCUGkIgl0kzF4CaA-tlQxIspoWqUJ9Go5zV86148AwQ",

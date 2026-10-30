@@ -54,3 +54,10 @@ export function daftar(v, { nama = "Daftar", min = 1, max = 500 } = {}){
   return v;
 }
 export const bulat2 = n => Math.round(n * 100) / 100;
+
+/** Tarif insentif produksi per pcs: tarif khusus produk (bila diisi admin) → harga jual di bawah batas (Rp50.000) = tarif murah (Rp500) → tarif umum. */
+export function tarifInsentif(harga, produk, s){
+  if (produk && produk.insentif != null) return produk.insentif;
+  const batas = Number(s.ins_murah_batas ?? 50000), murah = Number(s.ins_murah ?? 500);
+  return Number(harga) > 0 && Number(harga) < batas ? murah : s.insentif;
+}

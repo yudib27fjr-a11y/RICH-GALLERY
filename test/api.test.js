@@ -679,3 +679,19 @@ test("panggilan balik Meta (cabut izin / hapus data Instagram) diperiksa tanda t
   assert.equal(r.status, 200, JSON.stringify(r.data)); assert.ok(r.data.confirmation_code && r.data.url);
   assert.equal((await admin("POST", "/api/konten/ig/cabut", { signed_request: sig + "." + isi })).status, 200);
 });
+
+test("insentif produksi barang di bawah Rp50.000 hanya Rp500/pcs (kecuali tarif khusus produk)", async () => {
+  const { tarifInsentif } = await import("../src/core/util.js");
+  const s = { insentif: 2500, ins_murah: 500, ins_murah_batas: 50000 };
+  assert.equal(tarifInsentif(35000, { insentif: null }, s), 500);
+  assert.equal(tarifInsentif(50000, { insentif: null }, s), 2500, "tepat 50rb = tarif umum");
+  assert.equal(tarifInsentif(35000, { insentif: 1000 }, s), 1000, "tarif khusus produk tetap dipakai");
+  assert.equal(tarifInsentif(0, null, s), 2500, "harga belum diisi = tarif umum");
+  const b = (await admin("GET", "/api/bootstrap")).data, murah = b.produk.find(x => x.harga > 0 && x.harga < 50000 && x.insentif == null);
+  if (!murah) return;
+  const eva = b.staf.find(u => u.nama === "EVA");
+  assert.equal((await admin("POST", "/api/produksi", { pembuat_id: eva.id, items: [{ product_id: murah.id, qty: 2 }] })).status, 200);
+  const L = (await admin("GET", `/api/produksi?tgl=${b.hariIni}`)).data;
+  const r = (L.rows || L).find(x => x.product_id === murah.id || x.kode === murah.kode);
+  assert.equal(r.tarif, 500);
+});

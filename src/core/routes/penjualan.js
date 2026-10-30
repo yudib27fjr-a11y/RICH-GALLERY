@@ -1,6 +1,6 @@
 import { route } from "../router.js";
 import { one, all, run, tx, getSettings, setSetting } from "../db.js";
-import { HttpError, bad, notFound, teks, angka, tanggal, pilihan, daftar, sekarang } from "../util.js";
+import { HttpError, bad, notFound, teks, angka, tanggal, pilihan, daftar, sekarang, tarifInsentif } from "../util.js";
 import { ambilItem, ubahStok, antre } from "../stok.js";
 import { cabangAktif } from "../cabang-perangkat.js";
 import { antreNotifPenjualan } from "../notif.js";
@@ -122,7 +122,7 @@ route("POST", "/api/penjualan", "semua", ({ body, user, ctx }) => tx(() => {
     if (!it.ready && it.pembuat) {
       const [dari] = periodeDari(tgl, s.periode_mulai);
       if (one("SELECT 1 x FROM insentif_bayar WHERE pembuat_id = ? AND periode_dari = ?", [it.pembuat.id, dari])) return; // periode sudah dibayar
-      const tarif = (it.p && it.p.insentif != null) ? it.p.insentif : s.insentif;
+      const tarif = tarifInsentif(it.harga, it.p, s);
       run(`INSERT INTO produksi(tgl, product_id, kode, nama, qty, pembuat_id, tarif, restock, user_id, oleh, uid) VALUES (?,?,?,?,?,?,?,0,?,?,?)`,
         [tgl, it.product_id, it.kode, it.nama, it.qty, it.pembuat.id, tarif, user.id, user.nama, `jual:${no}:${idx}`]);
       prodRows.push([tgl, it.kode, it.nama, it.qty, it.pembuat.nama, tarif, Math.round(it.qty * tarif), "PESANAN " + no, user.nama]);

@@ -3619,7 +3619,7 @@ async function vProduksi(){
       </tbody></table></div>
       ${rek.lemburTersedia === false ? `<p class="note" style="margin:8px 0 0">Lembur belum ikut dihitung: data absen ada di server pusat dan perangkat ini sedang offline.</p>` : ""}
       <p class="small" style="margin:8px 0 0">Insentif & lembur dibayarkan bersama gaji tanggal ${B.toko.periode_mulai} lewat menu <a href="#gaji" id="keGaji"><b>Gaji</b></a>.</p>
-      <p class="small muted" style="margin:4px 0 0">Total = insentif produksi + insentif lain + lembur (${B.toko.lembur_per_jam ? rp(B.toko.lembur_per_jam) + "/jam" : "upah lembur belum diatur"}). Tarif ${rp(B.toko.insentif)} per produk, periode tanggal ${B.toko.periode_mulai} s/d ${B.toko.periode_mulai - 1 || "akhir bulan"}.${isAdmin() ? " Ubah di Pengaturan; tarif khusus per produk diisi di menu Stok." : ""}</p>`;
+      <p class="small muted" style="margin:4px 0 0">Total = insentif produksi + insentif lain + lembur (${B.toko.lembur_per_jam ? rp(B.toko.lembur_per_jam) + "/jam" : "upah lembur belum diatur"}). Tarif ${rp(B.toko.insentif)} per produk (harga jual di bawah ${rp(B.toko.ins_murah_batas ?? 50000)}: ${rp(B.toko.ins_murah ?? 500)}), periode tanggal ${B.toko.periode_mulai} s/d ${B.toko.periode_mulai - 1 || "akhir bulan"}.${isAdmin() ? " Ubah di Pengaturan; tarif khusus per produk diisi di menu Stok." : ""}</p>`;
     $$("[data-slip]").forEach(bt => bt.onclick = () => slipInsentif(rek, rows.find(r => r.pembuat_id === +bt.dataset.slip)));
     $("#keGaji").onclick = e => { e.preventDefault(); gPer = pPer; pindah("gaji"); };
     }
@@ -3793,7 +3793,7 @@ function editItem(jenis, id, preset = {}){
       ${isP ? `<label class="f grow">HPP (modal)<input type="number" id="eH" value="${x ? x.hpp : ""}" min="0" inputmode="numeric" placeholder="otomatis ${B.toko.hpp_persen}%"></label>` : `<label class="f" style="width:100px">Satuan<input type="text" id="eU" value="${esc(x ? x.satuan : "PCS")}"></label>`}</div>
       <div class="row"><label class="f grow">Stok sekarang<input type="number" id="eS" value="${x ? x.stok : 0}" step="0.01" inputmode="decimal"></label><label class="f grow">Batas stok minimum<input type="number" id="eM" value="${x ? x.stok_min : isP ? 1 : 5}" min="0" inputmode="numeric"></label></div>
       ${x ? `<p class="note">Untuk menambah atau mengurangi stok sebaiknya pakai menu Masuk/Keluar atau Opname. Mengubah angka stok di sini dicatat sebagai koreksi.</p>` : ""}
-      ${isP ? `<label class="f">Insentif produksi per pcs (kosongkan = tarif umum ${rp(B.toko.insentif)})<input type="number" id="eI" value="${x && x.insentif != null ? x.insentif : ""}" min="0" step="500" inputmode="numeric"></label>` : ""}
+      ${isP ? `<label class="f">Insentif produksi per pcs (kosongkan = tarif umum ${rp(B.toko.insentif)}, atau ${rp(B.toko.ins_murah ?? 500)} bila harga di bawah ${rp(B.toko.ins_murah_batas ?? 50000)})<input type="number" id="eI" value="${x && x.insentif != null ? x.insentif : ""}" min="0" step="500" inputmode="numeric"></label>` : ""}
       ${isP && x ? `<label class="row small"><input type="checkbox" id="eOn" ${x.aktif ? "checked" : ""}> Tampilkan di katalog kasir</label>` : ""}
     </div>
     <div class="actions">${x ? `<button class="btn danger" id="eDel" style="margin-right:auto">Hapus</button><button class="btn" id="eRiw" type="button">Riwayat stok</button><button class="btn" id="eLbl" type="button">Cetak label</button>` : ""}<button class="btn" data-close>Batal</button><button class="btn pri" id="eOk">Simpan</button></div>`, m => {
@@ -4095,9 +4095,10 @@ async function aturToko(){
     <div class="row"><label class="f grow">Awalan no invoice<input type="text" id="tP" value="${esc(s.prefix)}"></label><label class="f grow">No berikutnya<input type="number" id="tNo" value="${s.no_berikutnya}" min="1"></label></div>
     <label class="f">HPP otomatis (% dari harga jual)<input type="number" id="tH" value="${s.hpp_persen}" min="0" max="100"></label>
     <div class="row"><label class="f grow">Insentif produksi per pcs (Rp)<input type="number" id="tI" value="${s.insentif}" min="0" step="500"></label><label class="f grow">Periode insentif mulai tanggal<input type="number" id="tPm" value="${s.periode_mulai}" min="1" max="28"></label></div>
+    <div class="row"><label class="f grow">Barang murah: harga jual di bawah (Rp)<input type="number" id="tMb" value="${s.ins_murah_batas ?? 50000}" min="0" step="1000"></label><label class="f grow">Insentif barang murah per pcs (Rp)<input type="number" id="tMi" value="${s.ins_murah ?? 500}" min="0" step="100"></label></div>
     <button class="btn pri" id="tSave" type="button">Simpan pengaturan toko</button>`;
   $("#tSave").onclick = e => coba(async () => {
-    await api("PUT", "/api/pengaturan", { nama_toko: $("#tN").value, alamat: $("#tA").value, telp: $("#tT").value, footer: $("#tF").value, prefix: $("#tP").value, no_berikutnya: $("#tNo").value, hpp_persen: $("#tH").value, insentif: $("#tI").value, periode_mulai: $("#tPm").value });
+    await api("PUT", "/api/pengaturan", { nama_toko: $("#tN").value, alamat: $("#tA").value, telp: $("#tT").value, footer: $("#tF").value, prefix: $("#tP").value, no_berikutnya: $("#tNo").value, hpp_persen: $("#tH").value, insentif: $("#tI").value, ins_murah: $("#tMi").value, ins_murah_batas: $("#tMb").value, periode_mulai: $("#tPm").value });
     await muatUlang(); shell(); render(); toast("Pengaturan toko tersimpan");
   }, e.target);
 }

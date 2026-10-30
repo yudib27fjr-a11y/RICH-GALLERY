@@ -1,6 +1,6 @@
 import { route } from "../router.js";
 import { one, all, run, tx, getSettings, setSetting } from "../db.js";
-import { HttpError, bad, notFound, teks, angka, tanggal, daftar, sekarang } from "../util.js";
+import { HttpError, bad, notFound, teks, angka, tanggal, daftar, sekarang, tarifInsentif } from "../util.js";
 import { ambilItem, ubahStok, antre } from "../stok.js";
 import { periodeDari } from "../../../public/shared.js";
 import { lemburPeriode, jamKhusus, daftarShift } from "./absen.js";
@@ -55,7 +55,7 @@ route("POST", "/api/produksi", "semua", ({ body, user }) => tx(() => {
   const rows = daftar(body.items, { nama: "Daftar produk" }).map((x, i) => {
     const p = ambilItem("produk", +x.product_id);
     const qty = angka(x.qty, { min: 0.01, max: 100000, wajib: true, nama: `Jumlah ${p.nama}` });
-    const tarif = p.insentif ?? s.insentif;
+    const tarif = tarifInsentif(p.harga, p, s);
     run(`INSERT INTO produksi(tgl, product_id, kode, nama, qty, pembuat_id, tarif, restock, user_id, oleh, uid) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
       [tgl, p.id, p.kode, p.nama, qty, pembuat.id, tarif, restock, user.id, user.nama, uid ? `${uid}:${i}` : null]);
     if (restock) ubahStok({ jenis: "produk", item: p, delta: qty, tipe: "produksi", tgl, ket: `Produksi ${pembuat.nama}`, user });
@@ -115,7 +115,7 @@ route("PUT", "/api/produksi/:id", "semua", ({ params, body, user }) => tx(() => 
   const gantiProduk = body.product_id != null && +body.product_id !== r.product_id;
   const p = gantiProduk ? ambilItem("produk", +body.product_id) : null;
   const qty = body.qty != null ? angka(body.qty, { min: 0.01, max: 100000, wajib: true, nama: "Jumlah" }) : r.qty;
-  const kode = p ? p.kode : r.kode, nama = p ? p.nama : r.nama, tarif = p ? (p.insentif ?? s.insentif) : r.tarif, productId = p ? p.id : r.product_id;
+  const kode = p ? p.kode : r.kode, nama = p ? p.nama : r.nama, tarif = p ? tarifInsentif(p.harga, p, s) : r.tarif, productId = p ? p.id : r.product_id;
   if (!gantiProduk && qty === r.qty && pembuat.id === r.pembuat_id) return { ok: true, berubah: false };
   // Koreksi stok ready: batalkan jumlah lama, tambahkan jumlah baru.
   if (r.restock) {
