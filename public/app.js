@@ -4229,10 +4229,37 @@ function vLaporan(){
 }
 
 /* ================= PENGATURAN ================= */
+/* Pengaturan ringkas: tiap bagian tampil sebagai baris judul; ketuk untuk membuka isi lengkapnya (satu bagian terbuka sekali waktu). */
+const IKON_ATUR = [[/perangkat ini/i, "🖨️", "Printer, cetak uji, tema"], [/akun saya/i, "👤", "Ganti password / PIN"], [/toko/i, "🏪", "Nama, alamat, struk, insentif"], [/pengguna/i, "👥", "Akun karyawan & admin"],
+  [/perangkat cabang|server pusat/i, "📱", "HP / tablet kasir"], [/whatsapp/i, "💬", "Pesan WA otomatis"], [/canva/i, "🎨", "Desain kartu ucapan"], [/kartu ucapan/i, "💌", "Cetak kartu"], [/nota/i, "🧾", "Nota / invoice A4"],
+  [/google sheet/i, "🔄", "Sinkron pembukuan"], [/jam kerja/i, "⏱️", "Shift, lembur, insentif lain"], [/absensi/i, "🕘", "Lokasi, perangkat, wajah"], [/notifikasi/i, "🔔", "Notifikasi HP admin"],
+  [/hard reset/i, "⚠️", "Hapus semua data"], [/cadangan/i, "💾", "Backup & pulihkan data"], [/mode aplikasi/i, "📲", "Versi & pembaruan aplikasi"]];
+let aturTerbuka = "";
+function pasangLipatAtur(){
+  const daftar = $("#aturDaftar"); if (!daftar) return;
+  const hiasi = () => {
+    if (view !== "atur" || !document.body.contains(daftar)) { obs.disconnect(); return; }
+    $$(":scope > section", daftar).forEach(sec => {
+      if (!sec.dataset.lipat) { sec.dataset.lipat = "1"; sec.classList.add("lipat", "tertutup"); }
+      const h = sec.querySelector(":scope > h3"); if (!h || h.dataset.hias) return;
+      h.dataset.hias = "1"; h.classList.add("lipat-judul"); h.setAttribute("role", "button"); h.tabIndex = 0;
+      const teks = h.textContent.trim(), m = IKON_ATUR.find(([r]) => r.test(teks));
+      const bersih = teks.replace(/^[^\p{L}\p{N}]+/u, "");
+      h.innerHTML = `<span class="lj-ikon">${m ? m[1] : "⚙️"}</span><span class="lj-teks"><span>${esc(bersih)}</span>${m ? `<small>${esc(m[2])}</small>` : ""}</span><span class="lj-panah" aria-hidden="true">›</span>`;
+      if (bersih === aturTerbuka) sec.classList.remove("tertutup");
+      const buka = () => { const tutup = !sec.classList.contains("tertutup"); $$(":scope > section", daftar).forEach(x => x.classList.add("tertutup")); aturTerbuka = tutup ? "" : bersih; if (tutup) return; sec.classList.remove("tertutup"); setTimeout(() => { try { sec.scrollIntoView({ block: "start", behavior: "smooth" }); } catch {} }, 60); };
+      h.onclick = buka; h.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); buka(); } };
+    });
+  };
+  const obs = new MutationObserver(hiasi); obs.observe(daftar, { childList: true, subtree: true }); hiasi();
+  const cari = $("#atCari"); if (cari) cari.oninput = () => { const q = cari.value.trim().toLowerCase();
+    $$(":scope > section", daftar).forEach(sec => { const cocok = !q || sec.textContent.toLowerCase().includes(q); sec.hidden = !cocok; if (q && cocok) sec.classList.remove("tertutup"); else if (!q) sec.classList.add("tertutup"); }); };
+}
 function vAtur(){
   $("#main").innerHTML = `
     <div class="view-head"><h2>Pengaturan</h2></div>
-    <div class="grid2" style="align-items:start">
+    <input type="search" id="atCari" class="at-cari" placeholder="🔎 Cari pengaturan… (printer, password, absen, WA)">
+    <div class="atur-daftar" id="aturDaftar">
       <section class="panel stack"><h3 style="font-size:17px">Perangkat ini</h3>
         <p class="small muted" style="margin:0">Berlaku untuk HP/tablet yang sedang dipakai saja.</p>
         <label class="f">Lebar kertas printer<select id="pK"><option value="58" ${D.kertas == 58 ? "selected" : ""}>58 mm (32 karakter)</option><option value="80" ${D.kertas == 80 ? "selected" : ""}>80 mm (48 karakter)</option></select></label>
@@ -4272,6 +4299,7 @@ function vAtur(){
       ${NATIVE ? `<section class="panel stack" id="aMode"></section>` : ""}
       ${TAG_PEMBUAT}
     </div>`;
+  pasangLipatAtur();
   if (NATIVE) aturMode();
   $("#pK").onchange = e => { D.kertas = +e.target.value; simpanD(); vAtur(); };
   $("#pM").onchange = e => { D.modeCetak = e.target.value; D.modeDipilih = true; simpanD(); vAtur(); };

@@ -558,3 +558,19 @@ nav.tabs button.diangkat .ic{box-shadow:0 10px 20px -6px var(--c),0 0 0 3px var(
 nav.tabs:not(.menggeser) button[data-v]{transition:transform .15s}
 @keyframes goyang{from{transform:rotate(-2deg)}to{transform:rotate(2deg)}}
 @media (prefers-reduced-motion:reduce){nav.tabs.menggeser button[data-v]:not(.diangkat){animation:none}}
+/* Pengaturan ringkas (lipat / buka) */
+.at-cari{margin-bottom:12px}
+.atur-daftar{display:flex;flex-direction:column;gap:10px;max-width:760px}
+.atur-daftar > section.lipat{padding:0;overflow:hidden;gap:12px}
+.atur-daftar > section.lipat > *:not(.lipat-judul){margin-left:14px;margin-right:14px}
+.atur-daftar > section.lipat > *:last-child{margin-bottom:14px}
+.atur-daftar > section.tertutup > *:not(.lipat-judul){display:none!important}
+.lipat-judul{display:flex;align-items:center;gap:12px;margin:0!important;padding:12px 14px;cursor:pointer;font-size:16px!important;-webkit-tap-highlight-color:transparent;user-select:none}
+.lipat-judul:hover{background:var(--surface-2)}
+.lj-ikon{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:20px;background:var(--surface-2);flex:0 0 auto}
+.lj-teks{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2}
+.lj-teks small{font-size:12.5px;font-weight:500;color:var(--muted);margin-top:2px}
+.lj-panah{font-size:24px;color:var(--muted);transition:transform .2s;transform:rotate(90deg)}
+section.tertutup .lj-panah{transform:none}
+section.lipat:not(.tertutup){border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+section.lipat:not(.tertutup) > .lipat-judul{border-bottom:1px solid var(--line)}
