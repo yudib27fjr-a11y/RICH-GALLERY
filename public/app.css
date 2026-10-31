@@ -574,3 +574,5 @@ nav.tabs:not(.menggeser) button[data-v]{transition:transform .15s}
 section.tertutup .lj-panah{transform:none}
 section.lipat:not(.tertutup){border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
 section.lipat:not(.tertutup) > .lipat-judul{border-bottom:1px solid var(--line)}
+.btn.btn-add{border-color:color-mix(in srgb,var(--accent) 45%,var(--line));color:var(--accent);font-weight:700}
+.btn.btn-add.on{background:var(--accent);color:#fff;border-color:var(--accent)}
