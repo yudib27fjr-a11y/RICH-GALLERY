@@ -945,10 +945,62 @@ function menuAkun(){
     $("#akKeluar", m).onclick = () => konfirmasi("Keluar dari akun?", `Anda akan keluar dari akun ${toTitle(B.me.nama)}. Keranjang yang belum dibayar dikosongkan.`, "Keluar", async () => { await api("POST", "/api/logout").catch(() => {}); resetCart(); tampilLogin(); });
   });
 }
+/* Tekan lama ikon menu bawah (± ½ detik) lalu geser untuk memindah posisinya. Urutan tersimpan seperti di "Atur posisi tombol". */
+const geserNav = { baruSaja: false };
+function pasangGeserNav(){
+  const nav = $("#tabs"); if (!nav || nav.dataset.geser) return; nav.dataset.geser = "1";
+  let timer = 0, btn = null, aktif = false, x0 = 0, y0 = 0, gulir = 0;
+  const datar = () => getComputedStyle(nav).flexDirection !== "column";
+  const titik = e => { const t = e.touches ? e.touches[0] || e.changedTouches[0] : e; return { x: t.clientX, y: t.clientY }; };
+  const posisiAlami = () => { const r = btn.getBoundingClientRect(), m = new DOMMatrix(getComputedStyle(btn).transform); return { x: r.left + r.width / 2 - m.m41, y: r.top + r.height / 2 - m.m42 }; };
+  const ikuti = p => { const a = posisiAlami(); btn.style.transform = datar() ? `translateX(${p.x - a.x}px) scale(1.12)` : `translateY(${p.y - a.y}px) scale(1.12)`; };
+  const mulai = e => {
+    const b = e.target.closest("button[data-v]"); if (!b || (e.button != null && e.button !== 0)) return;
+    btn = b; const p = titik(e); x0 = p.x; y0 = p.y;
+    clearTimeout(timer); timer = setTimeout(() => {
+      aktif = true; nav.classList.add("menggeser"); btn.classList.add("diangkat");
+      try { navigator.vibrate && navigator.vibrate(25); } catch {}
+      toast("Geser ke posisi yang diinginkan, lalu lepas");
+    }, 450);
+  };
+  const gerak = e => {
+    if (!btn) return; const p = titik(e);
+    if (!aktif) { if (Math.abs(p.x - x0) > 8 || Math.abs(p.y - y0) > 8) { clearTimeout(timer); btn = null; } return; }
+    if (e.cancelable) e.preventDefault();
+    const h = datar(), item = $$("button[data-v]", nav).filter(x => x !== btn);
+    for (const x of item) {
+      const r = x.getBoundingClientRect(), c = h ? r.left + r.width / 2 : r.top + r.height / 2, v = h ? p.x : p.y;
+      const a = posisiAlami(), sayaC = h ? a.x : a.y;
+      if (c > sayaC && v > c && x.compareDocumentPosition(btn) & Node.DOCUMENT_POSITION_PRECEDING) { x.after(btn); break; }
+      if (c < sayaC && v < c && x.compareDocumentPosition(btn) & Node.DOCUMENT_POSITION_FOLLOWING) { x.before(btn); break; }
+    }
+    ikuti(p);
+    // gulir otomatis di dekat tepi
+    const r = nav.getBoundingClientRect(); cancelAnimationFrame(gulir);
+    const dorong = h ? (p.x < r.left + 40 ? -8 : p.x > r.right - 40 ? 8 : 0) : (p.y < r.top + 40 ? -8 : p.y > r.bottom - 40 ? 8 : 0);
+    if (dorong) { const jalan = () => { if (h) nav.scrollLeft += dorong; else nav.scrollTop += dorong; ikuti(p); gulir = requestAnimationFrame(jalan); }; gulir = requestAnimationFrame(jalan); }
+  };
+  const selesai = () => {
+    clearTimeout(timer); cancelAnimationFrame(gulir);
+    if (aktif && btn) {
+      btn.style.transform = ""; btn.classList.remove("diangkat"); nav.classList.remove("menggeser");
+      const T = tataTombol(); T.urut = $$("button[data-v]", nav).map(x => x.dataset.v); simpanTata(T);
+      geserNav.baruSaja = true; setTimeout(() => { geserNav.baruSaja = false; }, 350);
+      toast("Posisi menu disimpan");
+    }
+    aktif = false; btn = null;
+  };
+  nav.addEventListener("touchstart", mulai, { passive: true });
+  nav.addEventListener("touchmove", gerak, { passive: false });
+  nav.addEventListener("touchend", selesai); nav.addEventListener("touchcancel", selesai);
+  nav.addEventListener("mousedown", mulai); window.addEventListener("mousemove", e => { if (btn) gerak(e); }); window.addEventListener("mouseup", () => { if (btn) selesai(); });
+  nav.addEventListener("contextmenu", e => { if (e.target.closest("button[data-v]")) e.preventDefault(); });
+}
 function renderNav(){
   $("#tabs").innerHTML = `<button type="button" data-semua class="semua" aria-label="Semua menu">${ikonMenu("menu")}Menu</button>`
     + (() => { const ex = diAtas(), u = tataTombol().urut, L = daftarView().filter(v => !ex.includes(v[0]) && !v[2]); return [...u.map(k => L.find(v => v[0] === k)).filter(Boolean), ...L.filter(v => !u.includes(v[0]))]; })().map(([k, l]) => `<button type="button" data-v="${k}" class="${view === k ? "on" : ""}" aria-label="${l}" style="--c:${WARNA_MENU[k] || "#8e1d4b"}">${ikonMenu(k)}${l}</button>`).join("");
-  $$("#tabs button[data-v]").forEach(b => b.onclick = () => pindah(b.dataset.v));
+  $$("#tabs button[data-v]").forEach(b => b.onclick = () => { if (geserNav.baruSaja) return; pindah(b.dataset.v); });
+  pasangGeserNav();
   $("#tabs [data-semua]").onclick = semuaMenu;
   renderPintasan(); // tombol besar & pojok kanan atas, tampil di semua menu
   const br = $("#tbBrand"); if (br) br.classList.toggle("on", view === "atur" || daftarView().some(v => v[2] && v[0] === view));

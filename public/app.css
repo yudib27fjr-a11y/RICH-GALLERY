@@ -550,3 +550,11 @@ button.brand{flex:0 0 auto}
 .tb-kanan{display:flex;align-items:center;gap:8px}
 .kasir-bar[hidden]{display:none}
 @media (max-width:480px){.tb-kanan{gap:6px}}
+/* geser menu bawah: tekan lama lalu geser */
+nav.tabs button{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+nav.tabs.menggeser button[data-v]:not(.diangkat){animation:goyang .3s ease-in-out infinite alternate}
+nav.tabs button.diangkat{position:relative;z-index:5;transition:none;opacity:.95}
+nav.tabs button.diangkat .ic{box-shadow:0 10px 20px -6px var(--c),0 0 0 3px var(--surface),0 0 0 5px var(--c)}
+nav.tabs:not(.menggeser) button[data-v]{transition:transform .15s}
+@keyframes goyang{from{transform:rotate(-2deg)}to{transform:rotate(2deg)}}
+@media (prefers-reduced-motion:reduce){nav.tabs.menggeser button[data-v]:not(.diangkat){animation:none}}
