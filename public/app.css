@@ -541,3 +541,12 @@ button.brand{flex:0 0 auto}
 .kasir-bar{display:flex;gap:10px}
 .kasir-besar.kb-pesanan{--g1:#bfdbfe;--g2:#3b82f6;--g3:#1e3a8a}
 .kasir-bar .kasir-besar{flex:1 1 0;width:auto;max-width:240px;min-width:0}
+/* warna tombol mengikuti warna menu; Kasir, Pesanan, Transaksi, Absen pakai gradasi khusus */
+.tb-btn,.kasir-besar{--g2:var(--c,#8e1d4b);--g1:color-mix(in srgb,var(--g2) 35%,#fff);--g3:color-mix(in srgb,var(--g2) 65%,#000)}
+.kb-kasir,.tb-kasir{--g1:#fbcfe8;--g2:#ec4899;--g3:#9d174d}
+.kb-pesanan,.tb-pesanan{--g1:#bfdbfe;--g2:#3b82f6;--g3:#1e3a8a}
+.tb-riwayat,.kb-riwayat{--g1:#fde68a;--g2:#fb923c;--g3:#e11d48}
+.tb-absenku,.kb-absenku{--g1:#bbf7d0;--g2:#22c55e;--g3:#166534}
+.tb-kanan{display:flex;align-items:center;gap:8px}
+.kasir-bar[hidden]{display:none}
+@media (max-width:480px){.tb-kanan{gap:6px}}
