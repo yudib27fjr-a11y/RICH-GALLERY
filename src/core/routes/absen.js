@@ -110,7 +110,7 @@ route("POST", "/api/login-wajah/konfirmasi", false, ({ body, ctx }) => {
   if (!k || k.sampai < Date.now()) throw new HttpError(401, "Konfirmasi kedaluwarsa — pindai wajah lagi");
   const u = one("SELECT id, nama, aktif FROM users WHERE id = ? AND peran = 'admin'", [k.id]); if (!u || !u.aktif) throw new HttpError(401, "Akun tidak aktif");
   buatSesi(ctx, u.id);
-  antreNotif(`🔐 Admin ${u.nama} masuk dengan wajah`, `Di ${k.tempat} · ${sekarang().tgl} ${sekarang().jam}. Bukan Anda? Ganti password di Pengaturan → Pengguna.`, "/#atur");
+  antreNotif(`🔐 Admin ${u.nama} masuk dengan wajah`, `Di ${k.tempat} · ${sekarang().tgl} ${sekarang().jam}. Bukan Anda? Ganti password di Pengaturan → Pengguna.`, "/#atur?bagian=pengguna");
   return { ok: true, nama: u.nama };
 });
 const wajahAbsen = b => { const d = Number(b.wajah); return isFinite(d) && d >= 0 && d < 5 ? { wajah: Math.round(d * 1000) / 1000, wajah_ok: b.wajah_ok ? 1 : 0 } : { wajah: null, wajah_ok: null }; };

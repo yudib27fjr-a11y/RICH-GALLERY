@@ -135,7 +135,7 @@ export function catatBelanja(p, { sumber = "shopee", oleh = "email" } = {}){
       status, relevan ? null : "Tidak ada barang toko", oleh]).lastInsertRowid);
     if (status === "kirim") {
       const brg = items.filter(i => i.toko).map(i => `${i.nama.slice(0, 40)}${i.variasi ? " (" + i.variasi + ")" : ""} ×${i.qty}`).join(", ");
-      antreNotif(`🛒 Belanja ${sumber === "shopee" ? "Shopee" : "online"} tercatat · ${p.toko}`, `${brg}\nDalam pengiriman — konfirmasi saat barang datang`, "/#belanja");
+      antreNotif(`🛒 Belanja ${sumber === "shopee" ? "Shopee" : "online"} tercatat · ${p.toko}`, `${brg}\nDalam pengiriman — konfirmasi saat barang datang`, "/#belanja?status=kirim");
     }
     return { id, baru: true, relevan, status };
   });

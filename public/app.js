@@ -4234,7 +4234,7 @@ const IKON_ATUR = [[/perangkat ini/i, "🖨️", "Printer, cetak uji, tema"], [/
   [/perangkat cabang|server pusat/i, "📱", "HP / tablet kasir"], [/whatsapp/i, "💬", "Pesan WA otomatis"], [/canva/i, "🎨", "Desain kartu ucapan"], [/kartu ucapan/i, "💌", "Cetak kartu"], [/nota/i, "🧾", "Nota / invoice A4"],
   [/google sheet/i, "🔄", "Sinkron pembukuan"], [/jam kerja/i, "⏱️", "Shift, lembur, insentif lain"], [/absensi/i, "🕘", "Lokasi, perangkat, wajah"], [/notifikasi/i, "🔔", "Notifikasi HP admin"],
   [/hard reset/i, "⚠️", "Hapus semua data"], [/cadangan/i, "💾", "Backup & pulihkan data"], [/mode aplikasi/i, "📲", "Versi & pembaruan aplikasi"]];
-let aturTerbuka = "";
+let aturTerbuka = "", aturBuka = "";
 function pasangLipatAtur(){
   const daftar = $("#aturDaftar"); if (!daftar) return;
   const hiasi = () => {
@@ -4246,6 +4246,7 @@ function pasangLipatAtur(){
       const teks = h.textContent.trim(), m = IKON_ATUR.find(([r]) => r.test(teks));
       const bersih = teks.replace(/^[^\p{L}\p{N}]+/u, "");
       h.innerHTML = `<span class="lj-ikon">${m ? m[1] : "⚙️"}</span><span class="lj-teks"><span>${esc(bersih)}</span>${m ? `<small>${esc(m[2])}</small>` : ""}</span><span class="lj-panah" aria-hidden="true">›</span>`;
+      if (aturBuka && bersih.toLowerCase().includes(aturBuka.toLowerCase())) { aturTerbuka = bersih; aturBuka = ""; setTimeout(() => { try { sec.scrollIntoView({ block: "start" }); } catch {} }, 150); }
       if (bersih === aturTerbuka) sec.classList.remove("tertutup");
       const buka = () => { const tutup = !sec.classList.contains("tertutup"); $$(":scope > section", daftar).forEach(x => x.classList.add("tertutup")); aturTerbuka = tutup ? "" : bersih; if (tutup) return; sec.classList.remove("tertutup"); setTimeout(() => { try { sec.scrollIntoView({ block: "start", behavior: "smooth" }); } catch {} }, 60); };
       h.onclick = buka; h.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); buka(); } };
@@ -4820,6 +4821,7 @@ function aturMode(){
 
 /* ================= mulai ================= */
 async function mulai(){
+  try { const h = location.hash.slice(1); if (h.includes("?")) sessionStorage.setItem("rg_tujuan", h); } catch {} // dibuka dari notifikasi: diingat sampai selesai login
   try {
     if (LOKAL && !window.RG_LOKAL) await import("/lokal/mesin.js");
     const st = await api("GET", "/api/status");
@@ -4843,36 +4845,49 @@ async function mulai(){
   halamanTampil();
   bukaTautanNotif();
   selesaiSambungSosmed();
-  setTimeout(async () => { await pengingatPesanan(); setTimeout(pengingatTugas, 400); }, 800);
+  setTimeout(async () => { if (dariNotif) return; await pengingatPesanan(); setTimeout(pengingatTugas, 400); }, 800); // dibuka dari notifikasi: jangan ditutupi pengingat
 }
 /** Ketuk notifikasi → langsung ke halamannya: transaksi & pesanan → halaman Transaksi (baris transaksinya disorot),
  *  absen → Rekap Absen tanggal itu (baris karyawannya disorot). */
 const sorotBaris = el => { if (!el) return; el.scrollIntoView({ block: "center" }); el.classList.remove("sorot"); void el.offsetWidth; el.classList.add("sorot"); };
+let dariNotif = false;
+/** Ketuk notifikasi → langsung ke halaman yang sesuai (tujuan disimpan dulu bila harus login). */
 async function bukaTautanNotif(){
-  const [v, q] = location.hash.slice(1).split("?");
-  if (!q || !B) return;
+  let h = location.hash.slice(1);
+  if (!h.includes("?")) {
+    let t = ""; try { t = sessionStorage.getItem("rg_tujuan") || ""; } catch {}
+    if (t) h = t;
+    else { if (B && h && h !== view && daftarView().some(x => x[0] === h)) pindah(h); return; } // alamat biasa (mis. tombol kembali)
+  }
+  try { sessionStorage.removeItem("rg_tujuan"); } catch {}
+  const [v, q = ""] = h.split("?");
+  if (!B || !v) return;
   const p = new URLSearchParams(q);
-  const tujuan = v === "absen" ? "absen" : ["produksi", "belanja", "konten", "promosi"].includes(v) ? v : "riwayat"; // pesanan juga ke halaman Transaksi
+  const tujuan = v === "pesanan" && p.get("id") ? "pesanan" : SEMUA_VIEW.some(x => x[0] === v) ? v : q ? "riwayat" : "";
+  if (!tujuan) return;
   try { history.replaceState(null, "", "#" + tujuan); } catch {}
-  if (!daftarView().some(x => x[0] === tujuan)) return;
-  closeModal();
-  if (["produksi", "belanja", "konten", "promosi"].includes(tujuan)) { view = tujuan; await render(); return; }
+  if (!daftarView().some(x => x[0] === tujuan)) { toast("Halaman itu tidak tersedia di akun / perangkat ini"); return; }
+  dariNotif = true; closeModal();
+  const tgl = /^\d{4}-\d{2}-\d{2}$/.test(p.get("tgl") || "") ? p.get("tgl") : "";
   if (tujuan === "absen") {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(p.get("tgl") || "")) aDari = aSampai = p.get("tgl");
+    if (tgl) aDari = aSampai = tgl;
     view = "absen"; await render();
     sorotBaris($(`#aIsi .li[data-k="${p.get("tgl")}|${+p.get("u") || 0}"]`));
     return;
   }
-  rQ = ""; if (isAdmin()) rDari = rSampai = today(); // notifikasi = transaksi baru: tampilkan hari ini tanpa saringan
-  view = "riwayat"; await render();
-  sorotBaris($(`#rList .li[data-id="${+p.get("id") || 0}"]`));
+  if (tujuan === "produksi" && tgl) pPer = periodeDari(tgl, B.toko.periode_mulai);
+  if (tujuan === "belanja") blStatus = p.get("status") || "kirim";
+  if (tujuan === "atur" && p.get("bagian")) aturBuka = p.get("bagian");
+  if (tujuan === "riwayat") { rQ = ""; if (isAdmin()) rDari = rSampai = tgl || today(); } // notifikasi = transaksi baru: tampilkan tanpa saringan
+  view = tujuan; await render();
+  if (tujuan === "riwayat" && p.get("id")) setTimeout(() => sorotBaris($(`#rList .li[data-id="${+p.get("id") || 0}"]`)), 400);
 }
 // Aplikasi sudah terbuka saat notifikasi diketuk: alamat berubah tanpa memuat ulang / pesan dari sw.js.
-window.addEventListener("hashchange", () => { if (location.hash.includes("?")) bukaTautanNotif(); });
+window.addEventListener("hashchange", () => { const h = location.hash.slice(1).split("?")[0]; if (location.hash.includes("?") || (h && h !== view)) bukaTautanNotif(); });
 if (!LOKAL && "serviceWorker" in navigator) {
   navigator.serviceWorker.addEventListener("message", e => {
     const u = e.data && e.data.rgBuka; if (!u) return;
-    try { const h = new URL(u, location.origin).hash; if (h.includes("?")) { history.replaceState(null, "", h); bukaTautanNotif(); } } catch { /* abaikan */ }
+    try { const h = new URL(u, location.origin).hash; if (h.length > 1) { history.replaceState(null, "", h); bukaTautanNotif(); } } catch { /* abaikan */ }
   });
   // Pakai sw.js terbaru (aturan buka notifikasi bisa berubah).
   navigator.serviceWorker.getRegistration("/").then(r => r && r.update()).catch(() => {});
