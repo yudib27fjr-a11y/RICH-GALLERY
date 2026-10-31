@@ -460,15 +460,17 @@ nav.tabs button:active .ic{transform:scale(.92)}
 .pill.metode-tunai{background:#16a34a22;color:#16a34a}.pill.metode-tf{background:#2563eb22;color:#3b82f6}.pill.metode-qris{background:#9333ea22;color:#a855f7}
 /* pintasan Transaksi & Kasir di pojok kanan atas (tampil di semua menu) */
 .tb-btn{display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:0;padding:0;margin-left:2px;cursor:pointer;font:inherit;font-size:10.5px;font-weight:800;letter-spacing:.2px;color:var(--ink);flex:0 0 auto;-webkit-tap-highlight-color:transparent}
-.tb-btn .ic{position:relative;width:48px;height:48px;border-radius:16px;display:grid;place-items:center;color:#fff;
-  box-shadow:0 10px 22px -10px var(--g3),0 2px 6px -2px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.55),inset 0 -6px 12px -6px rgba(60,0,30,.35);transition:transform .15s,box-shadow .15s;
+.tb-btn .ic{position:relative;width:44px;height:44px;border-radius:15px;display:grid;place-items:center;color:#fff;
+  box-shadow:0 10px 22px -10px var(--g3),0 2px 6px -2px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.55),inset 0 -6px 12px -6px rgba(60,0,30,.35);transition:transform .15s,box-shadow .15s,width .15s,height .15s;
   background:radial-gradient(120% 120% at 20% 10%,var(--g1) 0%,var(--g2) 42%,var(--g3) 100%)}
 .tb-trx{--g1:#fde68a;--g2:#fb923c;--g3:#e11d48}
 .tb-kasir{--g1:#fbcfe8;--g2:#ec4899;--g3:#9d174d}
-.tb-kasir .ic{width:56px;height:56px;border-radius:18px}
-.tb-kasir .ic svg{width:29px!important;height:29px!important}
+.tb-absen{--g1:#bbf7d0;--g2:#22c55e;--g3:#166534}
+/* semua tombol atas sama besar; yang sedang dibuka sedikit membesar */
+.tb-btn.on .ic{width:54px;height:54px;border-radius:18px}
+.tb-btn.on .ic svg{width:28px;height:28px}
 .tb-btn .ic::after{content:"";position:absolute;inset:3px 3px auto 3px;height:45%;border-radius:13px 13px 40% 40%;background:linear-gradient(rgba(255,255,255,.35),rgba(255,255,255,0));pointer-events:none}
-.tb-btn .ic svg{width:25px;height:25px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.25))}
+.tb-btn .ic svg{width:23px;height:23px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.25))}
 .tb-btn:hover .ic{transform:translateY(-1px) rotate(-3deg)}
 .tb-btn:active .ic{transform:scale(.93)}
 .tb-btn.on{color:var(--g2)}

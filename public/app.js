@@ -822,7 +822,7 @@ function shell(){
       <button class="brand" id="tbBrand" type="button" aria-haspopup="dialog" title="Akun, pengaturan & menu admin"><img src="/monogram.png" alt="" width="34" height="34"><span class="brand-teks"><h1>${esc(toTitle(B.toko.nama_toko))}<svg class="brand-panah" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></h1><small>${esc(toTitle(B.me.nama))} · ${isAdmin() ? "Admin" : "Karyawan"}</small></span></button>
       <span class="sp"></span>
       ${isAdmin() ? `<span class="sync-dot" id="syncDot" title="Status sinkron Google Sheet"></span>` : ""}${LOKAL ? `<button class="sync-chip" id="syncChip" type="button" hidden></button>` : ""}
-      ${kioskInfo && kioskInfo.boleh ? `<button class="btn sm absen-masuk" id="tbAbsen" type="button">🕘 Absen</button>` : ""}
+      ${kioskInfo && kioskInfo.boleh ? `<button class="tb-btn tb-absen" id="tbAbsen" type="button" title="Absen" aria-label="Absen"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON.absenku}</svg></span><span>Absen</span></button>` : ""}
       <button class="tb-btn tb-trx" id="tbTrx" type="button" title="Transaksi" aria-label="Transaksi"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON.struk}</svg></span><span>Transaksi</span></button>
       <button class="tb-btn tb-kasir" id="tbKasir" type="button" title="Kasir" aria-label="Kasir"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON.kasir}</svg></span><span>Kasir</span></button>
     </header>
@@ -895,6 +895,7 @@ function renderNav(){
   $("#tabs [data-semua]").onclick = semuaMenu;
   const tr = $("#tbTrx"); if (tr) { tr.hidden = !daftarView().some(v => v[0] === "riwayat"); tr.classList.toggle("on", view === "riwayat"); } // Transaksi & Kasir: pintasan di pojok kanan atas, tampil di semua menu
   const ks = $("#tbKasir"); if (ks) ks.classList.toggle("on", view === "kasir");
+  const ab = $("#tbAbsen"); if (ab) ab.classList.toggle("on", view === "absenku");
   const br = $("#tbBrand"); if (br) br.classList.toggle("on", view === "atur" || daftarView().some(v => v[2] && v[0] === view));
   const on = $("#tabs button.on"); if (on && on.scrollIntoView) try { on.scrollIntoView({ block: "nearest", inline: "center" }); } catch {}
 }
