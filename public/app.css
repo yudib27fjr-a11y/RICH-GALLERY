@@ -538,3 +538,6 @@ button.brand{flex:0 0 auto}
 .kasir-bar{padding-bottom:8px;position:relative;z-index:2}
 .kolom-isi > main{padding-top:8px}
 @media (min-width:900px){.kasir-bar{padding-bottom:8px}.kolom-isi > main{padding-top:10px}}
+.kasir-bar{display:flex;gap:10px}
+.kasir-besar.kb-pesanan{--g1:#bfdbfe;--g2:#3b82f6;--g3:#1e3a8a}
+.kasir-bar .kasir-besar{flex:1 1 0;width:auto;max-width:240px;min-width:0}
