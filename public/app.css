@@ -503,3 +503,20 @@ button.brand:active .brand-panah{transform:translateY(2px)}
 .btn.ide-tt{background:#111;color:#fff;border-color:#111}.btn.ide-ig{background:linear-gradient(45deg,#f58529,#dd2a7b,#8134af);color:#fff;border-color:transparent}
 .li.ide-pemicu{background:color-mix(in srgb,#eab308 12%,transparent)}
 .ide-kartu a.btn{text-decoration:none}
+/* HP: tulisan nama toko tidak boleh terpotong — tombol & jarak dikecilkan */
+button.brand{flex:0 0 auto}
+.brand-teks h1{white-space:nowrap;overflow:visible}
+@media (max-width:480px){
+  .topbar{gap:6px;padding-left:12px;padding-right:8px}
+  button.brand{gap:7px;padding:4px 4px 4px 2px}
+  button.brand img{width:30px;height:30px}
+  .brand-teks h1{font-size:16px!important}
+  .brand-panah{width:13px;height:13px}
+  .tb-btn{margin-left:0;font-size:9.5px}
+  .tb-btn .ic{width:40px;height:40px;border-radius:13px}
+  .tb-btn .ic svg{width:21px;height:21px}
+  .tb-btn.on .ic{width:48px;height:48px;border-radius:16px}
+  .tb-btn.on .ic svg{width:25px;height:25px}
+  .sync-dot{margin:0 -2px}
+}
+@media (max-width:350px){.brand-teks small{display:none!important}.brand-panah{display:none}}
