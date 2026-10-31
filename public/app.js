@@ -824,10 +824,12 @@ function shell(){
       ${isAdmin() ? `<span class="sync-dot" id="syncDot" title="Status sinkron Google Sheet"></span>` : ""}${LOKAL ? `<button class="sync-chip" id="syncChip" type="button" hidden></button>` : ""}
       ${kioskInfo && kioskInfo.boleh ? `<button class="tb-btn tb-absen" id="tbAbsen" type="button" title="Absen" aria-label="Absen"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON.absenku}</svg></span><span>Absen</span></button>` : ""}
       <button class="tb-btn tb-trx" id="tbTrx" type="button" title="Transaksi" aria-label="Transaksi"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON.struk}</svg></span><span>Transaksi</span></button>
-      <button class="tb-btn tb-kasir" id="tbKasir" type="button" title="Kasir" aria-label="Kasir"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON.kasir}</svg></span><span>Kasir</span></button>
     </header>
     <nav class="tabs" id="tabs"></nav>
-    <main id="main"></main></div>`;
+    <div class="kolom-isi">
+      <div class="kasir-bar"><button class="kasir-besar" id="tbKasir" type="button" aria-label="Kasir"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON.kasir}</svg></span><span class="kb-teks"><b>Kasir</b><small>Jual & bayar</small></span></button></div>
+      <main id="main"></main>
+    </div></div>`;
   const ab = $("#tbAbsen"); if (ab) ab.onclick = () => pindah("absenku");
   $("#tbTrx").onclick = () => pindah("riwayat");
   $("#tbKasir").onclick = () => pindah("kasir");
