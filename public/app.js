@@ -875,7 +875,7 @@ const WARNA_MENU = { kasir: "#ee4d2d", absenku: "#16a34a", pesanan: "#2563eb", j
   absen: "#7c3aed", gaji: "#047857", konten: "#e11d48", promosi: "#c026d3", atur: "#64748b", menu: "#8e1d4b" };
 ICON.menu = '<rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/>';
 const ikonMenu = k => `<span class="ic" style="--c:${WARNA_MENU[k] || "#8e1d4b"};--cs:${WARNA_MENU[k] || "#8e1d4b"}1f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[k] || ""}</svg></span>`;
-const DI_ATAS = ["kasir", "riwayat", "atur"]; // ada di bar atas / menu akun, tidak diulang di deretan menu
+const DI_ATAS = ["kasir", "riwayat", "atur", "absenku"]; // ada di bar atas / menu akun, tidak diulang di deretan menu
 /** Ketuk nama toko: akun, menu khusus admin, pengaturan, keluar. */
 function menuAkun(){
   const adminV = daftarView().filter(v => v[2]);
