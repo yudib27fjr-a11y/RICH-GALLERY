@@ -192,8 +192,9 @@ function datang(id, body, user){
 
 /* ---------- Rute (di perangkat kasir diteruskan ke server pusat) ---------- */
 const AKSI = {
-  daftar: ({ status }, user) => all(`SELECT * FROM belanja WHERE status = ? ORDER BY ${status === "kirim" ? "tgl, id" : "id DESC"} LIMIT 200`, [["kirim", "datang", "abaikan", "batal"].includes(status) ? status : "kirim"])
-    .map(b => untuk({ ...b, items: JSON.parse(b.items || "[]") }, user)),
+  daftar: ({ status }, user) => all(`SELECT *, nota IS NOT NULL ada_nota FROM belanja WHERE status = ? ORDER BY ${status === "kirim" ? "tgl, id" : "id DESC"} LIMIT 200`, [["kirim", "datang", "abaikan", "batal"].includes(status) ? status : "kirim"])
+    .map(({ nota, ...b }) => untuk({ ...b, items: JSON.parse(b.items || "[]") }, user)),
+  nota: ({ id }, user) => { if (user.peran !== "admin") throw bad("Nota hanya untuk admin"); const b = muat(id); const r = one("SELECT nota FROM belanja WHERE id = ?", [b.id]); if (!r || !r.nota) throw notFound("Nota tidak ada"); return { nota: r.nota }; },
   hitung: () => ({ kirim: one("SELECT COUNT(*) n FROM belanja WHERE status = 'kirim'").n }),
   datang: ({ id, data }, user) => datang(id, data || {}, user),
   status: ({ id, status }, user) => {
@@ -216,11 +217,15 @@ const AKSI = {
       qty: angka(i.qty, { min: 0.01, max: 1e7, wajib: true, nama: "Jumlah" }), harga: user.peran === "admin" ? (angka(i.harga, { min: 0, max: 1e10, bulat: true, nama: "Harga" }) ?? 0) : 0 }));
     if (!items.length) throw bad("Isi minimal satu barang");
     const sub = items.reduce((a, i) => a + i.harga * i.qty, 0), ongkir = user.peran === "admin" ? (angka(d.ongkir, { min: 0, max: 1e9, bulat: true }) ?? 0) : 0;
-    const no = teks(d.no, { max: 30, nama: "No pesanan" }) || `M${Date.now().toString(36).toUpperCase()}`;
-    if (one("SELECT 1 x FROM belanja WHERE sumber = ? AND no_pesanan = ?", ["manual", no])) throw bad("Nomor pesanan itu sudah dicatat");
-    const id = Number(run(`INSERT INTO belanja(sumber, no_pesanan, toko, tgl, items, subtotal, ongkir, biaya, total, metode, status, oleh) VALUES ('manual',?,?,?,?,?,?,0,?,?,'kirim',?)`,
-      [no, teks(d.toko, { max: 80, nama: "Toko" }) || "Belanja online", tanggal(d.tgl || sekarang().tgl), JSON.stringify(items.map(i => { const c = cocokkanBarang(i.nama); return { ...i, toko: true, kata: c.kata, barang: c.barang }; })),
-        Math.round(sub), ongkir, Math.round(sub + ongkir), teks(d.metode, { max: 40 }) || "", user.nama]).lastInsertRowid);
+    // Belanja offline (beli langsung di toko): foto / PDF nota sebagai bukti
+    const offline = !!d.offline, nota = d.nota ? String(d.nota) : null;
+    if (nota && (!/^data:(image\/(jpeg|png|webp)|application\/pdf);base64,[A-Za-z0-9+/=]+$/.test(nota) || nota.length > 1_900_000)) throw bad("Nota harus foto (JPG/PNG) atau PDF, maksimal ±1,4 MB");
+    const sumber = offline ? "offline" : "manual";
+    const no = teks(d.no, { max: 30, nama: "No pesanan" }) || `${offline ? "N" : "M"}${Date.now().toString(36).toUpperCase()}`;
+    if (one("SELECT 1 x FROM belanja WHERE sumber = ? AND no_pesanan = ?", [sumber, no])) throw bad("Nomor nota / pesanan itu sudah dicatat");
+    const id = Number(run(`INSERT INTO belanja(sumber, no_pesanan, toko, tgl, items, subtotal, ongkir, biaya, total, metode, status, oleh, nota) VALUES (?,?,?,?,?,?,?,0,?,?,'kirim',?,?)`,
+      [sumber, no, teks(d.toko, { max: 80, nama: "Toko" }) || (offline ? "Belanja offline" : "Belanja online"), tanggal(d.tgl || sekarang().tgl), JSON.stringify(items.map(i => { const c = cocokkanBarang(i.nama); return { ...i, toko: true, kata: c.kata, barang: c.barang }; })),
+        Math.round(sub), ongkir, Math.round(sub + ongkir), teks(d.metode, { max: 40 }) || "", user.nama, nota]).lastInsertRowid);
     return { id };
   },
   hapus: ({ id }, user) => { if (user.peran !== "admin") throw bad("Hanya admin"); const b = muat(id); if (b.status === "datang") throw bad("Belanja yang sudah datang tidak bisa dihapus (stok sudah masuk)"); run("DELETE FROM belanja WHERE id = ?", [b.id]); return { ok: true }; },
@@ -235,7 +240,8 @@ const jalankanAksi = async (aksi, data, user) => {
 };
 route("GET", "/api/belanja", "semua", ({ query, user }) => jalankanAksi("daftar", { status: query.status || "kirim" }, user));
 route("GET", "/api/belanja/hitung", "semua", ({ user }) => jalankanAksi("hitung", {}, user));
-route("POST", "/api/belanja", "semua", ({ body, user }) => jalankanAksi("manual", { data: body }, user));
+route("POST", "/api/belanja", "semua", ({ body, user }) => jalankanAksi("manual", { data: body }, user), { batas: 2_500_000 });
+route("GET", "/api/belanja/:id/nota", "admin", ({ params, user }) => jalankanAksi("nota", { id: +params.id }, user));
 route("POST", "/api/belanja/tempel", "admin", ({ body, user }) => jalankanAksi("tempel", { isi: String(body.isi || "").slice(0, 100000) }, user), { batas: 300_000 });
 route("POST", "/api/belanja/:id/datang", "semua", ({ params, body, user }) => jalankanAksi("datang", { id: +params.id, data: body }, user));
 route("POST", "/api/belanja/:id/status", "admin", ({ params, body, user }) => jalankanAksi("status", { id: +params.id, status: body.status }, user));

@@ -2671,7 +2671,7 @@ const ALAMAT_BELANJA = "belanja@richgallery.my.id";
 async function vBelanja(){
   const st = blStatus;
   $("#main").innerHTML = `<div class="view-head"><h2>Belanja online</h2><span class="sp"></span>
-      <button class="btn sm" id="blManual" type="button">+ Catat belanja</button>${isAdmin() ? `<button class="btn sm" id="blTempel" type="button">📋 Tempel email Shopee</button>` : ""}</div>
+      <button class="btn sm pri" id="blOffline" type="button">🧾 Belanja offline (nota)</button><button class="btn sm" id="blManual" type="button">+ Catat belanja</button>${isAdmin() ? `<button class="btn sm" id="blTempel" type="button">📋 Tempel email Shopee</button>` : ""}</div>
     <div class="seg" id="blS" style="display:flex;margin-bottom:10px">${[["kirim", "🚚 Dikirim"], ["datang", "📦 Datang"], ...(isAdmin() ? [["abaikan", "Diabaikan"], ["batal", "Batal"]] : [])]
       .map(([k, l]) => `<button type="button" data-s="${k}" style="flex:1" class="${st === k ? "on" : ""}">${l}</button>`).join("")}</div>
     <div id="blL"><div class="empty">Memuat…</div></div>
@@ -2683,6 +2683,7 @@ async function vBelanja(){
       <button class="btn sm" id="blSurat" type="button" style="align-self:flex-start">📧 Lihat email masuk lain (kode konfirmasi Gmail)</button><div id="blSuratL"></div></div></details>` : ""}`;
   $$("#blS button").forEach(b => b.onclick = () => { blStatus = b.dataset.s; vBelanja(); });
   $("#blManual").onclick = belanjaManual;
+  $("#blOffline").onclick = belanjaOffline;
   const tp = $("#blTempel"); if (tp) tp.onclick = tempelEmail;
   const pn = $("#blPanel"); if (pn) pn.ontoggle = () => { blPanelBuka = pn.open; };
   const muatSurat = async () => {
@@ -2700,17 +2701,19 @@ async function vBelanja(){
   $("#blL").innerHTML = L.length ? `<div class="stack">${L.map(b => {
     const lama = st === "kirim" && (Date.parse(today()) - Date.parse(b.tgl)) / 864e5;
     return `<div class="panel stack bl-kartu" style="gap:6px">
-      <div class="row" style="align-items:center;gap:6px"><span class="pill ${b.sumber === "shopee" ? "bl-shopee" : "mut"}">${b.sumber === "shopee" ? "🛒 Shopee" : "✍️ Manual"}</span><b style="flex:1">${b.sumber === "shopee" ? "Belanja Shopee" : "Belanja online"}${isAdmin() && (b.toko || b.no_pesanan) ? ` <button class="btn sm ghost bl-intip" type="button" title="Lihat nama toko (admin)" aria-label="Lihat nama toko">👁</button><span class="bl-rahasia muted" hidden> · ${esc(b.toko || "")}${b.no_pesanan && b.sumber !== "manual" ? " #" + esc(b.no_pesanan) : ""}</span>` : ""}</b>${totalBelanja(b) ? `<b class="num">${rp(totalBelanja(b))}</b>` : ""}</div>
+      <div class="row" style="align-items:center;gap:6px"><span class="pill ${b.sumber === "shopee" ? "bl-shopee" : b.sumber === "offline" ? "ok" : "mut"}">${b.sumber === "shopee" ? "🛒 Shopee" : b.sumber === "offline" ? "🧾 Offline" : "✍️ Manual"}</span><b style="flex:1">${b.sumber === "shopee" ? "Belanja Shopee" : b.sumber === "offline" ? "Belanja offline" : "Belanja online"}${isAdmin() && (b.toko || b.no_pesanan) ? ` <button class="btn sm ghost bl-intip" type="button" title="Lihat nama toko (admin)" aria-label="Lihat nama toko">👁</button><span class="bl-rahasia muted" hidden> · ${esc(b.toko || "")}${b.no_pesanan && b.sumber !== "manual" ? " #" + esc(b.no_pesanan) : ""}</span>` : ""}</b>${totalBelanja(b) ? `<b class="num">${rp(totalBelanja(b))}</b>` : ""}</div>
       <div class="small muted">dipesan ${esc(tglID(b.tgl))}${b.metode ? " · " + esc(b.metode) : ""}${lama >= 5 ? ` · <b style="color:var(--warn)">sudah ${Math.round(lama)} hari</b>` : ""}${b.alasan ? " · " + esc(b.alasan) : ""}</div>
       <div class="stack" style="gap:4px">${b.items.map(i => `<div class="small bl-item ${i.toko ? "" : "bukan"}"><b>${esc(i.nama)}</b>${i.variasi ? ` <span class="pill mut">${esc(i.variasi)}</span>` : ""} ×${fq(i.qty)}${i.harga != null && i.harga ? ` · ${rp(i.harga)}` : ""}
         ${i.masuk ? `<div class="ok-teks">✅ masuk stok: ${esc(i.masuk.nama)} +${fq(i.masuk.qty)}${i.datang !== i.qty ? ` (datang ${fq(i.datang)} dari ${fq(i.qty)})` : ""}</div>` : st === "datang" ? `<div class="muted">tidak masuk stok${i.datang != null && i.datang !== i.qty ? ` · datang ${fq(i.datang)} dari ${fq(i.qty)}` : ""}</div>`
           : i.barang ? `<div class="muted">↔ ${esc(i.barang.nama)} (${esc(i.barang.kode)})</div>` : i.toko ? `<div class="muted">barang toko${i.kata ? " (" + esc(i.kata.toLowerCase()) + ")" : ""} · pilih barangnya saat datang</div>` : `<div class="muted">bukan barang toko</div>`}</div>`).join("")}</div>
+      ${b.ada_nota && isAdmin() ? `<button class="btn sm" data-nota="${b.id}" type="button">🧾 Lihat nota</button>` : ""}
       ${b.catatan ? `<div class="small">📝 ${esc(b.catatan)}</div>` : ""}${b.datang_at ? `<div class="small muted">Datang ${esc(b.datang_at)} · dicek ${esc(b.datang_oleh || "")}${b.nominal_bayar ? " · pengeluaran " + rp(b.nominal_bayar) : ""}</div>` : ""}
       <div class="row" style="gap:6px;flex-wrap:wrap">${st === "kirim" ? `<button class="btn pri" data-datang="${b.id}" type="button">📦 Barang datang</button>` : ""}
         ${isAdmin() && st !== "datang" ? `${st !== "kirim" ? `<button class="btn sm" data-st="${b.id}" data-v="kirim" type="button">Pindah ke dalam pengiriman</button>` : `<button class="btn sm ghost" data-st="${b.id}" data-v="abaikan" type="button">Abaikan</button><button class="btn sm ghost" data-st="${b.id}" data-v="batal" type="button">Batal</button>`}<button class="btn sm ghost danger-teks" data-hapus="${b.id}" type="button">Hapus</button>` : ""}</div></div>`; }).join("")}</div>`
     : `<div class="list"><div class="empty">${st === "kirim" ? "Tidak ada belanja yang sedang dikirim." : "Belum ada."}</div></div>`;
   $$(".bl-intip").forEach(x => x.onclick = () => { const r = x.nextElementSibling; r.hidden = !r.hidden; x.textContent = r.hidden ? "👁" : "🙈"; });
   $$("[data-datang]").forEach(x => x.onclick = () => barangDatang(L.find(b => b.id === +x.dataset.datang)));
+  $$("[data-nota]").forEach(x => x.onclick = () => lihatNotaBelanja(+x.dataset.nota, x));
   $$("[data-st]").forEach(x => x.onclick = () => coba(async () => { await api("POST", `/api/belanja/${x.dataset.st}/status`, { status: x.dataset.v }); vBelanja(); }, x));
   $$("[data-hapus]").forEach(x => x.onclick = () => konfirmasi("Hapus catatan belanja ini?", "Hanya catatannya yang dihapus.", "Hapus", async () => { await api("DELETE", `/api/belanja/${x.dataset.hapus}`); vBelanja(); }));
 }
@@ -2750,11 +2753,68 @@ function tempelEmail(){
     }, e.target);
   });
 }
+/** Belanja offline (beli langsung di toko / pasar): foto atau PDF nota + daftar barang. Bisa langsung "sudah diterima" → masuk stok. */
+async function bacaNota(file){
+  if (!file) return "";
+  if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) {
+    if (file.size > 1_400_000) throw new Error("PDF terlalu besar (maks. ±1,4 MB). Foto notanya saja.");
+    return await new Promise((ok, gagal) => { const r = new FileReader(); r.onload = () => ok(String(r.result).replace(/^data:[^;]*;/, "data:application/pdf;")); r.onerror = () => gagal(new Error("PDF tidak bisa dibaca")); r.readAsDataURL(file); });
+  }
+  const url = URL.createObjectURL(file), img = new Image(); img.src = url;
+  try { await img.decode(); } catch { URL.revokeObjectURL(url); throw new Error("Foto tidak bisa dibaca"); }
+  URL.revokeObjectURL(url);
+  const sk = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement("canvas");
+  c.width = Math.round(img.naturalWidth * sk); c.height = Math.round(img.naturalHeight * sk); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  let q = 0.75, d = c.toDataURL("image/jpeg", q); while (d.length > 1_300_000 && q > 0.35) { q -= 0.1; d = c.toDataURL("image/jpeg", q); }
+  return d;
+}
+function belanjaOffline(){
+  let nota = "";
+  const baris = () => `<div class="row bm-b" style="flex-wrap:nowrap;gap:6px;align-items:flex-end"><label class="f" style="flex:2;min-width:0">Barang<input type="text" class="bmN" list="bmL" placeholder="Nama barang di nota"></label><label class="f" style="width:64px">Jml<input class="bmQ" type="number" value="1" min="0.01" step="any" inputmode="decimal"></label>${isAdmin() ? `<label class="f" style="width:96px">Harga/pcs<input class="bmH" type="number" min="0" step="500" inputmode="numeric"></label>` : ""}<button class="btn sm ghost" data-hps type="button" aria-label="Hapus baris">✕</button></div>`;
+  modal(`<div class="modal-kepala"><h3>🧾 Belanja offline</h3>${tombolTutup()}</div>
+    <p class="small muted" style="margin:0 0 6px">Untuk belanja langsung di toko / pasar. Foto atau unggah PDF notanya sebagai bukti, lalu tulis barangnya.</p>
+    <label class="nota-unggah" id="noBox"><input type="file" id="noF" accept="image/*,application/pdf" hidden><span id="noIsi">📷 <b>Foto / pilih nota</b><br><span class="small muted">JPG, PNG, atau PDF</span></span></label>
+    <div class="row"><label class="f grow">Nama toko<input type="text" id="bmT" placeholder="Mis. Toko Pita Jaya, Pasar Baru"></label><label class="f" style="width:150px">Tanggal<input id="bmD" type="date" value="${today()}" max="${today()}"></label></div>
+    <datalist id="bmL">${[...B.bahan, ...B.produk].map(x => `<option value="${esc(x.nama)}">`).join("")}</datalist>
+    <div class="stack" id="bmI">${baris()}</div><button class="btn sm" id="bmTambah" type="button">+ Barang</button>
+    ${isAdmin() ? `<div class="row"><label class="f grow">No. nota<input type="text" id="bmNo" placeholder="Opsional"></label><label class="f grow">Ongkos / biaya lain<input id="bmO" type="number" min="0" step="1000" inputmode="numeric"></label></div><div class="small" id="bmTot"></div>` : ""}
+    <label class="row small" style="gap:8px;flex-wrap:nowrap;align-items:flex-start;margin-bottom:6px"><input type="checkbox" id="bmLangsung" checked style="margin-top:2px"><span>Barang sudah diterima — langsung cek &amp; masukkan ke stok</span></label>
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="bmOk" type="button">Simpan</button></div>`, m => {
+    const hitung = () => { const t = $("#bmTot", m); if (!t) return; const sub = $$(".bm-b", m).reduce((a, r) => a + (num($(".bmQ", r).value) || 0) * (num($(".bmH", r)?.value) || 0), 0) + (num($("#bmO", m)?.value) || 0); t.innerHTML = sub ? `Total: <b>${rp(sub)}</b>` : ""; };
+    const pasang = () => { $$("[data-hps]", m).forEach(b => b.onclick = () => { if ($$(".bm-b", m).length > 1) b.closest(".bm-b").remove(); hitung(); }); $$(".bmQ,.bmH", m).forEach(x => x.oninput = hitung); };
+    pasang(); if ($("#bmO", m)) $("#bmO", m).oninput = hitung;
+    $("#bmTambah", m).onclick = () => { $("#bmI", m).insertAdjacentHTML("beforeend", baris()); pasang(); };
+    $("#noF", m).onchange = e => coba(async () => {
+      const f = e.target.files[0]; if (!f) return;
+      $("#noIsi", m).innerHTML = "Memproses…";
+      nota = await bacaNota(f);
+      $("#noIsi", m).innerHTML = nota.startsWith("data:application/pdf") ? `📄 <b>${esc(f.name)}</b><br><span class="small muted">PDF siap · ketuk untuk ganti</span>` : `<img src="${nota}" alt="Nota"><span class="small muted">ketuk untuk ganti</span>`;
+    }).then(() => { if (!nota) $("#noIsi", m).innerHTML = "📷 <b>Foto / pilih nota</b><br><span class=\"small muted\">JPG, PNG, atau PDF</span>"; });
+    $("#bmOk", m).onclick = e => coba(async () => {
+      const items = $$(".bm-b", m).map(r => ({ nama: $(".bmN", r).value.trim(), qty: num($(".bmQ", r).value) || 1, harga: $(".bmH", r) ? num($(".bmH", r).value) || 0 : 0 })).filter(x => x.nama);
+      if (!items.length) throw new Error("Tulis minimal satu barang dari nota");
+      if (!nota && !confirm("Belum ada foto nota. Simpan tanpa nota?")) return;
+      const r = await api("POST", "/api/belanja", { offline: true, nota: nota || undefined, toko: $("#bmT", m).value.trim(), tgl: $("#bmD", m).value, no: $("#bmNo", m) ? $("#bmNo", m).value.trim() : "", ongkir: $("#bmO", m) ? num($("#bmO", m).value) : 0, items });
+      const langsung = $("#bmLangsung", m).checked; closeModal(); blStatus = "kirim";
+      if (langsung) { const L = await api("GET", "/api/belanja?status=kirim").catch(() => []); const b = L.find(x => x.id === r.id); if (b) { await vBelanja(); return barangDatang(b); } }
+      toast("Belanja offline dicatat"); vBelanja();
+    }, e.target);
+  });
+}
+async function lihatNotaBelanja(id, el){
+  const r = await coba(() => api("GET", `/api/belanja/${id}/nota`), el); if (!r) return;
+  if (r.nota.startsWith("data:application/pdf")) {
+    const bin = atob(r.nota.split(",")[1]), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([u8], { type: "application/pdf" })); window.open(url, "_blank"); setTimeout(() => URL.revokeObjectURL(url), 60_000); return;
+  }
+  modal(`<div class="modal-kepala"><h3>🧾 Nota belanja</h3>${tombolTutup()}</div><img src="${r.nota}" alt="Nota belanja" style="width:100%;border-radius:10px">
+    <div class="actions"><a class="btn" href="${r.nota}" download="nota-belanja-${id}.jpg">⬇️ Unduh</a></div>`);
+}
 /** Catat belanja online manual (Tokopedia, Lazada, WA, dll.). */
 function belanjaManual(){
-  const baris = () => `<div class="row bm-b" style="flex-wrap:nowrap;gap:6px;align-items:flex-end"><label class="f" style="flex:2;min-width:0">Barang<input class="bmN" list="bmL" placeholder="Nama barang"></label><label class="f" style="width:70px">Jml<input class="bmQ" type="number" min="1" value="1" inputmode="decimal"></label>${isAdmin() ? `<label class="f" style="width:100px">Harga<input class="bmH" type="number" min="0" step="1000" inputmode="numeric"></label>` : ""}</div>`;
+  const baris = () => `<div class="row bm-b" style="flex-wrap:nowrap;gap:6px;align-items:flex-end"><label class="f" style="flex:2;min-width:0">Barang<input type="text" class="bmN" list="bmL" placeholder="Nama barang"></label><label class="f" style="width:70px">Jml<input class="bmQ" type="number" min="1" value="1" inputmode="decimal"></label>${isAdmin() ? `<label class="f" style="width:100px">Harga<input class="bmH" type="number" min="0" step="1000" inputmode="numeric"></label>` : ""}</div>`;
   modal(`<h3>+ Catat belanja online</h3>
-    <div class="row"><label class="f grow">Toko / marketplace<input id="bmT" placeholder="Mis. Tokopedia · Toko Pita Jaya"></label><label class="f grow">No. pesanan<input id="bmNo" placeholder="Opsional"></label></div>
+    <div class="row"><label class="f grow">Toko / marketplace<input type="text" id="bmT" placeholder="Mis. Tokopedia · Toko Pita Jaya"></label><label class="f grow">No. pesanan<input type="text" id="bmNo" placeholder="Opsional"></label></div>
     <datalist id="bmL">${[...B.bahan, ...B.produk].map(x => `<option value="${esc(x.nama)}">`).join("")}</datalist>
     <div class="stack" id="bmI">${baris()}</div><button class="btn sm" id="bmTambah" type="button">+ Barang</button>
     ${isAdmin() ? `<label class="f">Ongkir<input id="bmO" type="number" min="0" step="1000" inputmode="numeric"></label>` : ""}
@@ -3942,7 +4002,7 @@ function vStok(){
   $("#main").innerHTML = `
     <div class="view-head"><h2>Stok</h2>
       <div class="seg" id="sJ"><button type="button" data-j="produk" class="${isP ? "on" : ""}">Produk jadi</button><button type="button" data-j="bahan" class="${!isP ? "on" : ""}">Bahan baku</button></div>
-      <span class="sp"></span>${isAdmin() ? `<button class="btn ${sUbah ? "pri" : ""}" id="sUbahBtn" type="button">✏️ ${sUbah ? "Sedang ubah stok" : "Ubah stok manual"}</button>` : ""}<button class="btn" id="sLbl" type="button">Cetak label barcode</button>${isAdmin() ? `<button class="btn pri" id="sAdd" type="button">+ ${isP ? "Produk" : "Bahan"} baru</button>` : ""}</div>
+      <span class="sp"></span>${isAdmin() && !sUbah && arr.some(x => x.stok < 0) ? `<button class="btn danger" id="sMinus" type="button">🧹 Nolkan ${arr.filter(x => x.stok < 0).length} stok minus</button>` : ""}${isAdmin() ? `<button class="btn ${sUbah ? "pri" : ""}" id="sUbahBtn" type="button">✏️ ${sUbah ? "Sedang ubah stok" : "Ubah stok manual"}</button>` : ""}<button class="btn" id="sLbl" type="button">Cetak label barcode</button>${isAdmin() ? `<button class="btn pri" id="sAdd" type="button">+ ${isP ? "Produk" : "Bahan"} baru</button>` : ""}</div>
     ${sUbah ? `<div class="panel stok-ubah-bar"><div class="row" style="align-items:center">
       <span style="flex:1" class="small">Ketik stok baru di kolom <b>Stok</b>. Yang diubah ditandai kuning. <span id="sJml"></span></span>
       <button class="btn sm" id="sNol" type="button">Nolkan yang tampil</button><button class="btn sm" id="sBatal" type="button">Batal</button><button class="btn sm pri" id="sSimpan" type="button">Simpan stok</button></div></div>` : ""}
@@ -3959,6 +4019,13 @@ function vStok(){
   $("#sKat").onchange = e => { sKat = e.target.value; drawStok(); };
   $("#sFil").onchange = e => { sFil = e.target.value; drawStok(); };
   if ($("#sAdd")) $("#sAdd").onclick = () => editItem(sJenis, null);
+  if ($("#sMinus")) $("#sMinus").onclick = () => {
+    const minus = arr.filter(x => x.stok < 0), jenis = sJenis, nama = isP ? "produk jadi" : "bahan baku";
+    konfirmasi(`Nolkan ${minus.length} stok minus?`, `Stok ${nama} yang minus (${minus.slice(0, 6).map(x => `${x.nama} ${fq(x.stok)}`).join(", ")}${minus.length > 6 ? ", …" : ""}) dijadikan 0 untuk mulai baru. Tercatat di riwayat stok sebagai opname, stok lain tidak berubah.`, "Nolkan & mulai baru", () => coba(async () => {
+      await api("POST", "/api/opname", { jenis, ket: "Mulai baru: stok minus dinolkan", items: minus.map(x => ({ id: x.id, fisik: 0 })) });
+      await muatUlang(); toast(`${minus.length} stok ${nama} minus dinolkan`); if (view === "stok") vStok();
+    }));
+  };
   if ($("#sUbahBtn")) $("#sUbahBtn").onclick = () => { if (sUbah && Object.keys(sBaru).length && !confirm("Batalkan perubahan stok yang belum disimpan?")) return; sUbah = !sUbah; sBaru = {}; vStok(); };
   if (sUbah) {
     $("#sBatal").onclick = () => { sUbah = false; sBaru = {}; vStok(); };

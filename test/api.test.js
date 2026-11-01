@@ -713,3 +713,17 @@ test("ide & jadwal konten: rencana mingguan berisi ide + referensi, jadwal hari 
   await admin("PUT", "/api/konten/jadwal", { hari: [2, 5], ide: [] });
   await admin("PUT", "/api/tugas/setelan", { wajib_konten: [] });
 });
+
+test("belanja offline: nota foto/PDF disimpan, daftar tidak membawa isi nota, nota hanya untuk admin", async () => {
+  const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  assert.equal((await kasir("POST", "/api/belanja", { offline: true, nota: "data:text/html;base64,PGI+", items: [{ nama: "Pita", qty: 1 }] })).status, 400, "jenis file ditolak");
+  const r = await kasir("POST", "/api/belanja", { offline: true, nota: PNG, toko: "Toko Pita Jaya", items: [{ nama: "Pita satin", qty: 2, harga: 5000 }] });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const L = (await admin("GET", "/api/belanja?status=kirim")).data, b = L.find(x => x.id === r.data.id);
+  assert.equal(b.sumber, "offline"); assert.ok(b.ada_nota); assert.ok(!("nota" in b));
+  assert.equal((await kasir("GET", `/api/belanja/${b.id}/nota`)).status, 403);
+  assert.equal((await admin("GET", `/api/belanja/${b.id}/nota`)).data.nota, PNG);
+  const pdf = await admin("POST", "/api/belanja", { offline: true, nota: "data:application/pdf;base64,JVBERi0xLjQK", items: [{ nama: "Kertas", qty: 1, harga: 1000 }] });
+  assert.equal(pdf.status, 200);
+  await admin("DELETE", `/api/belanja/${b.id}`); await admin("DELETE", `/api/belanja/${pdf.data.id}`);
+});
