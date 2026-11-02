@@ -2049,8 +2049,9 @@ async function vIdeKonten(){
       ${capt ? `<div class="ide-capt small">${esc(capt)}</div>` : ""}
       <div class="row" style="gap:6px;flex-wrap:wrap">
         ${capt ? `<button class="btn sm" data-salin="${i}" type="button">📋 Salin caption</button>` : ""}
-        <a class="btn sm ide-tt" href="${esc(x.ide.ref.tiktok)}" target="_blank" rel="noopener">🎵 Contoh TikTok</a>
-        <a class="btn sm ide-ig" href="${esc(x.ide.ref.reels)}" target="_blank" rel="noopener">📸 Contoh Reels</a>
+        <a class="btn sm ide-tt" href="${esc(x.ide.ref.tiktok)}" target="_blank" rel="noopener" title="Cari di TikTok: ${esc(x.ide.ref.cari)}">🎵 TikTok: “${esc(x.ide.ref.cari)}”</a>
+        <a class="btn sm ide-ig" href="${esc(x.ide.ref.reels)}" target="_blank" rel="noopener">📸 Reels #${esc(x.ide.ref.hashtag)}</a>
+        <a class="btn sm" href="${esc(x.ide.ref.tiktok_tag)}" target="_blank" rel="noopener">🎵 #${esc(x.ide.ref.hashtag)}</a>
         ${x.ide.ref.lain ? `<a class="btn sm" href="${esc(x.ide.ref.lain)}" target="_blank" rel="noopener">🔗 Referensi</a>` : ""}
         ${!x.selesai && !D.admin ? `<button class="btn sm pri" data-upload type="button">✅ Sudah upload</button>` : ""}</div></div>`;
   };

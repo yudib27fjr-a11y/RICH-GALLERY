@@ -706,7 +706,9 @@ test("ide & jadwal konten: rencana mingguan berisi ide + referensi, jadwal hari 
   assert.equal(R.slot.length, 7); assert.equal(R.target_views, 2000); assert.equal(R.wajib, true);
   assert.ok(R.slot.every(x => x.ide.judul && /tiktok\.com\/search/.test(x.ide.ref.tiktok) && /instagram\.com/.test(x.ide.ref.reels)));
   const T = (await kasir("GET", "/api/tugas-saya")).data;
-  assert.ok(T.some(t => t.jenis === "jadwal" && !t.besok && t.judul), "jadwal hari ini muncul di pengingat: " + JSON.stringify(T));
+  const hi = (await kasir("GET", "/api/bootstrap")).data.hariIni, hariIni = R.slot.find(x => x.tgl === hi);
+  if (hariIni && !hariIni.selesai) assert.ok(T.some(t => t.jenis === "jadwal" && !t.besok && t.judul), "jadwal hari ini muncul di pengingat: " + JSON.stringify(T));
+  else assert.ok(!T.some(t => t.jenis === "jadwal" && !t.besok), "jadwal yang sudah dikerjakan tidak diingatkan lagi");
   const J = (await admin("GET", "/api/konten/jadwal")).data;
   assert.deepEqual(J.ide[0].langkah, ["Shot 1", "Shot 2"]);
   assert.equal((await admin("GET", `/api/konten/rencana?user_id=${me.id}`)).data.user_id, me.id);

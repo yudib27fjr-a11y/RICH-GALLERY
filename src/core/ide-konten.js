@@ -28,6 +28,14 @@ export const IDE_BAWAAN = [
   T("Tantangan: buket dalam 60 detik", "Hiburan", "Bisa nggak bikin buket dalam 60 detik? ⏱️", ["Timer di layar", "Rangkai secepatnya", "Hasil + reaksi"], "Nilai dari 1–10? 😂", "#challenge #60detik #buketbunga", "challenge bikin buket 1 menit"),
 ];
 
+/* Kata kunci pencarian singkat (TikTok) & hashtag (Reels) yang paling pas untuk tiap ide bawaan, urut sama dengan IDE_BAWAAN. */
+const REF_BAWAAN = [["proses buket bunga", "bouquettutorial"], ["buket custom before after", "buketcustom"], ["reaksi dapat buket", "surprisebouquet"], ["tebak harga buket", "buketbunga"],
+  ["tutorial buket uang", "buketuang"], ["asmr packing buket", "asmrpacking"], ["pov florist", "floristlife"], ["arti warna bunga", "artibunga"], ["buket sesuai budget", "buketmurah"],
+  ["cara merawat bunga", "flowercare"], ["transisi buket bunga", "buketbunga"], ["dekorasi ulang tahun", "dekorasiulangtahun"], ["kartu ucapan buket", "kartuucapan"],
+  ["florist menjawab", "floristindonesia"], ["wrapping buket korea", "buketkorea"], ["rekap pesanan florist", "floristindonesia"], ["buket wisuda", "buketwisuda"],
+  ["testimoni florist", "buketbunga"], ["unboxing bunga segar", "freshflowers"], ["bikin buket 1 menit", "buketbunga"]];
+IDE_BAWAAN.forEach((x, i) => { const r = REF_BAWAAN[i]; if (r) { x.cari = r[0]; x.rtag = r[1]; } });
+
 /* Momen hari besar (bulan-hari). Ide momen diutamakan bila tanggalnya dalam 14 hari ke depan. */
 export const MOMEN = [
   ["01-01", "Tahun baru", "buket tahun baru"], ["02-14", "Valentine", "buket valentine"], ["03-08", "Hari Perempuan Internasional", "buket hari perempuan"],
@@ -35,9 +43,9 @@ export const MOMEN = [
   ["08-17", "HUT RI", "buket merah putih"], ["10-16", "Hari Bos", "buket kado atasan"], ["11-11", "Promo 11.11", "promo buket 11.11"],
   ["11-25", "Hari Guru", "kado hari guru buket"], ["12-12", "Promo 12.12", "promo buket 12.12"], ["12-22", "Hari Ibu", "buket hari ibu"], ["12-25", "Natal", "buket natal"],
 ];
-const ideMomen = (nama, cari) => T(`Konten ${nama}: ide kado & promo`, "Momen", `${nama} sebentar lagi! Sudah siapkan kado? 🎁`,
+const ideMomen = (nama, cari) => ({ rtag: nama.replace(/[^a-z0-9]/gi, "").toLowerCase(), ...T(`Konten ${nama}: ide kado & promo`, "Momen", `${nama} sebentar lagi! Sudah siapkan kado? 🎁`,
   ["Tampilkan 3 pilihan buket bertema " + nama, "Info harga / promo khusus", "Ajak order lebih awal (stok terbatas)", "Tutup dengan cara order"],
-  `Spesial ${nama} 💐 Order dari sekarang biar nggak kehabisan!`, `#${nama.replace(/[^A-Za-z0-9]/g, "").toLowerCase()} #buketbunga #kado #floristindramayu`, cari);
+  `Spesial ${nama} 💐 Order dari sekarang biar nggak kehabisan!`, `#${nama.replace(/[^A-Za-z0-9]/g, "").toLowerCase()} #buketbunga #kado #floristindramayu`, cari) });
 
 const HARI = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 const geser = (tgl, n) => { const d = new Date(tgl + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
@@ -51,9 +59,13 @@ export function setelanJadwal(s = getSettings(), minPerMinggu = 2){
   const ide = (Array.isArray(j.ide) ? j.ide : []).filter(x => x && x.judul);
   return { hari, target_views: Math.max(0, Number(j.target_views ?? 1000) || 0), jam: /^\d{2}:\d{2}$/.test(j.jam || "") ? j.jam : "10:00", ide };
 }
-const linkRef = cari => ({
-  tiktok: "https://www.tiktok.com/search/video?q=" + encodeURIComponent(cari),
-  reels: "https://www.instagram.com/explore/search/keyword/?q=" + encodeURIComponent(cari),
+/** Link contoh: TikTok = pencarian kata kunci singkat ide itu; Reels = halaman hashtag Instagram (pencarian kata kunci IG tidak bisa dibuka lewat link). */
+const tagDari = ide => ide.rtag || (String(ide.tag || "").match(/#(\w+)/) || [])[1] || String(ide.cari || ide.judul || "buketbunga").replace(/[^a-z0-9]/gi, "").toLowerCase().slice(0, 30);
+const linkRef = ide => ({
+  tiktok: "https://www.tiktok.com/search?q=" + encodeURIComponent(ide.cari || ide.judul),
+  reels: "https://www.instagram.com/explore/tags/" + encodeURIComponent(tagDari(ide)) + "/",
+  tiktok_tag: "https://www.tiktok.com/tag/" + encodeURIComponent(tagDari(ide)),
+  cari: ide.cari || ide.judul, hashtag: tagDari(ide),
 });
 
 /** Rencana konten satu minggu (Senin–Minggu) berisi tanggal tiap jadwal + idenya. `selesai` = jumlah video yang sudah dibuat minggu itu. */
@@ -67,7 +79,7 @@ export function rencanaMinggu(tgl, { s = getSettings(), min = 2, selesai = 0 } =
     const m = MOMEN.map(([md, nama, cari]) => { let d = `${t.slice(0, 4)}-${md}`; if (d < t) d = `${Number(t.slice(0, 4)) + 1}-${md}`; return { d, nama, cari, jarak: (Date.parse(d) - Date.parse(t)) / 864e5 }; })
       .filter(x => x.jarak <= 14).sort((x, y) => x.jarak - y.jarak)[0];
     const ide = m && i === 0 ? { ...ideMomen(m.nama, m.cari), momen: { nama: m.nama, tgl: m.d } } : bank[(mingguKe * J.hari.length + i) % bank.length];
-    return { tgl: t, hari: HARI[new Date(t + "T00:00:00Z").getUTCDay()], ide: { ...ide, ref: ide.ref ? { lain: ide.ref, ...linkRef(ide.cari || ide.judul) } : linkRef(ide.cari || ide.judul) }, selesai: i < selesai };
+    return { tgl: t, hari: HARI[new Date(t + "T00:00:00Z").getUTCDay()], ide: { ...ide, ref: ide.ref ? { lain: ide.ref, ...linkRef(ide) } : linkRef(ide) }, selesai: i < selesai };
   });
   return { dari: a, sampai: geser(a, 6), slot, target_views: J.target_views, min: Math.max(min, 1), hari: J.hari, jam: J.jam };
 }
