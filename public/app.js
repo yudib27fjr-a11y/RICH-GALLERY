@@ -1,4 +1,4 @@
-import { eanValid, eanSVG, barcodeDefault, periodeDari, geserPeriode, tambahHari, pad, tebakKategori } from "./shared.js";
+import { eanValid, eanSVG, barcodeDefault, periodeDari, geserPeriode, tambahHari, pad, tebakKategori, bacaStruk } from "./shared.js";
 
 /* ================= util ================= */
 const $ = (s, r = document) => r.querySelector(s);
@@ -2769,12 +2769,58 @@ async function bacaNota(file){
   let q = 0.75, d = c.toDataURL("image/jpeg", q); while (d.length > 1_300_000 && q > 0.35) { q -= 0.1; d = c.toDataURL("image/jpeg", q); }
   return d;
 }
+/** OCR nota di perangkat: rapikan foto (potong ke kertas, hitam-putih) lalu baca dengan Tesseract di Web Worker. */
+let ocrWorker = null, ocrId = 0;
+async function ocrNota(file){
+  const url = URL.createObjectURL(file), img = new Image(); img.src = url; await img.decode(); URL.revokeObjectURL(url);
+  const sk = Math.min(1, 1800 / Math.max(img.naturalWidth, img.naturalHeight)), W0 = Math.round(img.naturalWidth * sk), H0 = Math.round(img.naturalHeight * sk);
+  const c = document.createElement("canvas"); c.width = W0; c.height = H0; const g = c.getContext("2d", { willReadFrequently: true }); g.drawImage(img, 0, 0, W0, H0);
+  const d = g.getImageData(0, 0, W0, H0).data, lum = new Float32Array(W0 * H0), kertasR = new Float32Array(H0), kertasK = new Float32Array(W0);
+  for (let y = 0, i = 0; y < H0; y++) for (let x = 0; x < W0; x++, i++) {
+    const r = d[i * 4], gg = d[i * 4 + 1], b = d[i * 4 + 2], l = 0.299 * r + 0.587 * gg + 0.114 * b; lum[i] = l;
+    if (l > 150 && Math.max(r, gg, b) - Math.min(r, gg, b) < 45) { kertasR[y]++; kertasK[x]++; }
+  }
+  // batas kertas nota (baris / kolom yang ≥25% putih); bila tidak jelas pakai seluruh foto
+  let y0 = 0, y1 = H0 - 1, x0 = 0, x1 = W0 - 1;
+  const rs = [...kertasR].map((v, y) => v / W0 > 0.25 ? y : -1).filter(v => v >= 0), ks = [...kertasK].map((v, x) => v / H0 > 0.25 ? x : -1).filter(v => v >= 0);
+  if (rs.length > H0 * 0.15 && ks.length > W0 * 0.15) { y0 = rs[0]; y1 = rs[rs.length - 1]; x0 = ks[0]; x1 = ks[ks.length - 1]; }
+  const W = x1 - x0 + 1, H = y1 - y0 + 1, k = 35, h = k >> 1;
+  // ambang adaptif (rata-rata lokal) memakai citra integral → teks hitam di kertas putih
+  const II = new Float64Array((W + 1) * (H + 1));
+  for (let y = 0; y < H; y++) { let s = 0; for (let x = 0; x < W; x++) { s += lum[(y + y0) * W0 + x + x0]; II[(y + 1) * (W + 1) + x + 1] = II[y * (W + 1) + x + 1] + s; } }
+  const out = document.createElement("canvas"); out.width = W; out.height = H; const go = out.getContext("2d"), od = go.createImageData(W, H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const ya = Math.max(0, y - h), yb = Math.min(H, y + h + 1), xa = Math.max(0, x - h), xb = Math.min(W, x + h + 1);
+    const rata = (II[yb * (W + 1) + xb] - II[ya * (W + 1) + xb] - II[yb * (W + 1) + xa] + II[ya * (W + 1) + xa]) / ((yb - ya) * (xb - xa));
+    const v = lum[(y + y0) * W0 + x + x0] < rata - 12 ? 0 : 255, j = (y * W + x) * 4; od.data[j] = od.data[j + 1] = od.data[j + 2] = v; od.data[j + 3] = 255;
+  }
+  go.putImageData(od, 0, 0);
+  const buf = await (await new Promise(ok => out.toBlob(ok, "image/png"))).arrayBuffer();
+  if (!ocrWorker) ocrWorker = new Worker("/vendor/ocr/ocr-worker.js");
+  const id = ++ocrId;
+  return await new Promise((ok, gagal) => {
+    const t = setTimeout(() => gagal(new Error("waktu habis")), 120_000);
+    const dengar = e => { if (e.data.id !== id) return; clearTimeout(t); ocrWorker.removeEventListener("message", dengar); e.data.galat ? gagal(new Error(e.data.galat)) : ok(e.data.teks); };
+    ocrWorker.addEventListener("message", dengar); ocrWorker.onerror = e => { clearTimeout(t); ocrWorker = null; gagal(new Error(e.message || "pembaca gagal dimuat")); };
+    ocrWorker.postMessage({ id, gambar: buf }, [buf]);
+  });
+}
+/** Nama toko hasil OCR dicocokkan ke daftar Mitra (mis. "YOU N HEL" → "You n Me"). */
+function cocokMitra(t){
+  const a = String(t || "").toLowerCase().replace(/[^a-z0-9]/g, ""); if (a.length < 3) return "";
+  const jarak = (p, q) => { const D = Array.from({ length: p.length + 1 }, (_, i) => [i]); for (let j = 1; j <= q.length; j++) D[0][j] = j;
+    for (let i = 1; i <= p.length; i++) for (let j = 1; j <= q.length; j++) D[i][j] = Math.min(D[i - 1][j] + 1, D[i][j - 1] + 1, D[i - 1][j - 1] + (p[i - 1] === q[j - 1] ? 0 : 1)); return D[p.length][q.length]; };
+  let terbaik = null;
+  for (const mt of daftarMitra()) { const b = String(mt.nama || "").toLowerCase().replace(/[^a-z0-9]/g, ""); if (!b) continue; const d = jarak(a, b) / Math.max(a.length, b.length); if (d <= 0.34 && (!terbaik || d < terbaik.d)) terbaik = { d, nama: mt.nama }; }
+  return terbaik ? terbaik.nama : "";
+}
 function belanjaOffline(){
   let nota = "";
-  const baris = () => `<div class="row bm-b" style="flex-wrap:nowrap;gap:6px;align-items:flex-end"><label class="f" style="flex:2;min-width:0">Barang<input type="text" class="bmN" list="bmL" placeholder="Nama barang di nota"></label><label class="f" style="width:64px">Jml<input class="bmQ" type="number" value="1" min="0.01" step="any" inputmode="decimal"></label>${isAdmin() ? `<label class="f" style="width:96px">Harga/pcs<input class="bmH" type="number" min="0" step="500" inputmode="numeric"></label>` : ""}<button class="btn sm ghost" data-hps type="button" aria-label="Hapus baris">✕</button></div>`;
+  const baris = (x = {}) => `<div class="row bm-b" style="flex-wrap:nowrap;gap:6px;align-items:flex-end"><label class="f" style="flex:2;min-width:0">Barang${x.kode ? ` <span class="pill mut" style="font-size:10px">${esc(x.kode)}</span>` : ""}<input type="text" class="bmN" list="bmL" placeholder="${x.kode ? "Barang apa? (pilih dari daftar)" : "Nama barang di nota"}" value="${esc(x.nama || "")}" data-kode="${esc(x.kode || "")}"></label><label class="f" style="width:64px">Jml<input class="bmQ" type="number" value="${x.qty || 1}" min="0.01" step="any" inputmode="decimal"></label>${isAdmin() ? `<label class="f" style="width:96px">Harga/pcs<input class="bmH" type="number" min="0" step="500" inputmode="numeric" value="${x.harga || ""}"></label>` : ""}<button class="btn sm ghost" data-hps type="button" aria-label="Hapus baris">✕</button></div>`;
   modal(`<div class="modal-kepala"><h3>🧾 Belanja offline</h3>${tombolTutup()}</div>
     <p class="small muted" style="margin:0 0 6px">Untuk belanja langsung di toko / pasar. Foto atau unggah PDF notanya sebagai bukti, lalu tulis barangnya.</p>
     <label class="nota-unggah" id="noBox"><input type="file" id="noF" accept="image/*,application/pdf" hidden><span id="noIsi">📷 <b>Foto / pilih nota</b><br><span class="small muted">JPG, PNG, atau PDF</span></span></label>
+    <div id="noOcr"></div>
     <div class="row"><label class="f grow">Nama toko<input type="text" id="bmT" placeholder="Mis. Toko Pita Jaya, Pasar Baru"></label><label class="f" style="width:150px">Tanggal<input id="bmD" type="date" value="${today()}" max="${today()}"></label></div>
     <datalist id="bmL">${[...B.bahan, ...B.produk].map(x => `<option value="${esc(x.nama)}">`).join("")}</datalist>
     <div class="stack" id="bmI">${baris()}</div><button class="btn sm" id="bmTambah" type="button">+ Barang</button>
@@ -2785,14 +2831,35 @@ function belanjaOffline(){
     const pasang = () => { $$("[data-hps]", m).forEach(b => b.onclick = () => { if ($$(".bm-b", m).length > 1) b.closest(".bm-b").remove(); hitung(); }); $$(".bmQ,.bmH", m).forEach(x => x.oninput = hitung); };
     pasang(); if ($("#bmO", m)) $("#bmO", m).oninput = hitung;
     $("#bmTambah", m).onclick = () => { $("#bmI", m).insertAdjacentHTML("beforeend", baris()); pasang(); };
+    // Baca otomatis isi nota dari foto (OCR di HP) → toko, tanggal, no nota, barang, jumlah & harga terisi; tinggal cocokkan nama barang.
+    const bacaOtomatis = async f => {
+      const kotak = $("#noOcr", m);
+      kotak.innerHTML = `<div class="note small">🔍 Membaca isi nota… <span class="muted">(pertama kali memuat pembaca ±7 MB)</span></div>`;
+      try {
+        const teks = await ocrNota(f); window.__rgOcrTeks = teks; // untuk pemeriksaan bila hasil baca keliru
+        const R = bacaStruk(teks, today());
+        if (!R.items.length) { kotak.innerHTML = `<div class="note small">⚠️ Barang di nota belum terbaca. Foto ulang lebih dekat, lurus & terang — atau isi manual di bawah.</div>`; return; }
+        const mitra = cocokMitra(R.toko);
+        if (!$("#bmT", m).value) $("#bmT", m).value = mitra || toTitle(R.toko);
+        if (R.tgl) $("#bmD", m).value = R.tgl;
+        if (R.no && $("#bmNo", m) && !$("#bmNo", m).value) $("#bmNo", m).value = R.no;
+        $("#bmI", m).innerHTML = R.items.map(x => baris({ nama: x.nama ? toTitle(x.nama) : "", kode: x.kode || "", qty: x.qty, harga: x.harga })).join(""); pasang(); hitung();
+        const jml = R.items.reduce((a, x) => a + x.jumlah, 0);
+        kotak.innerHTML = `<div class="note small ${R.cocok ? "ok-note" : ""}">${R.cocok ? "✅" : "⚠️"} Terbaca <b>${R.items.length} barang</b> · jumlah ${rp(jml)}${!R.adaTotal ? " · total nota tidak terbaca — <b>cek lagi</b> jumlah & harganya" : !R.cocok ? ` · total di nota ${rp(R.total)} — <b>cek lagi</b> jumlah & harganya` : " · sama dengan total nota"}.${R.items.some(x => !x.nama) ? " Nota ini tidak mencantumkan nama barang: <b>pilih nama barangnya</b> di tiap baris." : " Cek nama barangnya."}</div>`;
+      } catch (err) { kotak.innerHTML = `<div class="note small">⚠️ Baca otomatis belum bisa di perangkat ini (${esc(err.message || err)}). Isi manual di bawah.</div>`; }
+    };
     $("#noF", m).onchange = e => coba(async () => {
       const f = e.target.files[0]; if (!f) return;
       $("#noIsi", m).innerHTML = "Memproses…";
       nota = await bacaNota(f);
       $("#noIsi", m).innerHTML = nota.startsWith("data:application/pdf") ? `📄 <b>${esc(f.name)}</b><br><span class="small muted">PDF siap · ketuk untuk ganti</span>` : `<img src="${nota}" alt="Nota"><span class="small muted">ketuk untuk ganti</span>`;
+      if (!nota.startsWith("data:application/pdf")) bacaOtomatis(f);
+      else $("#noOcr", m).innerHTML = `<div class="note small">PDF disimpan sebagai bukti. Baca otomatis hanya untuk <b>foto</b> nota — isi barangnya di bawah.</div>`;
     }).then(() => { if (!nota) $("#noIsi", m).innerHTML = "📷 <b>Foto / pilih nota</b><br><span class=\"small muted\">JPG, PNG, atau PDF</span>"; });
     $("#bmOk", m).onclick = e => coba(async () => {
-      const items = $$(".bm-b", m).map(r => ({ nama: $(".bmN", r).value.trim(), qty: num($(".bmQ", r).value) || 1, harga: $(".bmH", r) ? num($(".bmH", r).value) || 0 : 0 })).filter(x => x.nama);
+      const kosong = $$(".bm-b", m).filter(r => !$(".bmN", r).value.trim() && $(".bmN", r).dataset.kode);
+      if (kosong.length) { $(".bmN", kosong[0]).focus(); throw new Error(`Pilih nama barang untuk ${kosong.length} baris yang belum diisi`); }
+      const items = $$(".bm-b", m).map(r => ({ nama: $(".bmN", r).value.trim(), variasi: $(".bmN", r).dataset.kode || "", qty: num($(".bmQ", r).value) || 1, harga: $(".bmH", r) ? num($(".bmH", r).value) || 0 : 0 })).filter(x => x.nama);
       if (!items.length) throw new Error("Tulis minimal satu barang dari nota");
       if (!nota && !confirm("Belum ada foto nota. Simpan tanpa nota?")) return;
       const r = await api("POST", "/api/belanja", { offline: true, nota: nota || undefined, toko: $("#bmT", m).value.trim(), tgl: $("#bmD", m).value, no: $("#bmNo", m) ? $("#bmNo", m).value.trim() : "", ongkir: $("#bmO", m) ? num($("#bmO", m).value) : 0, items });

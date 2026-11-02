@@ -729,3 +729,15 @@ test("belanja offline: nota foto/PDF disimpan, daftar tidak membawa isi nota, no
   assert.equal(pdf.status, 200);
   await admin("DELETE", `/api/belanja/${b.id}`); await admin("DELETE", `/api/belanja/${pdf.data.id}`);
 });
+
+test("baca nota (OCR): pola 'qty x harga  Rp jumlah', salah baca angka diperbaiki, nama barang & total", async () => {
+  const { bacaStruk } = await import("../public/shared.js");
+  const A = bacaStruk(`YOU N HEL.\nCIREBON ONE STOP SHOPPING\n#000040 02/11/2026 10:11\n01 Fio 000000\n12x 14000 ~ Rp168600\nDPT.O7\n3x 39500 Rpl06500\nDPT.O7 * #\n2x 32500 " pp65000 » *\nDPT.O7\nIx 14500 Re1 45000\nDPT.O7\n1x 1500 e RPTSOO\nDPT.13\nCREDIT! Re521000\nTERIMA KASIH`, "2026-11-02");
+  assert.equal(A.tgl, "2026-11-02"); assert.equal(A.no, "000040");
+  assert.deepEqual(A.items.map(x => [x.qty, x.harga, x.jumlah, x.kode]), [[12, 14000, 168000, "DPT.07"], [3, 35500, 106500, "DPT.07"], [2, 32500, 65000, "DPT.07"], [1, 145000, 145000, "DPT.07"], [1, 1500, 1500, "DPT.13"]]);
+  assert.equal(A.total, 521000); assert.equal(A.cocok, false, "ada baris yang tidak terbaca → total nota tidak cocok, minta dicek");
+  const B = bacaStruk(`TOKO PITA JAYA\nJl. Pasar Baru 12\n05-10-26\nPITA SATIN 2 x 5.000 10.000\nKERTAS CELLO 3 2.500 7.500\nBUNGA MAWAR MERAH\n10 x 6.000 60.000\nTOTAL 77.500\nTUNAI 100.000\nKEMBALI 22.500`, "2026-11-02");
+  assert.equal(B.toko, "TOKO PITA JAYA"); assert.equal(B.tgl, "2026-10-05");
+  assert.deepEqual(B.items.map(x => [x.nama, x.qty, x.harga]), [["PITA SATIN", 2, 5000], ["KERTAS CELLO", 3, 2500], ["BUNGA MAWAR MERAH", 10, 6000]]);
+  assert.equal(B.total, 77500); assert.equal(B.cocok, true);
+});

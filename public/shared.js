@@ -63,3 +63,62 @@ export function geserPeriode(dariIso, n, mulai){
   return periodeDari(isoOf(new Date(y, m - 1 + n, d)), mulai);
 }
 export function tambahHari(iso, n){ const [y, m, d] = iso.split("-").map(Number); return isoOf(new Date(y, m - 1, d + n)); }
+
+/* ---- Baca teks nota belanja hasil OCR → { toko, tgl, no, total, items:[{nama, kode, qty, harga, jumlah}] } ----
+   Mendukung pola umum struk kasir: "12x 14000  Rp168000", "NAMA BARANG 2 x 5.000 10.000", "NAMA BARANG  2  5.000  10.000". */
+const angkaOCR = s => { const t = String(s || "").replace(/[Oo]/g, "0").replace(/[Il|!]/g, "1").replace(/[Ss](?=\d|$)/g, "5").replace(/[Bb](?=\d)/g, "8").replace(/[^\d]/g, ""); return t ? +t : NaN; };
+// "Rp 1 45.000" / "Rpl06500" / "Re35000" → angka saja (spasi di dalam angka setelah Rp disatukan)
+const bersihRp = l => l.replace(/\b(?:r\s?[pera]|pp|rd)\.?\s?([\dOoIl](?:[\dOoIl.,]|\s(?=[\dOoIl]))*)/gi, (_, n) => " " + n.replace(/\s+/g, ""));
+const KODE_BRS = /^\s*((?:DPT|DEPT|PLU|SKU|KD)\s*[.:]?\s*[0-9OoIl]{1,6})[^0-9A-Za-z]*(?:\S{0,2}[^0-9A-Za-z]*)?$/i;
+const TOKEN_ANGKA = "[0-9OoIl|]{1,3}(?:[.,][0-9Oo]{3})+|[0-9OoIlSB]{3,}";
+export function bacaStruk(teks, hariIni = ""){
+  const L = String(teks || "").replace(/\r/g, "").split("\n").map(x => x.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const hurufN = s => (s.match(/[A-Za-z]/g) || []).length, digitN = s => (s.match(/\d/g) || []).length;
+  const res = { toko: "", tgl: "", no: "", total: 0, items: [] };
+  res.toko = (L.find(l => hurufN(l) >= 4 && hurufN(l) >= l.replace(/\s/g, "").length * 0.6) || "").replace(/[^A-Za-z0-9 &'.-]/g, "").trim();
+  for (const l of L) {
+    const d = l.match(/\b(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})\b/);
+    if (d && !res.tgl) { const th = d[3].length === 2 ? "20" + d[3] : d[3], t = `${th}-${d[2].padStart(2, "0")}-${d[1].padStart(2, "0")}`; if (+d[2] >= 1 && +d[2] <= 12 && +d[1] >= 1 && +d[1] <= 31 && (!hariIni || t <= hariIni)) res.tgl = t; }
+    const n = l.match(/(?:#|no\.?\s*(?:nota|struk|trx|faktur)?\s*[:#]?\s*)(\d{3,})/i); if (n && !res.no) res.no = n[1];
+  }
+  const KUNCI_TOTAL = /\b(grand\s*total|total|jumlah|credit|debit|tunai|cash|bayar|qris|transfer)/i, BUKAN_BARANG = /\b(total|subtotal|kembali|change|tunai|cash|credit|debit|diskon|ppn|pajak|terima kasih|bayar)\b/i;
+  const totalKand = [], totalMentah = [];
+  const reX = new RegExp(`^(.*?)\\s*\\b([0-9OoIl|]{1,3})\\s*[xX×*]\\s*(${TOKEN_ANGKA})(?:\\s+.*?(${TOKEN_ANGKA}))?[^0-9A-Za-z]*$`);
+  const re3 = new RegExp(`^(.*[A-Za-z].*?)\\s+([0-9]{1,3})\\s+(${TOKEN_ANGKA})\\s+(${TOKEN_ANGKA})\\s*$`);
+  L.forEach((mentah, i) => {
+    const l = bersihRp(mentah);
+    if (KUNCI_TOTAL.test(l)) { totalMentah.push(l); const nums = (l.match(new RegExp(TOKEN_ANGKA, "g")) || []).map(angkaOCR).filter(x => x >= 100); if (nums.length) totalKand.push({ v: Math.max(...nums), utama: /total|credit|debit|qris|transfer/i.test(l) }); return; }
+    if (BUKAN_BARANG.test(l)) return;
+    let m = l.match(reX), nama = "", qty, harga, jml;
+    if (m) { nama = m[1]; qty = angkaOCR(m[2]); harga = angkaOCR(m[3]); jml = m[4] ? angkaOCR(m[4]) : NaN; }
+    else if ((m = l.match(re3))) { nama = m[1]; qty = +m[2]; harga = angkaOCR(m[3]); jml = angkaOCR(m[4]); if (Math.abs(qty * harga - jml) > 1) return; }
+    else return;
+    if (!(qty > 0 && qty < 1000) || !(harga > 0)) return;
+    // Harga satuan vs jumlah: percayai jumlah bila habis dibagi qty, kalau tidak pakai qty × harga
+    if (jml > 0 && qty * harga !== jml) {
+      // pilih yang paling masuk akal: jumlah (kanan) habis dibagi qty & tidak lebih "ganjil" (nol di belakang) daripada qty × harga
+      const nol = v => (String(v).match(/0*$/) || [""])[0].length;
+      const a = qty * harga, okB = jml % qty === 0 && jml >= harga && String(jml).length >= String(a).length && nol(jml) >= nol(a);
+      if (okB) harga = jml / qty; else jml = a;
+    }
+    if (!(jml > 0)) jml = qty * harga;
+    nama = nama.replace(/[^A-Za-z0-9 .,&'/-]/g, " ").replace(/\s+/g, " ").trim();
+    if (hurufN(nama) < 3) { // nama di baris sebelumnya (teks saja) bila ada
+      const sb = L[i - 1] || "";
+      nama = hurufN(sb) >= 3 && digitN(sb) <= hurufN(sb) / 2 && !KODE_BRS.test(sb) && !reX.test(bersihRp(sb)) && !KUNCI_TOTAL.test(sb) && i > 1 && sb !== L[0] ? sb.replace(/[^A-Za-z0-9 .,&'/-]/g, " ").trim() : "";
+    }
+    const sd = L[i + 1] || "", kode = (sd.match(KODE_BRS) || [])[1];
+    res.items.push({ nama, kode: kode ? kode.replace(/\s+/g, "").replace(/[Oo]/g, "0").toUpperCase() : "", qty, harga, jumlah: jml });
+  });
+  const jumlahBaris = res.items.reduce((a, x) => a + x.jumlah, 0);
+  // Total yang salah baca 1–2 karakter (mis. "Rp52@1000"): coba ganti karakter aneh dengan angka → kalau cocok dengan jumlah barang, pakai itu
+  if (jumlahBaris && !totalKand.some(x => x.v === jumlahBaris)) for (const l of totalMentah) for (const run of l.match(/[\dOoIl@#$&%?]{4,}/g) || []) {
+    const pola = run.replace(/[Oo]/g, "0").replace(/[Il]/g, "1"), aneh = (pola.match(/[^\d]/g) || []).length;
+    if (aneh >= 1 && aneh <= 2 && (new RegExp("^" + pola.replace(/[^\d]/g, "\\d") + "$").test(String(jumlahBaris)) || pola.replace(/[^\d]/g, "") === String(jumlahBaris))) totalKand.push({ v: jumlahBaris, utama: true });
+  }
+  const utama = totalKand.filter(x => x.utama);
+  res.total = (utama.length ? utama : totalKand).map(x => x.v).sort((a, b) => Math.abs(a - jumlahBaris) - Math.abs(b - jumlahBaris))[0] || jumlahBaris;
+  res.adaTotal = totalKand.length > 0;
+  res.cocok = !!res.items.length && res.adaTotal && res.total === jumlahBaris;
+  return res;
+}

@@ -579,3 +579,4 @@ section.lipat:not(.tertutup) > .lipat-judul{border-bottom:1px solid var(--line)}
 .nota-unggah{display:flex;align-items:center;justify-content:center;text-align:center;min-height:110px;border:2px dashed var(--line);border-radius:14px;padding:10px;cursor:pointer;background:var(--surface-2);margin-bottom:8px}
 .nota-unggah:hover{border-color:var(--accent)}
 .nota-unggah img{display:block;max-height:220px;max-width:100%;border-radius:8px;margin:0 auto 4px}
+.note.ok-note{border-color:color-mix(in srgb,var(--ok) 45%,var(--line))}
