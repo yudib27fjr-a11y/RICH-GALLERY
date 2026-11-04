@@ -1159,8 +1159,9 @@ function vKasir(){
       <div class="kasir-atas">
       <div class="row">
         <input type="search" id="posQ" placeholder="Cari nama / kode, atau scan barcode…" value="${esc(posQ)}" style="flex:1 1 220px" aria-label="Cari produk">
-        <button class="btn" id="manualBtn" type="button">+ Item manual</button>
+        <div class="pos-tombol"><button class="btn" id="manualBtn" type="button">+ Item manual</button>
         ${katAdd ? `<button class="btn btn-add ${posKat === katAdd ? "on" : ""}" id="addBtn" type="button" aria-pressed="${posKat === katAdd}">✨ Additional</button>` : ""}
+        <button class="btn btn-menu" id="posMenu" type="button" aria-label="Semua menu">${ikonMenu("menu")}<span>Menu</span></button></div>
         <label class="row small muted" style="gap:6px"><input type="checkbox" id="readyOnly" ${hanyaReady ? "checked" : ""}> Stok ready saja</label>
       </div>
       <div class="chips" id="katChips">${kats.map(k => `<button type="button" class="chip ${k === posKat ? "on" : ""}" data-k="${esc(k)}">${esc(k === "SEMUA" ? "Semua" : toTitle(k))}</button>`).join("")}</div>
@@ -1174,6 +1175,7 @@ function vKasir(){
   $("#readyOnly").onchange = e => { hanyaReady = e.target.checked; drawGrid(); };
   $$("#katChips .chip").forEach(b => b.onclick = () => { posKat = b.dataset.k; $$("#katChips .chip").forEach(x => x.classList.toggle("on", x === b)); drawGrid(); });
   $("#manualBtn").onclick = itemManual;
+  $("#posMenu").onclick = semuaMenu;
   const ad = $("#addBtn"); if (ad) ad.onclick = () => {
     posKat = posKat === katAdd ? "SEMUA" : katAdd; ad.classList.toggle("on", posKat === katAdd); ad.setAttribute("aria-pressed", posKat === katAdd);
     $$("#katChips .chip").forEach(x => x.classList.toggle("on", x.dataset.k === posKat));
