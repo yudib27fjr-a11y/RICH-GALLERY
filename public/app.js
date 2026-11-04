@@ -28,6 +28,37 @@ const DKEY = "rg_perangkat";
 let D = { kertas: 58, modeCetak: "chrome", tema: "" };
 try { D = { ...D, ...JSON.parse(localStorage.getItem(DKEY) || "{}") }; } catch {}
 const simpanD = () => { try { localStorage.setItem(DKEY, JSON.stringify(D)); } catch {} };
+/* Bunyi "klik" pendek + getar setiap tombol diketuk (bisa dimatikan: Pengaturan → Perangkat ini). iPhone: getar lewat sakelar tersembunyi (iOS 18+). */
+let ketukAudio = null, ketukSakelar = null, ketukTerakhir = 0;
+function umpanKetuk(){
+  if (D.ketuk === false) return;
+  const t = performance.now(); if (t - ketukTerakhir < 60) return; ketukTerakhir = t;
+  try {
+    const A = window.AudioContext || window.webkitAudioContext;
+    if (A) {
+      if (!ketukAudio) ketukAudio = new A();
+      if (ketukAudio.state === "suspended") ketukAudio.resume();
+      const c = ketukAudio, o = c.createOscillator(), g = c.createGain(), n = c.currentTime;
+      o.type = "sine"; o.frequency.setValueAtTime(1500, n); o.frequency.exponentialRampToValueAtTime(700, n + 0.04);
+      g.gain.setValueAtTime(0.0001, n); g.gain.exponentialRampToValueAtTime(0.08, n + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, n + 0.05);
+      o.connect(g); g.connect(c.destination); o.start(n); o.stop(n + 0.06);
+    }
+  } catch { /* tanpa bunyi */ }
+  try {
+    if (NATIVE && NATIVE.getar) NATIVE.getar(15);
+    else if (navigator.vibrate) navigator.vibrate(12);
+    else if (/iPhone|iPad/.test(navigator.userAgent)) {
+      if (!ketukSakelar) { ketukSakelar = document.createElement("label"); ketukSakelar.setAttribute("aria-hidden", "true"); ketukSakelar.style.cssText = "position:fixed;left:-99px;top:0;width:1px;height:1px;opacity:0;pointer-events:none";
+        ketukSakelar.innerHTML = '<input type="checkbox" switch tabindex="-1">'; document.body.appendChild(ketukSakelar); }
+      ketukSakelar.click();
+    }
+  } catch { /* tanpa getar */ }
+}
+document.addEventListener("click", e => {
+  if (!e.isTrusted) return;
+  const el = e.target.closest && e.target.closest('button, a.btn, a[role="button"], .li.click, .chip, label.btn, [data-g], [data-v], .lipat-judul, select');
+  if (el && !el.disabled && !(ketukSakelar && ketukSakelar.contains(e.target))) umpanKetuk();
+}, true);
 function terapkanTema(){ if (D.tema) document.documentElement.setAttribute("data-theme", D.tema); else document.documentElement.removeAttribute("data-theme"); }
 terapkanTema();
 
@@ -4414,6 +4445,7 @@ function vAtur(){
         <label class="f">Cara mencetak<select id="pM">${NATIVE && NATIVE.cetakLangsung ? `<option value="langsung" ${D.modeCetak === "langsung" ? "selected" : ""}>Printer bawaan iMin langsung (paling tajam)</option>` : ""}<option value="chrome" ${D.modeCetak === "chrome" ? "selected" : ""}>Layanan cetak Android (gambar)</option><option value="rawbt" ${D.modeCetak === "rawbt" ? "selected" : ""}>Aplikasi RawBT (ESC/POS)</option></select></label>
         <p class="note">${NATIVE && NATIVE.cetakLangsung ? `<b>Printer bawaan langsung</b> mengirim teks ke printer iMin seperti aplikasi kasir lain, hasilnya hitam dan tajam. Bluetooth harus menyala (printer iMin tersambung lewat Bluetooth internal "BluetoothPrinter"). ${(() => { const st = statusPrinterLangsung(); return st === "izin" ? "Saat mencetak pertama kali, izinkan akses <i>Perangkat sekitar</i>." : st ? `Printer ditemukan: <b>${esc(st)}</b>.` : "Printer bawaan belum terdeteksi — pastikan Bluetooth menyala."; })()}<br>` : ""}Layanan cetak Android mengubah struk menjadi gambar, sehingga bisa tampak buram. RawBT butuh aplikasi RawBT dari Play Store.</p>
         <div class="row"><button class="btn" id="pTest" type="button">Cetak struk uji</button><button class="btn" id="pKartu" type="button">Cetak kartu uji</button></div>
+        <label class="row" style="gap:8px"><input type="checkbox" id="pKetuk" ${D.ketuk === false ? "" : "checked"}> Bunyi &amp; getar saat tombol diketuk</label>
         <label class="f">Tema<select id="thm"><option value="">Ikuti perangkat</option><option value="light" ${D.tema === "light" ? "selected" : ""}>Terang</option><option value="dark" ${D.tema === "dark" ? "selected" : ""}>Gelap</option></select></label>
       </section>
       <section class="panel stack"><h3 style="font-size:17px">Akun saya</h3>
@@ -4452,6 +4484,7 @@ function vAtur(){
   $("#pK").onchange = e => { D.kertas = +e.target.value; simpanD(); vAtur(); };
   $("#pM").onchange = e => { D.modeCetak = e.target.value; D.modeDipilih = true; simpanD(); vAtur(); };
   $("#thm").onchange = e => { D.tema = e.target.value; simpanD(); terapkanTema(); };
+  $("#pKetuk").onchange = e => { D.ketuk = e.target.checked; simpanD(); if (D.ketuk) umpanKetuk(); };
   $("#pTest").onclick = () => cetak({ no: B.toko.prefix + "UJI", tgl: today(), jam: "00:00", kasir: B.me.nama, pelanggan: "UJI CETAK", hp: "", items: [{ nama: "BUKET BUNGA 100K", harga: 100000, qty: 1 }, { nama: "COKLAT SILVERQUEEN", harga: 15000, qty: 2 }], subtotal: 130000, diskon: 0, ongkir: 0, total: 130000, metode: "Tunai", bayar: 150000, catatan: "" });
   $("#pKartu").onclick = () => cetakKartu("Happy Birthday!\nSemoga panjang umur, sehat selalu,\ndan bahagia.\n\nDari: Rina");
   $("#pwSave").onclick = e => coba(async () => { await api("POST", "/api/akun/password", { lama: $("#pwL").value, baru: $("#pwB").value }); $("#pwL").value = $("#pwB").value = ""; toast("Password diganti"); }, e.target);

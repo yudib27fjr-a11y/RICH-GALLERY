@@ -12,6 +12,7 @@
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <!-- Absen karyawan: foto selfie & cek lokasi toko -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
