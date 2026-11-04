@@ -580,3 +580,14 @@ section.lipat:not(.tertutup) > .lipat-judul{border-bottom:1px solid var(--line)}
 .nota-unggah:hover{border-color:var(--accent)}
 .nota-unggah img{display:block;max-height:220px;max-width:100%;border-radius:8px;margin:0 auto 4px}
 .note.ok-note{border-color:color-mix(in srgb,var(--ok) 45%,var(--line))}
+/* ikon menu: kotak warna bergradasi + kilau, ikon putih dua nada */
+nav.tabs button .ic,.menu-grid .ic,.akun-baris .ic{position:relative;overflow:hidden;
+  background:radial-gradient(120% 120% at 18% 8%,color-mix(in srgb,var(--c) 40%,#fff) 0%,var(--c) 48%,color-mix(in srgb,var(--c) 70%,#000) 100%);
+  box-shadow:0 6px 14px -7px var(--c),0 1px 3px -1px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.5),inset 0 -5px 10px -6px rgba(0,0,0,.35)}
+nav.tabs button .ic::after,.menu-grid .ic::after,.akun-baris .ic::after{content:"";position:absolute;inset:2px 2px auto 2px;height:46%;border-radius:inherit;border-bottom-left-radius:45%;border-bottom-right-radius:45%;background:linear-gradient(rgba(255,255,255,.32),rgba(255,255,255,0));pointer-events:none}
+nav.tabs button .ic svg,.menu-grid .ic svg,.akun-baris .ic svg{position:relative;z-index:1;filter:drop-shadow(0 1px 1px rgba(0,0,0,.28));stroke-width:1.9}
+.menu-grid .ic{width:56px;height:56px;border-radius:18px}
+.menu-grid .ic svg{width:30px;height:30px}
+nav.tabs button .ic{width:36px;height:36px;border-radius:12px}
+.menu-grid button:hover .ic{transform:translateY(-2px)}
+.menu-grid .ic{transition:transform .15s}

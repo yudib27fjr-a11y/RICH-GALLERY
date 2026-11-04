@@ -788,28 +788,28 @@ function tampilSetup(sendiri = false){
 
 /* ================= kerangka & navigasi ================= */
 const ICON = {
-  kasir: '<path d="M4 7h16l-1.5 9a2 2 0 0 1-2 1.7H7.5a2 2 0 0 1-2-1.7L4 7z"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/>',
-  riwayat: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
-  jasa: '<ellipse cx="9" cy="8" rx="4" ry="5"/><path d="M9 13l-.8 1.4h1.6zM9 14.4c0 2.2 1.6 2.8 1.6 6.1"/><path d="M15 21l1.5-6h4L22 21z"/><path d="M16.5 15c0-1.6 1.1-2.6 2.5-2.6s2.5 1 2.5 2.6"/>',
-  buketuang: '<rect x="3" y="6.5" width="13" height="8" rx="1.2"/><circle cx="9.5" cy="10.5" r="2"/><path d="M16 9l3.5-3.5M17.5 12.5L21 9M14 17.5l3 3.5M10 17.5l-3 3.5M8 21h8"/>',
-  promosi: '<path d="M4 10v4h3l6 4V6L7 10H4z"/><path d="M16.5 9a4 4 0 0 1 0 6M19 6.5a7.5 7.5 0 0 1 0 11"/>',
-  konten: '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.5v5l4.5-2.5z"/>',
-  idekonten: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.8.6 1.1 1.4 1.1 2.2h5c0-.8.3-1.6 1.1-2.2A6 6 0 0 0 12 3z"/>',
-  struk: '<path d="M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 21z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
-  belanja: '<path d="M3 4h2l2.2 11h10.6L20 7H6.2"/><circle cx="9" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/><path d="M11 10.5l2 2 3.5-3.5"/>',
-  mitra: '<path d="M2.5 12.5l4-4 3 1 2.5-2 2.5 1 4-1.5 3 4"/><path d="M6.5 8.5l5 5.5c.8.8 2 .8 2.6 0l2.4-2.6"/><path d="M9.5 15.5l1.5 1.5c.7.7 1.8.7 2.4 0"/><path d="M2.5 12.5l3 3M21.5 13l-3 3"/>',
-  kurir: '<circle cx="6" cy="16.5" r="2.8"/><circle cx="18" cy="16.5" r="2.8"/><path d="M8.8 16.5h5.4l2.3-5H12l-2 3"/><path d="M14.5 7.5h2.2l1.3 4"/><path d="M5 11.5h4"/>',
-  produksi: '<circle cx="12" cy="8" r="3"/><path d="M12 5V3M15 8h2M9 8H7M12 11v10M12 17c-3 0-5-2-5-4 3 0 5 2 5 4zM12 15c3 0 5-2 5-4-3 0-5 2-5 4z"/>',
-  stok: '<path d="M4 8l8-4 8 4-8 4-8-4z"/><path d="M4 8v8l8 4 8-4V8"/><path d="M12 12v8"/>',
-  mutasi: '<path d="M7 4v14M7 18l-3-3M7 18l3-3"/><path d="M17 20V6M17 6l-3 3M17 6l3 3"/>',
-  opname: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4.5h6M9 10l2 2 4-4M9 16h6"/>',
-  biaya: '<rect x="3.5" y="6" width="17" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M7 9.5v5M17 9.5v5"/>',
-  laporan: '<path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/>',
-  pesanan: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/><path d="M9 15l2 2 4-4"/>',
-  absenku: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M9 2.5h6M12 2.5V5"/>',
-  absen: '<path d="M8.5 20c1-2 1.5-4.5 1.5-8a2 2 0 0 1 4 0c0 2.5-.3 4.8-1 7"/><path d="M5.5 17c.7-1.6 1-3.3 1-5a5.5 5.5 0 0 1 11 0c0 1.2-.1 2.4-.3 3.5"/><path d="M4 9.5A8.5 8.5 0 0 1 20 9"/><path d="M12 12c0 3.5-.6 6.3-2 8.5"/>',
-  gaji: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/><path d="M16 3.5l-4 2.5-4-2.5"/>',
-  atur: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
+  kasir: '<path d="M5 8h14l-1 11.2a2 2 0 0 1-2 1.8H8a2 2 0 0 1-2-1.8L5 8z" fill="currentColor" fill-opacity=".28"/><path d="M9 10V7a3 3 0 0 1 6 0v3"/><path d="M9.5 14.5h5"/>',
+  riwayat: '<path d="M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 21z" fill="currentColor" fill-opacity=".28"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+  jasa: '<ellipse cx="9.5" cy="8" rx="4.3" ry="5" fill="currentColor" fill-opacity=".28"/><path d="M9.5 13l-1 1.6h2z"/><path d="M9.5 14.6c0 2.4 2 3.2 2 6.4"/><path d="M17.5 3.5v4M15.5 5.5h4M18.5 11v2.6M17.2 12.3h2.6"/>',
+  buketuang: '<path d="M5.5 11.5h13L12 22z" fill="currentColor" fill-opacity=".28"/><rect x="3" y="3.2" width="10" height="6.4" rx="1.3" transform="rotate(-16 8 6.4)"/><rect x="11" y="3.2" width="10" height="6.4" rx="1.3" transform="rotate(16 16 6.4)" fill="currentColor" fill-opacity=".28"/><circle cx="16" cy="6.4" r="1.4"/><path d="M9.5 15.5h5"/>',
+  promosi: '<path d="M4 10v4h3l7 4.5v-13L7 10z" fill="currentColor" fill-opacity=".28"/><path d="M17.5 9a4 4 0 0 1 0 6M20 6.5a7.5 7.5 0 0 1 0 11"/><path d="M7 14l1.2 5h2.3l-1-5"/>',
+  konten: '<rect x="3" y="5" width="18" height="14" rx="4" fill="currentColor" fill-opacity=".28"/><path d="M10.2 9.2v5.6l4.6-2.8z" fill="currentColor"/>',
+  idekonten: '<path d="M12 3a6 6 0 0 0-3.6 10.8c.8.6 1.1 1.4 1.1 2.2h5c0-.8.3-1.6 1.1-2.2A6 6 0 0 0 12 3z" fill="currentColor" fill-opacity=".28"/><path d="M9.6 19h4.8M10.6 21.5h2.8"/><path d="M12 7.6v3.2M10.4 10.8h3.2"/>',
+  struk: '<path d="M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 21z" fill="currentColor" fill-opacity=".28"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+  belanja: '<path d="M6.2 7H20l-2.2 8H7.4z" fill="currentColor" fill-opacity=".28"/><path d="M3 4h2l2.2 11h10.6"/><circle cx="9" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/>',
+  mitra: '<path d="M2.5 12.5l4-4 3 1 2.5-2 2.5 1 4-1.5 3 4" /><path d="M6.5 8.5l5 5.5c.8.8 2 .8 2.6 0l2.4-2.6" /><path d="M9.5 15.5l1.5 1.5c.7.7 1.8.7 2.4 0"/><path d="M2.5 12.5l3 3M21.5 13l-3 3"/><path d="M6.5 8.5l5 5.5c.8.8 2 .8 2.6 0l2.4-2.6-2.5-1-2.5 2-3-1z" fill="currentColor" fill-opacity=".28" stroke="none"/>',
+  kurir: '<rect x="3" y="7.5" width="6" height="5" rx="1.2" fill="currentColor" fill-opacity=".28"/><circle cx="6" cy="17" r="2.6"/><circle cx="18" cy="17" r="2.6"/><path d="M8.6 17h6.2l2.2-6h-3.8"/><path d="M14 6h2.6l1.9 5"/><path d="M3 12.5h6l2.2 4"/>',
+  produksi: '<g fill="currentColor" fill-opacity=".28"><circle cx="12" cy="5" r="3"/><circle cx="16.4" cy="8.2" r="3"/><circle cx="14.7" cy="13.2" r="3"/><circle cx="9.3" cy="13.2" r="3"/><circle cx="7.6" cy="8.2" r="3"/></g><circle cx="12" cy="9.4" r="1.8" fill="currentColor"/><path d="M12 16.4V22"/>',
+  stok: '<path d="M4 7.5l8-4 8 4-8 4z" fill="currentColor" fill-opacity=".28"/><path d="M4 7.5v9l8 4 8-4v-9"/><path d="M12 11.5v9"/><path d="M8 5.5l8 4"/>',
+  mutasi: '<path d="M7.5 4v15M7.5 19l-3.2-3.2M7.5 19l3.2-3.2"/><path d="M16.5 20V5M16.5 5l-3.2 3.2M16.5 5l3.2 3.2"/>',
+  opname: '<rect x="5" y="4.5" width="14" height="16.5" rx="2.5" fill="currentColor" fill-opacity=".28"/><rect x="9" y="2.8" width="6" height="3.4" rx="1.2"/><path d="M8.8 12.2l2.1 2.1 4.3-4.3M9 17.5h6"/>',
+  biaya: '<rect x="3" y="6.5" width="18" height="13" rx="3" fill="currentColor" fill-opacity=".28"/><path d="M15.5 13h5.5"/><circle cx="16.8" cy="13" r=".9" fill="currentColor"/><path d="M6.5 6.5l8.5-3.2 1.3 3.2"/>',
+  laporan: '<rect x="4" y="11" width="4" height="9" rx="1.2" fill="currentColor" fill-opacity=".28"/><rect x="10" y="5" width="4" height="15" rx="1.2" fill="currentColor" fill-opacity=".28"/><rect x="16" y="14" width="4" height="6" rx="1.2" fill="currentColor" fill-opacity=".28"/>',
+  pesanan: '<rect x="3.5" y="5" width="17" height="15.5" rx="3" fill="currentColor" fill-opacity=".28"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M9 14.8l2 2 4-4"/>',
+  absenku: '<circle cx="12" cy="13.5" r="7.5" fill="currentColor" fill-opacity=".28"/><path d="M12 9.6v4l2.8 1.8"/><path d="M9.5 2.6h5M12 2.6v3.4M18.4 6.6l1.4-1.4"/>',
+  absen: '<rect x="3.5" y="5" width="17" height="15.5" rx="3" fill="currentColor" fill-opacity=".28"/><path d="M3.5 10h17M8 3v4M16 3v4"/><circle cx="12" cy="13.6" r="1.8"/><path d="M8.8 18.6c.6-1.6 1.8-2.4 3.2-2.4s2.6.8 3.2 2.4"/>',
+  gaji: '<rect x="2.5" y="6" width="19" height="12" rx="2.5" fill="currentColor" fill-opacity=".28"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9.5v5M18 9.5v5"/>',
+  atur: '<path d="M10.3 3h3.4l.5 2.4 1.9.8 2-1.4 2.4 2.4-1.4 2 .8 1.9 2.4.5v3.4l-2.4.5-.8 1.9 1.4 2-2.4 2.4-2-1.4-1.9.8-.5 2.4h-3.4l-.5-2.4-1.9-.8-2 1.4-2.4-2.4 1.4-2-.8-1.9L3 13.7v-3.4l2.4-.5.8-1.9-1.4-2 2.4-2.4 2 1.4 1.9-.8z" fill="currentColor" fill-opacity=".28"/><circle cx="12" cy="12" r="3"/>',
 };
 const SEMUA_VIEW = [["kasir", "Kasir"], ["absenku", "Absen"], ["pesanan", "Pesanan"], ["jasa", "Jasa"], ["buketuang", "Buket uang"], ["kurir", "Kurir"], ["mitra", "Mitra"], ["belanja", "Belanja"], ["riwayat", "Transaksi"], ["produksi", "Produksi"], ["stok", "Stok"], ["mutasi", "Masuk/Keluar"], ["opname", "Opname"], ["biaya", "Pengeluaran", 1], ["laporan", "Laporan", 1], ["absen", "Rekap Absen", 1], ["gaji", "Gaji", 1], ["konten", "Konten", 1], ["idekonten", "Ide konten"], ["promosi", "Promosi"], ["atur", "Pengaturan"]];
 const daftarView = () => SEMUA_VIEW.filter(v => (!v[2] || isAdmin()) && (v[0] !== "absen" || (B && B.toko.absen_aktif))
@@ -871,7 +871,7 @@ async function cekSync(){
 const WARNA_MENU = { kasir: "#ee4d2d", absenku: "#16a34a", pesanan: "#2563eb", jasa: "#9333ea", buketuang: "#059669", kurir: "#0d9488", mitra: "#4f46e5",
   belanja: "#f97316", riwayat: "#d97706", idekonten: "#eab308", produksi: "#db2777", stok: "#a16207", mutasi: "#0891b2", opname: "#65a30d", biaya: "#dc2626", laporan: "#1d4ed8",
   absen: "#7c3aed", gaji: "#047857", konten: "#e11d48", promosi: "#c026d3", atur: "#64748b", menu: "#8e1d4b" };
-ICON.menu = '<rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/>';
+ICON.menu = '<rect x="4" y="4" width="7" height="7" rx="2.2" fill="currentColor" fill-opacity=".28"/><rect x="13" y="4" width="7" height="7" rx="2.2"/><rect x="4" y="13" width="7" height="7" rx="2.2"/><rect x="13" y="13" width="7" height="7" rx="2.2" fill="currentColor" fill-opacity=".28"/>';
 const ikonMenu = k => `<span class="ic" style="--c:${WARNA_MENU[k] || "#8e1d4b"};--cs:${WARNA_MENU[k] || "#8e1d4b"}1f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[k] || ""}</svg></span>`;
 /* ---- Tata letak tombol (bisa diubah per pengguna di HP ini): 2 tombol besar, ≤3 tombol pojok kanan atas, urutan menu bawah ---- */
 const TATA_BAWAAN = { besar: ["kasir", "pesanan"], atas: ["absenku", "riwayat"], urut: [] };
