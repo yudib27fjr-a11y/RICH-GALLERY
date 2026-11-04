@@ -937,11 +937,13 @@ function menuAkun(){
   modal(`<div class="akun-kepala"><img src="/monogram.png" alt="" width="52" height="52"><div style="flex:1;min-width:0"><b>${esc(toTitle(B.toko.nama_toko))}</b><div class="small muted">${esc(toTitle(B.me.nama))} · <span class="pill ${isAdmin() ? "ok" : "mut"}">${isAdmin() ? "ADMIN" : "KARYAWAN"}</span></div></div>${tombolTutup()}</div>
     ${adminV.length ? `<div class="small muted" style="font-weight:700;margin:4px 0 6px">🔒 Menu admin</div><div class="menu-grid">${adminV.map(([k, l]) => `<button type="button" data-g="${k}" class="${view === k ? "on" : ""}">${ikonMenu(k)}<span>${esc(l)}</span></button>`).join("")}</div>` : ""}
     <div class="list" style="margin-top:12px">
+      <button class="li akun-baris" id="akSemua" type="button">${ikonMenu("menu")}<span style="flex:1">Semua menu</span><span class="muted">›</span></button>
       <button class="li akun-baris" data-g="atur" type="button">${ikonMenu("atur")}<span style="flex:1">Pengaturan</span><span class="muted">›</span></button>
       <button class="li akun-baris" id="akTata" type="button"><span class="ic" style="--c:#7c3aed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><path d="M17.5 14v7M14 17.5h7"/></svg></span><span style="flex:1">Atur posisi tombol</span><span class="muted">›</span></button>
       <button class="li akun-baris keluar" id="akKeluar" type="button"><span class="ic" style="--c:#dc2626"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h11"/></svg></span><span style="flex:1">Keluar (logout)</span></button></div>`, m => {
     $$("[data-g]", m).forEach(b => b.onclick = () => { closeModal(); pindah(b.dataset.g); });
     $("#akTata", m).onclick = () => { closeModal(); aturTata(); };
+    $("#akSemua", m).onclick = () => { closeModal(); semuaMenu(); };
     $("#akKeluar", m).onclick = () => konfirmasi("Keluar dari akun?", `Anda akan keluar dari akun ${toTitle(B.me.nama)}. Keranjang yang belum dibayar dikosongkan.`, "Keluar", async () => { await api("POST", "/api/logout").catch(() => {}); resetCart(); tampilLogin(); });
   });
 }
@@ -997,11 +999,10 @@ function pasangGeserNav(){
   nav.addEventListener("contextmenu", e => { if (e.target.closest("button[data-v]")) e.preventDefault(); });
 }
 function renderNav(){
-  $("#tabs").innerHTML = `<button type="button" data-semua class="semua" aria-label="Semua menu">${ikonMenu("menu")}Menu</button>`
+  $("#tabs").innerHTML = "" // tombol "Menu" (semua menu) ada di halaman Kasir & menu akun
     + (() => { const ex = diAtas(), u = tataTombol().urut, L = daftarView().filter(v => !ex.includes(v[0]) && !v[2]); return [...u.map(k => L.find(v => v[0] === k)).filter(Boolean), ...L.filter(v => !u.includes(v[0]))]; })().map(([k, l]) => `<button type="button" data-v="${k}" class="${view === k ? "on" : ""}" aria-label="${l}" style="--c:${WARNA_MENU[k] || "#8e1d4b"}">${ikonMenu(k)}${l}</button>`).join("");
   $$("#tabs button[data-v]").forEach(b => b.onclick = () => { if (geserNav.baruSaja) return; pindah(b.dataset.v); });
   pasangGeserNav();
-  $("#tabs [data-semua]").onclick = semuaMenu;
   renderPintasan(); // tombol besar & pojok kanan atas, tampil di semua menu
   const br = $("#tbBrand"); if (br) br.classList.toggle("on", view === "atur" || daftarView().some(v => v[2] && v[0] === view));
   const on = $("#tabs button.on"); if (on && on.scrollIntoView) try { on.scrollIntoView({ block: "nearest", inline: "center" }); } catch {}
