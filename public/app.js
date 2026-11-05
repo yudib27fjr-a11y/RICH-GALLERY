@@ -156,6 +156,18 @@ function modal(html, onMount){
 }
 function closeModal(){ $("#modalRoot").innerHTML = ""; }
 /* Tombol kembali Android: tutup jendela/keranjang dulu sebelum keluar aplikasi. */
+/* Geser layar ke kanan (atau dari tepi kanan ke kiri) di menu mana pun → kembali ke menu utama (Kasir). */
+(() => {
+  let x0 = 0, y0 = 0, t0 = 0, aktif = false;
+  const abaikan = el => !!(el && el.closest && el.closest("input, textarea, select, .chips, .unit-chips, nav.tabs, .tbl-wrap, .jenis-saring, .seg, .modal, [data-noswipe], table"));
+  document.addEventListener("touchstart", e => { const t = e.touches[0]; aktif = e.touches.length === 1 && !abaikan(e.target) && typeof view !== "undefined" && view !== "kasir" && B; x0 = t.clientX; y0 = t.clientY; t0 = Date.now(); }, { passive: true });
+  document.addEventListener("touchend", e => {
+    if (!aktif) return; aktif = false;
+    const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0;
+    if (Date.now() - t0 > 700 || Math.abs(dy) > 70 || Math.abs(dx) < Math.abs(dy) * 2) return;
+    if (dx > 90 || (dx < -90 && x0 > innerWidth - 40)) { if ($("#modalRoot .modal")) return; pindah("kasir"); }
+  }, { passive: true });
+})();
 window.rgBack = () => {
   if ($("#modalRoot .modal")) { closeModal(); return true; }
   const c = $("#cart.open"); if (c) { c.classList.remove("open"); return true; }
@@ -858,6 +870,7 @@ let view = "kasir";
 function shell(){
   $("#root").innerHTML = `<div class="app">
     <header class="topbar">
+      <button class="tb-kembali" id="tbKembali" type="button" aria-label="Kembali ke Kasir" title="Kembali ke Kasir (atau geser layar ke kanan)" hidden><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
       <button class="brand" id="tbBrand" type="button" aria-haspopup="dialog" title="Akun, pengaturan & menu admin"><img src="/monogram.png" alt="" width="34" height="34"><span class="brand-teks"><h1>${esc(toTitle(B.toko.nama_toko))}<svg class="brand-panah" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></h1><small>${esc(toTitle(B.me.nama))} · ${isAdmin() ? "Admin" : "Karyawan"}</small></span></button>
       <span class="sp"></span>
       ${isAdmin() ? `<span class="sync-dot" id="syncDot" title="Status sinkron Google Sheet"></span>` : ""}${LOKAL ? `<button class="sync-chip" id="syncChip" type="button" hidden></button>` : ""}
@@ -869,6 +882,7 @@ function shell(){
       <main id="main"></main>
     </div></div>`;
   $("#tbBrand").onclick = menuAkun;
+  $("#tbKembali").onclick = () => pindah("kasir");
   if (isAdmin() || LOKAL) { cekSync(); clearInterval(window.__rgCekSync); window.__rgCekSync = setInterval(cekSync, 30_000); }
 }
 /** Perangkat kasir: tanda jelas bila ada transaksi yang belum terkirim / ditolak server pusat (untuk semua pengguna). */
@@ -913,9 +927,10 @@ const WARNA_MENU = { kasir: "#ee4d2d", absenku: "#16a34a", pesanan: "#2563eb", j
 ICON.menu = '<rect x="4" y="4" width="7" height="7" rx="2.2" fill="currentColor" fill-opacity=".28"/><rect x="13" y="4" width="7" height="7" rx="2.2"/><rect x="4" y="13" width="7" height="7" rx="2.2"/><rect x="13" y="13" width="7" height="7" rx="2.2" fill="currentColor" fill-opacity=".28"/>';
 const ikonMenu = k => `<span class="ic" style="--c:${WARNA_MENU[k] || "#8e1d4b"};--cs:${WARNA_MENU[k] || "#8e1d4b"}1f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[k] || ""}</svg></span>`;
 /* ---- Tata letak tombol (bisa diubah per pengguna di HP ini): 2 tombol besar, ≤3 tombol pojok kanan atas, urutan menu bawah ---- */
-const TATA_BAWAAN = { besar: ["kasir", "pesanan"], atas: ["absenku", "riwayat"], urut: [] };
+const TATA_BAWAAN = { besar: [], atas: ["pesanan", "absenku", "riwayat"], urut: [] }; // Kasir = menu utama; menu lain punya tombol ‹ kembali / geser
+
 const SUB_BESAR = { kasir: "Jual & bayar", pesanan: "Ambil & antar", riwayat: "Riwayat jual", jasa: "Pesanan jasa", buketuang: "Isi & jasa", kurir: "Antar pesanan", belanja: "Belanja online", produksi: "Catat buatan", stok: "Stok barang", absenku: "Masuk & pulang", idekonten: "Ide video", promosi: "Rencana promo", laporan: "Ringkasan", biaya: "Uang keluar", gaji: "Gaji karyawan", mitra: "Kontak mitra" };
-const kunciTata = () => "rg_tata_" + ((B && B.me && B.me.id) || 0);
+const kunciTata = () => "rg_tata2_" + ((B && B.me && B.me.id) || 0);
 function tataTombol(){
   let t = {}; try { t = JSON.parse(localStorage.getItem(kunciTata()) || "{}") || {}; } catch {}
   const ada = k => SEMUA_VIEW.some(v => v[0] === k) && k !== "atur";
@@ -931,12 +946,12 @@ const svgIkon = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
 function renderPintasan(){
   const T = tataTombol(), kb = $("#tbBesar"), kn = $("#tbKanan"); if (!kb || !kn) return;
   const besar = T.besar.filter(bolehLihat), atas = T.atas.filter(bolehLihat);
-  kb.hidden = !besar.length;
+  kb.hidden = !besar.length || view === "kasir"; // di menu utama (Kasir) tampilan bersih seperti contoh
   kb.innerHTML = besar.map(k => `<button class="kasir-besar kb-${k}" data-pv="${k}" type="button" aria-label="${esc(namaView(k))}" style="--c:${WARNA_MENU[k] || "#8e1d4b"}"><span class="ic">${svgIkon(k)}</span><span class="kb-teks"><b>${esc(namaView(k))}</b><small>${esc(SUB_BESAR[k] || "Buka menu")}</small></span></button>`).join("");
   kn.innerHTML = atas.map(k => `<button class="tb-btn tb-${k}" data-pv="${k}" type="button" title="${esc(namaView(k))}" aria-label="${esc(namaView(k))}" style="--c:${WARNA_MENU[k] || "#8e1d4b"}"><span class="ic">${svgIkon(k)}</span><span>${esc(k === "absenku" ? "Absen" : namaView(k))}</span></button>`).join("");
   $$("[data-pv]", kb).concat($$("[data-pv]", kn)).forEach(b => { b.classList.toggle("on", view === b.dataset.pv); b.onclick = () => pindah(b.dataset.pv); });
 }
-const diAtas = () => { const T = tataTombol(); return [...T.besar, ...T.atas, "atur"]; }; // tidak diulang di deretan menu
+const diAtas = () => { const T = tataTombol(); return ["kasir", ...T.besar, ...T.atas, "atur"]; }; // tidak diulang di deretan menu
 /** Atur posisi tombol: pilih menu untuk 2 tombol besar & tombol pojok kanan atas, dan urutan menu bawah (ukuran tetap). */
 function aturTata(){
   let T = tataTombol();
@@ -1043,6 +1058,8 @@ function renderNav(){
   $$("#tabs button[data-v]").forEach(b => b.onclick = () => { if (geserNav.baruSaja) return; pindah(b.dataset.v); });
   pasangGeserNav();
   renderPintasan(); // tombol besar & pojok kanan atas, tampil di semua menu
+  const kb = $("#tbKembali"); if (kb) kb.hidden = view === "kasir";
+  const br2 = $("#tbBrand small"); if (br2) br2.textContent = view === "kasir" ? `Kasir · ${toTitle(B.me.nama)}` : `${namaView(view)} · ${toTitle(B.me.nama)}`;
   const br = $("#tbBrand"); if (br) br.classList.toggle("on", view === "atur" || daftarView().some(v => v[2] && v[0] === view));
   const on = $("#tabs button.on"); if (on && on.scrollIntoView) try { on.scrollIntoView({ block: "nearest", inline: "center" }); } catch {}
 }
