@@ -1192,6 +1192,10 @@ let posKat = "SEMUA", posQ = "", hanyaReady = false, saleTerakhir = null, posUni
 const petaUnit = () => (B && B.toko && B.toko.unit_kat) || {};
 const unitP = k => unitKategori(k, petaUnit());
 const infoUnit = id => UNIT.find(u => u.id === id);
+const IKON_KAT = [[/WISUDA|SKRIPSI/, "🎓"], [/UANG/, "💸"], [/SNACK TOWER/, "🗼"], [/SNACK/, "🍫"], [/COSTUME|CUSTOM/, "🎨"], [/BONEKA/, "🧸"], [/SINGLE/, "🌹"], [/BAG/, "👜"], [/BALON/, "🎈"], [/BLOOM/, "🎁"],
+  [/STANDING FLOWER/, "🌺"], [/STANDING|PAPAN/, "🪧"], [/SESERAHAN|HANTARAN|MAHAR/, "💍"], [/GURU/, "🍎"], [/PROFESI/, "🩺"], [/VAS/, "🏺"], [/HAMPERS|PARSEL|PARCEL/, "🧺"], [/DEKOR/, "🎉"], [/ADDITIONAL/, "✨"]];
+/** Gambar (emoji) kartu produk sesuai kategori. */
+const ikonKategori = k => { const K = String(k || "").toUpperCase(); return (IKON_KAT.find(([r]) => r.test(K)) || [, "💐"])[1]; };
 /** Lencana unit kecil (💐 Bouquet, 🪧 Papan, …). */
 const unitTrx = s => [...new Set(unitBarang(s.items || [], s.jenis || "", petaUnit()))];
 /** Baris saringan unit (Semua · 💐 · 🎁 …) untuk daftar transaksi / pesanan; hanya unit yang ada di daftar. */
@@ -1217,7 +1221,7 @@ function vKasir(){
         <label class="row small muted" style="gap:6px"><input type="checkbox" id="readyOnly" ${hanyaReady ? "checked" : ""}> Stok ready saja</label>
       </div>
       ${unitAda.length > 1 ? `<div class="unit-chips" id="unitChips"><button type="button" class="${posUnit ? "" : "on"}" data-u="">Semua</button>${unitAda.map(u => `<button type="button" class="${posUnit === u.id ? "on" : ""}" data-u="${u.id}" style="--c:${u.warna}">${u.ikon} ${esc(u.nama.replace(/^Rich /, ""))}</button>`).join("")}</div>` : ""}
-      <div class="chips" id="katChips">${kats.map(k => `<button type="button" class="chip ${k === posKat ? "on" : ""}" data-k="${esc(k)}">${esc(k === "SEMUA" ? "Semua" : toTitle(k))}</button>`).join("")}</div>
+      <div class="chips" id="katChips" ${posUnit || posKat !== "SEMUA" || unitAda.length <= 1 ? "" : "hidden"}>${kats.map(k => `<button type="button" class="chip ${k === posKat ? "on" : ""}" data-k="${esc(k)}">${esc(k === "SEMUA" ? "Semua" : toTitle(k))}</button>`).join("")}</div>
       </div>
       <div class="prodgrid" id="prodGrid"></div>
     </section>
@@ -1246,7 +1250,7 @@ function drawGrid(){
   const list = B.produk.filter(p => p.aktif && (posKat === "SEMUA" || p.kategori === posKat) && (!posUnit || unitP(p.kategori) === posUnit) && (!q || p.nama.toUpperCase().includes(q) || p.kode.includes(q) || p.barcode === q) && (!hanyaReady || p.stok > 0))
     .sort((a, b) => (b.stok > 0) - (a.stok > 0) || a.kategori.localeCompare(b.kategori) || a.harga - b.harga);
   if (!list.length) { g.innerHTML = `<div class="empty" style="grid-column:1/-1">Tidak ada produk yang cocok. Coba kata lain, atau pakai <b>+ Item manual</b>.</div>`; return; }
-  g.innerHTML = list.slice(0, 240).map(p => { const [, cl] = statusStok(p.stok, p.stok_min); return `<button type="button" class="prod" data-id="${p.id}"><span class="nm">${esc(p.nama)}</span><span class="code">${p.kode}${!posUnit ? " " + lencanaUnit(unitP(p.kategori)) : ""}</span><span class="meta"><span class="pr num">${rp(p.harga)}</span><span class="pill ${p.stok > 0 ? cl : "mut"}">${p.stok > 0 ? "Ready " + fq(p.stok) : "Produksi"}</span></span></button>`; }).join("")
+  g.innerHTML = list.slice(0, 240).map(p => { const [, cl] = statusStok(p.stok, p.stok_min); const u = infoUnit(unitP(p.kategori)); return `<button type="button" class="prod prod-u" data-id="${p.id}" style="--c:${u ? u.warna : "#8e1d4b"}"><span class="prod-im">${ikonKategori(p.kategori)}${u ? `<span class="prod-unit">${esc(u.nama.replace(/^Rich /, "").replace("Gift & Bouquet", "Bouquet").replace("Papan Ucapan", "Papan"))}</span>` : `<span class="prod-unit">Additional</span>`}</span><span class="nm">${esc(p.nama)}</span><span class="code">${p.kode}</span><span class="meta"><span class="pr num">${rp(p.harga)}</span><span class="pill ${p.stok > 0 ? cl : "mut"}">${p.stok > 0 ? "Ready " + fq(p.stok) : "Produksi"}</span></span></button>`; }).join("")
     + (list.length > 240 ? `<div class="empty" style="grid-column:1/-1">${list.length - 240} produk lain tersembunyi. Persempit pencarian.</div>` : "");
   $$(".prod", g).forEach(b => b.onclick = () => tambahKeKeranjang(+b.dataset.id));
 }
