@@ -616,3 +616,26 @@ nav.tabs button .ic{width:36px;height:36px;border-radius:12px}
 .tb-kembali:active{transform:scale(.92)}
 .tb-kembali[hidden]{display:none}
 @media (max-width:480px){.tb-kembali{width:36px;height:36px;border-radius:12px}}
+/* Kasir ringkas seperti contoh: tombol ikon kecil di samping cari, kartu produk padat */
+.kasir-atas .row{flex-wrap:nowrap;gap:8px}
+.kasir-atas #posQ{flex:1 1 auto;min-width:0}
+.pos-tombol{flex:0 0 auto;gap:6px}
+.btn.pt-ik{flex:0 0 auto!important;width:50px;height:46px;padding:0!important;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:17px!important;line-height:1;border-radius:13px}
+.btn.pt-ik small{font-size:8.5px;font-weight:700;color:var(--muted);letter-spacing:.1px}
+.btn.pt-ik.btn-add.on small{color:#fff}
+.btn.pt-ik.btn-menu .ic{width:24px;height:24px;border-radius:8px}.btn.pt-ik.btn-menu .ic svg{width:15px;height:15px}
+.unit-chips{margin-top:10px}
+.unit-chips button{font-size:12.5px;padding:6px 10px;border-radius:11px}
+.ready-chip{flex:0 0 auto;display:flex;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:6px 10px;border-radius:11px;border:1.5px dashed var(--line);color:var(--muted);cursor:pointer;white-space:nowrap}
+.ready-chip input{width:14px;height:14px;margin:0}
+.ready-chip.on{border-style:solid;border-color:var(--ok);color:var(--ok)}
+.prodgrid{gap:8px}
+.prod.prod-u{min-height:0;padding:6px 6px 8px;gap:3px;border-radius:14px}
+.prod-im{height:56px;border-radius:10px;font-size:26px;margin-bottom:3px}
+.prod-unit{font-size:9.5px;padding:2px 7px;left:5px;top:5px}
+.prod.prod-u .nm{font-size:12px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;padding:0 2px}
+.prod.prod-u .code{display:none}
+.prod.prod-u .meta{padding:0 2px}
+.prod.prod-u .pr{font-size:12.5px}
+.prod.prod-u .pill{font-size:9.5px;padding:2px 6px}
+@media (min-width:700px){.prodgrid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}

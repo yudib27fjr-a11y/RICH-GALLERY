@@ -1231,13 +1231,12 @@ function vKasir(){
     <section class="catalog">
       <div class="kasir-atas">
       <div class="row">
-        <input type="search" id="posQ" placeholder="Cari nama / kode, atau scan barcode…" value="${esc(posQ)}" style="flex:1 1 220px" aria-label="Cari produk">
-        <div class="pos-tombol"><button class="btn" id="manualBtn" type="button">+ Item manual</button>
-        ${katAdd ? `<button class="btn btn-add ${posKat === katAdd ? "on" : ""}" id="addBtn" type="button" aria-pressed="${posKat === katAdd}">✨ Additional</button>` : ""}
-        <button class="btn btn-menu" id="posMenu" type="button" aria-label="Semua menu">${ikonMenu("menu")}<span>Menu</span></button></div>
-        <label class="row small muted" style="gap:6px"><input type="checkbox" id="readyOnly" ${hanyaReady ? "checked" : ""}> Stok ready saja</label>
+        <input type="search" id="posQ" placeholder="🔎 Cari produk / scan…" value="${esc(posQ)}" style="flex:1 1 220px" aria-label="Cari produk">
+        <div class="pos-tombol"><button class="btn pt-ik" id="manualBtn" type="button" title="Item manual" aria-label="Item manual">＋<small>Manual</small></button>
+        ${katAdd ? `<button class="btn pt-ik btn-add ${posKat === katAdd ? "on" : ""}" id="addBtn" type="button" aria-pressed="${posKat === katAdd}" title="Additional" aria-label="Additional">✨<small>Additional</small></button>` : ""}
+        <button class="btn pt-ik btn-menu" id="posMenu" type="button" aria-label="Semua menu" title="Semua menu">${ikonMenu("menu")}<small>Menu</small></button></div>
       </div>
-      ${unitAda.length > 1 ? `<div class="unit-chips" id="unitChips"><button type="button" class="${posUnit ? "" : "on"}" data-u="">Semua</button>${unitAda.map(u => `<button type="button" class="${posUnit === u.id ? "on" : ""}" data-u="${u.id}" style="--c:${u.warna}">${u.ikon} ${esc(u.nama.replace(/^Rich /, ""))}</button>`).join("")}</div>` : ""}
+      <div class="unit-chips" id="unitChips">${unitAda.length > 1 ? `<button type="button" class="${posUnit ? "" : "on"}" data-u="">Semua</button>${unitAda.map(u => `<button type="button" class="${posUnit === u.id ? "on" : ""}" data-u="${u.id}" style="--c:${u.warna}">${u.ikon} ${esc(u.nama.replace(/^Rich /, "").replace("Gift & Bouquet", "Bouquet").replace("Papan Ucapan", "Papan"))}</button>`).join("")}` : ""}<label class="ready-chip ${hanyaReady ? "on" : ""}"><input type="checkbox" id="readyOnly" ${hanyaReady ? "checked" : ""}> Ready saja</label></div>
       <div class="chips" id="katChips" ${posUnit || posKat !== "SEMUA" || unitAda.length <= 1 ? "" : "hidden"}>${kats.map(k => `<button type="button" class="chip ${k === posKat ? "on" : ""}" data-k="${esc(k)}">${esc(k === "SEMUA" ? "Semua" : toTitle(k))}</button>`).join("")}</div>
       </div>
       <div class="prodgrid" id="prodGrid"></div>
@@ -1246,7 +1245,7 @@ function vKasir(){
   </div>`;
   $("#posQ").oninput = e => { posQ = e.target.value; drawGrid(); };
   $("#posQ").onkeydown = e => { if (e.key !== "Enter") return; const h = cariScan(e.target.value); if (h && h.jenis === "produk") { e.preventDefault(); tambahKeKeranjang(h.x.id); posQ = ""; e.target.value = ""; drawGrid(); } };
-  $("#readyOnly").onchange = e => { hanyaReady = e.target.checked; drawGrid(); };
+  $("#readyOnly").onchange = e => { hanyaReady = e.target.checked; e.target.parentElement.classList.toggle("on", hanyaReady); drawGrid(); };
   $$("#katChips .chip").forEach(b => b.onclick = () => { posKat = b.dataset.k; $$("#katChips .chip").forEach(x => x.classList.toggle("on", x === b)); drawGrid(); });
   $("#manualBtn").onclick = itemManual;
   $("#posMenu").onclick = semuaMenu;
