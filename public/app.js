@@ -870,7 +870,7 @@ let view = "kasir";
 function shell(){
   $("#root").innerHTML = `<div class="app">
     <header class="topbar">
-      <button class="tb-kembali" id="tbKembali" type="button" aria-label="Kembali ke Kasir" title="Kembali ke Kasir (atau geser layar ke kanan)" hidden><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <button class="tb-kembali" id="tbKembali" type="button" aria-label="Ke menu utama" title="Ke menu utama (atau geser layar ke kanan)" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 11.5L12 4l8.5 7.5"/><path d="M5.5 10v9.5h13V10" fill="currentColor" fill-opacity=".18"/><path d="M10 19.5v-5h4v5"/></svg><small>Utama</small></button>
       <button class="brand" id="tbBrand" type="button" aria-haspopup="dialog" title="Akun, pengaturan & menu admin"><img src="/monogram.png" alt="" width="34" height="34"><span class="brand-teks"><h1>${esc(toTitle(B.toko.nama_toko))}<svg class="brand-panah" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></h1><small>${esc(toTitle(B.me.nama))} · ${isAdmin() ? "Admin" : "Karyawan"}</small></span></button>
       <span class="sp"></span>
       ${isAdmin() ? `<span class="sync-dot" id="syncDot" title="Status sinkron Google Sheet"></span>` : ""}${LOKAL ? `<button class="sync-chip" id="syncChip" type="button" hidden></button>` : ""}
@@ -1265,6 +1265,12 @@ function drawGrid(){
   const q = posQ.trim().toUpperCase(), g = $("#prodGrid"); if (!g) return;
   const list = B.produk.filter(p => p.aktif && (posKat === "SEMUA" || p.kategori === posKat) && (!posUnit || unitP(p.kategori) === posUnit) && (!q || p.nama.toUpperCase().includes(q) || p.kode.includes(q) || p.barcode === q) && (!hanyaReady || p.stok > 0))
     .sort((a, b) => (b.stok > 0) - (a.stok > 0) || a.kategori.localeCompare(b.kategori) || a.harga - b.harga);
+  // Tampilan "Semua" tanpa cari / kategori: selang-seling antar unit (Bouquet, Papan, Hampers, Party, …) seperti etalase
+  if (!posUnit && posKat === "SEMUA" && !q && list.length) {
+    const per = UNIT.map(u => list.filter(p => (unitP(p.kategori) || "x") === u.id)).filter(a => a.length), lain = list.filter(p => !UNIT.some(u => u.id === unitP(p.kategori)));
+    const campur = []; for (let i = 0; per.some(a => a[i]); i++) per.forEach(a => { if (a[i]) campur.push(a[i]); });
+    list.splice(0, list.length, ...campur, ...lain);
+  }
   if (!list.length) { g.innerHTML = `<div class="empty" style="grid-column:1/-1">Tidak ada produk yang cocok. Coba kata lain, atau pakai <b>+ Item manual</b>.</div>`; return; }
   g.innerHTML = list.slice(0, 240).map(p => { const [, cl] = statusStok(p.stok, p.stok_min); const u = infoUnit(unitP(p.kategori)); return `<button type="button" class="prod prod-u" data-id="${p.id}" style="--c:${u ? u.warna : "#8e1d4b"}"><span class="prod-im">${ikonKategori(p.kategori)}${u ? `<span class="prod-unit">${esc(u.nama.replace(/^Rich /, "").replace("Gift & Bouquet", "Bouquet").replace("Papan Ucapan", "Papan"))}</span>` : `<span class="prod-unit">Additional</span>`}</span><span class="nm">${esc(p.nama)}</span><span class="code">${p.kode}</span><span class="meta"><span class="pr num">${rp(p.harga)}</span><span class="pill ${p.stok > 0 ? cl : "mut"}">${p.stok > 0 ? "Ready " + fq(p.stok) : "Produksi"}</span></span></button>`; }).join("")
     + (list.length > 240 ? `<div class="empty" style="grid-column:1/-1">${list.length - 240} produk lain tersembunyi. Persempit pencarian.</div>` : "");
@@ -5087,7 +5093,8 @@ async function mulai(){
     $("#root").innerHTML = `<div class="auth"><div class="card"><h1>Tidak terhubung</h1><p>${esc(e.message)}</p><button class="btn pri" id="ulang">Coba lagi</button></div></div>`;
     $("#ulang").onclick = mulai; return;
   }
-  try { const h = location.hash.slice(1).split("?")[0]; if (SEMUA_VIEW.some(v => v[0] === h)) view = h; } catch {}
+  view = "kasir"; // tampilan awal selalu menu utama (Kasir); tautan notifikasi (#…?…) dibuka sesudahnya
+  try { if (!location.hash.includes("?")) history.replaceState(null, "", "#kasir"); } catch {}
   await cekKiosk();
   pPer = null; shell(); render();
   halamanTampil();
