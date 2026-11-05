@@ -160,18 +160,18 @@ function closeModal(){ $("#modalRoot").innerHTML = ""; }
 (() => {
   let x0 = 0, y0 = 0, t0 = 0, aktif = false;
   const abaikan = el => !!(el && el.closest && el.closest("input, textarea, select, .chips, .unit-chips, nav.tabs, .tbl-wrap, .jenis-saring, .seg, .modal, [data-noswipe], table"));
-  document.addEventListener("touchstart", e => { const t = e.touches[0]; aktif = e.touches.length === 1 && !abaikan(e.target) && typeof view !== "undefined" && view !== "kasir" && B; x0 = t.clientX; y0 = t.clientY; t0 = Date.now(); }, { passive: true });
+  document.addEventListener("touchstart", e => { const t = e.touches[0]; aktif = e.touches.length === 1 && !abaikan(e.target) && typeof view !== "undefined" && view !== "beranda" && B; x0 = t.clientX; y0 = t.clientY; t0 = Date.now(); }, { passive: true });
   document.addEventListener("touchend", e => {
     if (!aktif) return; aktif = false;
     const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0;
     if (Date.now() - t0 > 700 || Math.abs(dy) > 70 || Math.abs(dx) < Math.abs(dy) * 2) return;
-    if (dx > 90 || (dx < -90 && x0 > innerWidth - 40)) { if ($("#modalRoot .modal")) return; pindah("kasir"); }
+    if (dx > 90 || (dx < -90 && x0 > innerWidth - 40)) { if ($("#modalRoot .modal")) return; pindah("beranda"); }
   }, { passive: true });
 })();
 window.rgBack = () => {
   if ($("#modalRoot .modal")) { closeModal(); return true; }
   const c = $("#cart.open"); if (c) { c.classList.remove("open"); return true; }
-  if (B && view !== "kasir") { pindah("kasir"); return true; }
+  if (B && view !== "beranda") { pindah("beranda"); return true; }
   return false;
 };
 function konfirmasi(judul, pesan, label, fn, danger = true){
@@ -862,11 +862,11 @@ const ICON = {
   gaji: '<rect x="2.5" y="6" width="19" height="12" rx="2.5" fill="currentColor" fill-opacity=".28"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9.5v5M18 9.5v5"/>',
   atur: '<path d="M10.3 3h3.4l.5 2.4 1.9.8 2-1.4 2.4 2.4-1.4 2 .8 1.9 2.4.5v3.4l-2.4.5-.8 1.9 1.4 2-2.4 2.4-2-1.4-1.9.8-.5 2.4h-3.4l-.5-2.4-1.9-.8-2 1.4-2.4-2.4 1.4-2-.8-1.9L3 13.7v-3.4l2.4-.5.8-1.9-1.4-2 2.4-2.4 2 1.4 1.9-.8z" fill="currentColor" fill-opacity=".28"/><circle cx="12" cy="12" r="3"/>',
 };
-const SEMUA_VIEW = [["kasir", "Kasir"], ["absenku", "Absen"], ["pesanan", "Pesanan"], ["jasa", "Jasa"], ["buketuang", "Buket uang"], ["kurir", "Kurir"], ["mitra", "Mitra"], ["belanja", "Belanja"], ["riwayat", "Transaksi"], ["produksi", "Produksi"], ["stok", "Stok"], ["mutasi", "Masuk/Keluar"], ["opname", "Opname"], ["biaya", "Pengeluaran", 1], ["laporan", "Laporan", 1], ["absen", "Rekap Absen", 1], ["gaji", "Gaji", 1], ["konten", "Konten", 1], ["idekonten", "Ide konten"], ["promosi", "Promosi"], ["atur", "Pengaturan"]];
+const SEMUA_VIEW = [["beranda", "Menu utama"], ["kasir", "Kasir"], ["absenku", "Absen"], ["pesanan", "Pesanan"], ["jasa", "Jasa"], ["buketuang", "Buket uang"], ["kurir", "Kurir"], ["mitra", "Mitra"], ["belanja", "Belanja"], ["riwayat", "Transaksi"], ["produksi", "Produksi"], ["stok", "Stok"], ["mutasi", "Masuk/Keluar"], ["opname", "Opname"], ["biaya", "Pengeluaran", 1], ["laporan", "Laporan", 1], ["absen", "Rekap Absen", 1], ["gaji", "Gaji", 1], ["konten", "Konten", 1], ["idekonten", "Ide konten"], ["promosi", "Promosi"], ["atur", "Pengaturan"]];
 const daftarView = () => SEMUA_VIEW.filter(v => (!v[2] || isAdmin()) && (v[0] !== "absen" || (B && B.toko.absen_aktif))
   && (v[0] !== "absenku" || (kioskInfo && kioskInfo.aktif))
   && (v[0] !== "promosi" || isAdmin() || (B && B.toko.promosi_pic && B.toko.promosi_pic === B.me.id)));
-let view = "kasir";
+let view = "beranda";
 function shell(){
   $("#root").innerHTML = `<div class="app">
     <header class="topbar">
@@ -882,7 +882,7 @@ function shell(){
       <main id="main"></main>
     </div></div>`;
   $("#tbBrand").onclick = menuAkun;
-  $("#tbKembali").onclick = () => pindah("kasir");
+  $("#tbKembali").onclick = () => pindah("beranda");
   if (isAdmin() || LOKAL) { cekSync(); clearInterval(window.__rgCekSync); window.__rgCekSync = setInterval(cekSync, 30_000); }
 }
 /** Perangkat kasir: tanda jelas bila ada transaksi yang belum terkirim / ditolak server pusat (untuk semua pengguna). */
@@ -927,10 +927,9 @@ const WARNA_MENU = { kasir: "#ee4d2d", absenku: "#16a34a", pesanan: "#2563eb", j
 ICON.menu = '<rect x="4" y="4" width="7" height="7" rx="2.2" fill="currentColor" fill-opacity=".28"/><rect x="13" y="4" width="7" height="7" rx="2.2"/><rect x="4" y="13" width="7" height="7" rx="2.2"/><rect x="13" y="13" width="7" height="7" rx="2.2" fill="currentColor" fill-opacity=".28"/>';
 const ikonMenu = k => `<span class="ic" style="--c:${WARNA_MENU[k] || "#8e1d4b"};--cs:${WARNA_MENU[k] || "#8e1d4b"}1f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[k] || ""}</svg></span>`;
 /* ---- Tata letak tombol (bisa diubah per pengguna di HP ini): 2 tombol besar, ≤3 tombol pojok kanan atas, urutan menu bawah ---- */
-const TATA_BAWAAN = { besar: [], atas: ["pesanan", "absenku", "riwayat"], urut: [] }; // Kasir = menu utama; menu lain punya tombol ‹ kembali / geser
-
+const TATA_BAWAAN = { besar: ["kasir", "pesanan"], atas: ["absenku", "riwayat"], urut: [] }; // menu utama = 5 unit; menu lain punya tombol 🏠 Utama / geser
 const SUB_BESAR = { kasir: "Jual & bayar", pesanan: "Ambil & antar", riwayat: "Riwayat jual", jasa: "Pesanan jasa", buketuang: "Isi & jasa", kurir: "Antar pesanan", belanja: "Belanja online", produksi: "Catat buatan", stok: "Stok barang", absenku: "Masuk & pulang", idekonten: "Ide video", promosi: "Rencana promo", laporan: "Ringkasan", biaya: "Uang keluar", gaji: "Gaji karyawan", mitra: "Kontak mitra" };
-const kunciTata = () => "rg_tata2_" + ((B && B.me && B.me.id) || 0);
+const kunciTata = () => "rg_tata3_" + ((B && B.me && B.me.id) || 0);
 function tataTombol(){
   let t = {}; try { t = JSON.parse(localStorage.getItem(kunciTata()) || "{}") || {}; } catch {}
   const ada = k => SEMUA_VIEW.some(v => v[0] === k) && k !== "atur";
@@ -946,12 +945,12 @@ const svgIkon = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
 function renderPintasan(){
   const T = tataTombol(), kb = $("#tbBesar"), kn = $("#tbKanan"); if (!kb || !kn) return;
   const besar = T.besar.filter(bolehLihat), atas = T.atas.filter(bolehLihat);
-  kb.hidden = !besar.length || view === "kasir"; // di menu utama (Kasir) tampilan bersih seperti contoh
+  kb.hidden = !besar.length;
   kb.innerHTML = besar.map(k => `<button class="kasir-besar kb-${k}" data-pv="${k}" type="button" aria-label="${esc(namaView(k))}" style="--c:${WARNA_MENU[k] || "#8e1d4b"}"><span class="ic">${svgIkon(k)}</span><span class="kb-teks"><b>${esc(namaView(k))}</b><small>${esc(SUB_BESAR[k] || "Buka menu")}</small></span></button>`).join("");
   kn.innerHTML = atas.map(k => `<button class="tb-btn tb-${k}" data-pv="${k}" type="button" title="${esc(namaView(k))}" aria-label="${esc(namaView(k))}" style="--c:${WARNA_MENU[k] || "#8e1d4b"}"><span class="ic">${svgIkon(k)}</span><span>${esc(k === "absenku" ? "Absen" : namaView(k))}</span></button>`).join("");
-  $$("[data-pv]", kb).concat($$("[data-pv]", kn)).forEach(b => { b.classList.toggle("on", view === b.dataset.pv); b.onclick = () => pindah(b.dataset.pv); });
+  $$("[data-pv]", kb).concat($$("[data-pv]", kn)).forEach(b => { b.classList.toggle("on", view === b.dataset.pv); b.onclick = () => { if (b.dataset.pv === "kasir" && view !== "kasir") { posUnit = ""; posKat = "SEMUA"; } pindah(b.dataset.pv); }; });
 }
-const diAtas = () => { const T = tataTombol(); return ["kasir", ...T.besar, ...T.atas, "atur"]; }; // tidak diulang di deretan menu
+const diAtas = () => { const T = tataTombol(); return ["beranda", "kasir", ...T.besar, ...T.atas, "atur"]; }; // tidak diulang di deretan menu
 /** Atur posisi tombol: pilih menu untuk 2 tombol besar & tombol pojok kanan atas, dan urutan menu bawah (ukuran tetap). */
 function aturTata(){
   let T = tataTombol();
@@ -1058,8 +1057,8 @@ function renderNav(){
   $$("#tabs button[data-v]").forEach(b => b.onclick = () => { if (geserNav.baruSaja) return; pindah(b.dataset.v); });
   pasangGeserNav();
   renderPintasan(); // tombol besar & pojok kanan atas, tampil di semua menu
-  const kb = $("#tbKembali"); if (kb) kb.hidden = view === "kasir";
-  const br2 = $("#tbBrand small"); if (br2) br2.textContent = view === "kasir" ? `Kasir · ${toTitle(B.me.nama)}` : `${namaView(view)} · ${toTitle(B.me.nama)}`;
+  const kb = $("#tbKembali"); if (kb) kb.hidden = view === "beranda";
+  const br2 = $("#tbBrand small"); if (br2) br2.textContent = view === "beranda" ? `${toTitle(B.me.nama)} · ${isAdmin() ? "Admin" : "Karyawan"}` : `${view === "kasir" && posUnit ? infoUnit(posUnit).nama : namaView(view)} · ${toTitle(B.me.nama)}`;
   const br = $("#tbBrand"); if (br) br.classList.toggle("on", view === "atur" || daftarView().some(v => v[2] && v[0] === view));
   const on = $("#tabs button.on"); if (on && on.scrollIntoView) try { on.scrollIntoView({ block: "nearest", inline: "center" }); } catch {}
 }
@@ -1073,10 +1072,10 @@ function semuaMenu(){
 function pindah(v){ view = v; try { history.replaceState(null, "", "#" + v); } catch {} render(); $("#main").scrollTop = 0; }
 function render(){
   if (!B) return;
-  if (!daftarView().some(v => v[0] === view)) view = "kasir";
+  if (!daftarView().some(v => v[0] === view)) view = "beranda";
   renderNav();
   $("#cartbar").hidden = view !== "kasir";
-  return ({ kasir: vKasir, pesanan: vPesanan, riwayat: vRiwayat, produksi: vProduksi, stok: vStok, mutasi: vMutasi, opname: vOpname, biaya: vBiaya, laporan: vLaporan, absen: vAbsen, absenku: vAbsenku, gaji: vGaji, atur: vAtur, kurir: vKurir, mitra: vMitra, jasa: vJasa, buketuang: vBuketUang, belanja: vBelanja, konten: vKonten, idekonten: vIdeKonten, promosi: vPromosi })[view]();
+  return ({ beranda: vBeranda, kasir: vKasir, pesanan: vPesanan, riwayat: vRiwayat, produksi: vProduksi, stok: vStok, mutasi: vMutasi, opname: vOpname, biaya: vBiaya, laporan: vLaporan, absen: vAbsen, absenku: vAbsenku, gaji: vGaji, atur: vAtur, kurir: vKurir, mitra: vMitra, jasa: vJasa, buketuang: vBuketUang, belanja: vBelanja, konten: vKonten, idekonten: vIdeKonten, promosi: vPromosi })[view]();
 }
 
 /* ================= KASIR ================= */
@@ -1219,6 +1218,25 @@ const unitTrx = s => [...new Set(unitBarang(s.items || [], s.jenis || "", petaUn
 const saringUnit = (id, L, pilih) => { const ada = UNIT.filter(u => L.some(x => unitTrx(x).includes(u.id))); return ada.length > 1 ? `<div class="unit-chips" id="${id}"><button type="button" data-u="" class="${pilih ? "" : "on"}">Semua <b>${L.length}</b></button>${ada.map(u => `<button type="button" data-u="${u.id}" class="${pilih === u.id ? "on" : ""}" style="--c:${u.warna}">${u.ikon} ${esc(u.nama.replace(/^Rich /, ""))} <b>${L.filter(x => unitTrx(x).includes(u.id)).length}</b></button>`).join("")}</div>` : ""; };
 const lencanaUnit = (id, pendek = true) => { const u = infoUnit(id); return u ? `<span class="unit-tag" style="--c:${u.warna}" title="${esc(u.nama)}">${u.ikon}${pendek ? "" : " " + esc(u.nama)}</span>` : ""; };
 
+/* ================= MENU UTAMA: 5 unit besar Rich Gallery ================= */
+const SUB_UNIT = { bouquet: "buket, bloom box, boneka, wisuda", hampers: "hampers, parsel, snack tower", party: "dekorasi, balon, sewa", hantaran: "seserahan, mahar, hantaran", papan: "standing ucapan & flower" };
+async function vBeranda(){
+  const nProduk = id => B.produk.filter(p => p.aktif && unitP(p.kategori) === id).length;
+  $("#main").innerHTML = `<div class="beranda">
+    ${isAdmin() ? `<div class="br-hero"><small>OMZET HARI INI · SEMUA UNIT</small><b id="brOmzet">…</b><span id="brTrx">memuat…</span></div>` : ""}
+    <div class="br-judul">UNIT USAHA</div>
+    <div class="br-units">${UNIT.map((u, i) => `<button type="button" class="br-unit ${i === UNIT.length - 1 && UNIT.length % 2 ? "lebar" : ""}" data-unit="${u.id}" style="--c:${u.warna}">
+      <span class="br-ik">${u.ikon}</span><span class="br-teks"><b>${esc(u.nama)}</b><span>${esc(u.brand !== u.nama ? u.brand : SUB_UNIT[u.id])}</span></span>
+      <em data-om="${u.id}">${nProduk(u.id)} produk</em></button>`).join("")}</div>
+    <button type="button" class="br-semua" id="brSemua">🛍️ Lihat semua produk</button></div>`;
+  $$(".br-unit").forEach(b => b.onclick = () => { posUnit = b.dataset.unit; posKat = "SEMUA"; pindah("kasir"); });
+  $("#brSemua").onclick = () => { posUnit = ""; posKat = "SEMUA"; pindah("kasir"); };
+  if (!isAdmin()) return;
+  const L = await api("GET", `/api/laporan?dari=${today()}&sampai=${today()}`).catch(() => null);
+  if (!L || view !== "beranda") return;
+  $("#brOmzet").textContent = rp(L.omzet || 0); $("#brTrx").textContent = `${L.transaksi || 0} transaksi hari ini`;
+  for (const x of L.perUnit || []) { const e = $(`[data-om="${x.unit}"]`); if (e) e.textContent = x.nilai >= 1e6 ? "Rp" + (x.nilai / 1e6).toLocaleString("id-ID", { maximumFractionDigits: 1 }) + " jt" : x.nilai ? "Rp" + Math.round(x.nilai / 1000) + " rb" : "Rp0"; }
+}
 function vKasir(){
   const semuaKat = B.kategori.filter(k => B.produk.some(p => p.kategori === k && p.aktif));
   const unitAda = UNIT.filter(u => semuaKat.some(k => unitP(k) === u.id));
@@ -5093,8 +5111,8 @@ async function mulai(){
     $("#root").innerHTML = `<div class="auth"><div class="card"><h1>Tidak terhubung</h1><p>${esc(e.message)}</p><button class="btn pri" id="ulang">Coba lagi</button></div></div>`;
     $("#ulang").onclick = mulai; return;
   }
-  view = "kasir"; // tampilan awal selalu menu utama (Kasir); tautan notifikasi (#…?…) dibuka sesudahnya
-  try { if (!location.hash.includes("?")) history.replaceState(null, "", "#kasir"); } catch {}
+  view = "beranda"; // tampilan awal selalu menu utama (5 unit Rich Gallery); tautan notifikasi (#…?…) dibuka sesudahnya
+  try { if (!location.hash.includes("?")) history.replaceState(null, "", "#beranda"); } catch {}
   await cekKiosk();
   pPer = null; shell(); render();
   halamanTampil();
