@@ -26,6 +26,7 @@ route("PUT", "/api/pengaturan", "admin", ({ body }) => tx(() => {
     no_berikutnya: b.no_berikutnya != null ? angka(b.no_berikutnya, { min: 1, max: 999999999, bulat: true, nama: "Nomor invoice" }) : undefined,
     hpp_persen: b.hpp_persen != null ? angka(b.hpp_persen, { min: 0, max: 100, nama: "HPP %" }) : undefined,
     insentif: b.insentif != null ? angka(b.insentif, { min: 0, max: 1e7, bulat: true, nama: "Insentif" }) : undefined,
+    unit_kat: b.unit_kat != null && typeof b.unit_kat === "object" && !Array.isArray(b.unit_kat) ? Object.fromEntries(Object.entries(b.unit_kat).slice(0, 200).filter(([k, v]) => /^[A-Z0-9 &/.-]{1,40}$/.test(k) && ["bouquet", "hampers", "party", "hantaran", "papan"].includes(v))) : undefined,
     ins_murah: b.ins_murah != null ? angka(b.ins_murah, { min: 0, max: 1e7, bulat: true, nama: "Insentif barang murah" }) : undefined,
     ins_murah_batas: b.ins_murah_batas != null ? angka(b.ins_murah_batas, { min: 0, max: 1e9, bulat: true, nama: "Batas harga barang murah" }) : undefined,
     periode_mulai: b.periode_mulai != null ? angka(b.periode_mulai, { min: 1, max: 28, bulat: true, nama: "Tanggal mulai periode" }) : undefined,

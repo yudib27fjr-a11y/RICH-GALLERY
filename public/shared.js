@@ -122,3 +122,36 @@ export function bacaStruk(teks, hariIni = ""){
   res.cocok = !!res.items.length && res.adaTotal && res.total === jumlahBaris;
   return res;
 }
+
+/* ---- Unit usaha Rich Gallery: 1 kasir untuk semua, unit dikenali otomatis dari kategori produk / jenis pesanan ---- */
+export const UNIT = [
+  { id: "bouquet", nama: "Gift & Bouquet", brand: "nyenengin.id", ikon: "💐", warna: "#db2777" },
+  { id: "hampers", nama: "Rich Hampers", brand: "Rich Hampers", ikon: "🎁", warna: "#d97706" },
+  { id: "party", nama: "Rich Party", brand: "Rich Party", ikon: "🎈", warna: "#7c3aed" },
+  { id: "hantaran", nama: "Rich Hantaran", brand: "Rich Hantaran", ikon: "💍", warna: "#059669" },
+  { id: "papan", nama: "Papan Ucapan", brand: "Papan Ucapan", ikon: "🪧", warna: "#b91c1c" },
+];
+export const UNIT_KAT_BAWAAN = { "HAMPERS": "hampers", "SNACK TOWER": "hampers", "SEWA SESERAHAN": "hantaran", "MAHAR": "hantaran", "SEWA HAND BUKET": "hantaran",
+  "STANDING UCAPAN": "papan", "STANDING FLOWER": "papan", "SEWA STANDING UCAPAN": "papan", "DEKORASI": "party" };
+export const UNIT_JENIS = { dekorasi: "party", seserahan: "hantaran", mahar: "hantaran", standing: "papan", parcel: "hampers", buket_uang: "bouquet", buket_costume: "bouquet" };
+/** Unit dari kategori produk ("" = ikut barang lain, mis. ADDITIONAL). peta = pengaturan admin { KATEGORI: unit }. */
+export function unitKategori(kat, peta = {}){
+  const k = String(kat || "").toUpperCase().trim();
+  if (peta && peta[k] && UNIT.some(u => u.id === peta[k])) return peta[k];
+  if (UNIT_KAT_BAWAAN[k]) return UNIT_KAT_BAWAAN[k];
+  if (!k || k === "ADDITIONAL") return "";
+  if (/DEKOR|PARTY/.test(k)) return "party";
+  if (/HAMPERS|PARSEL|PARCEL/.test(k)) return "hampers";
+  if (/SESERAHAN|HANTARAN|MAHAR/.test(k)) return "hantaran";
+  if (/STANDING|PAPAN/.test(k)) return "papan";
+  return "bouquet";
+}
+/** Unit tiap barang dalam satu transaksi. Jenis pesanan (dekorasi, seserahan, …) mengalahkan unit bawaan "bouquet";
+ *  barang tanpa unit (Additional) ikut unit dengan nilai terbesar di transaksi itu. */
+export function unitBarang(items, jenis = "", peta = {}){
+  const viaJenis = UNIT_JENIS[jenis] || "";
+  const awal = (items || []).map(i => { const u = unitKategori(i.kategori, peta); return viaJenis && (!u || u === "bouquet") && viaJenis !== "bouquet" ? viaJenis : u; });
+  const nilai = {}; (items || []).forEach((i, n) => { if (awal[n]) nilai[awal[n]] = (nilai[awal[n]] || 0) + (i.harga || 0) * (i.qty || 1); });
+  const utama = Object.keys(nilai).sort((a, b) => nilai[b] - nilai[a])[0] || viaJenis || "bouquet";
+  return awal.map(u => u || utama);
+}

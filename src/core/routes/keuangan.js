@@ -2,7 +2,8 @@ import { route } from "../router.js";
 import { one, all, run, tx } from "../db.js";
 import { HttpError, bad, notFound, teks, angka, tanggal, pilihan, hariIni } from "../util.js";
 import { antre } from "../stok.js";
-import { KAT_PENGELUARAN, tambahHari } from "../../../public/shared.js";
+import { KAT_PENGELUARAN, tambahHari, UNIT, unitBarang } from "../../../public/shared.js";
+import { getSettings } from "../db.js";
 
 /* ---- Pengeluaran (admin) ---- */
 route("GET", "/api/pengeluaran", "admin", ({ query }) => {
@@ -67,8 +68,18 @@ route("GET", "/api/laporan", "admin", ({ query }) => {
     for (let i = 0; i < 120; i++) { const k = `${y}-${String(mo).padStart(2, "0")}`; if (k > akhir) break; grafik.push({ label: k, k, v: m.get(k) || 0 }); if (++mo > 12) { mo = 1; y++; } }
   }
   const prod = one("SELECT COALESCE(SUM(qty),0) qty, COALESCE(SUM(qty * tarif),0) insentif FROM produksi WHERE tgl BETWEEN ? AND ?", p);
+  // Omzet per unit usaha (nilai barang; unit dari kategori / jenis pesanan, Additional ikut barang lain di transaksi yang sama)
+  const peta = getSettings().unit_kat || {}, perUnitM = Object.fromEntries(UNIT.map(u => [u.id, { unit: u.id, nilai: 0, qty: 0, transaksi: 0 }]));
+  const rows = all(`SELECT i.sale_id, i.kategori, i.harga, i.qty, s.jenis ${I} ORDER BY i.sale_id`, p);
+  for (let a = 0; a < rows.length;) {
+    let b = a; while (b < rows.length && rows[b].sale_id === rows[a].sale_id) b++;
+    const grup = rows.slice(a, b), un = unitBarang(grup, grup[0].jenis || "", peta), ada = new Set();
+    grup.forEach((r, n) => { const x = perUnitM[un[n]]; if (!x) return; x.nilai += r.harga * r.qty; x.qty += r.qty; ada.add(un[n]); });
+    ada.forEach(u => perUnitM[u].transaksi++); a = b;
+  }
   return {
     dari, sampai, ...ring, ...it, biaya, labaKotor, labaBersih: labaKotor - biaya, grafik, produksi: prod,
+    perUnit: Object.values(perUnitM).sort((a, b) => b.nilai - a.nilai),
     perKategori: all(`SELECT i.kategori, SUM(i.qty) qty, SUM(i.harga * i.qty) nilai ${I} GROUP BY i.kategori ORDER BY nilai DESC`, p),
     terlaris: all(`SELECT i.nama, SUM(i.qty) qty, SUM(i.harga * i.qty) nilai ${I} GROUP BY i.nama ORDER BY qty DESC, nilai DESC LIMIT 10`, p),
     perKasir: all(`SELECT kasir, COUNT(*) transaksi, SUM(total) nilai ${S} GROUP BY kasir ORDER BY nilai DESC`, p),

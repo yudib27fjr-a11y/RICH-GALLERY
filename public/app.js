@@ -1,4 +1,4 @@
-import { eanValid, eanSVG, barcodeDefault, periodeDari, geserPeriode, tambahHari, pad, tebakKategori, bacaStruk } from "./shared.js";
+import { eanValid, eanSVG, barcodeDefault, periodeDari, geserPeriode, tambahHari, pad, tebakKategori, bacaStruk, UNIT, unitKategori, unitBarang } from "./shared.js";
 
 /* ================= util ================= */
 const $ = (s, r = document) => r.querySelector(s);
@@ -183,9 +183,17 @@ function samarHp(hp){
   if (pos.length < 7) return t;
   const tutup = new Set(pos.slice(-6, -3)); return [...t].map((c, i) => tutup.has(i) ? "*" : c).join("");
 }
+/** Judul struk / nota sesuai unit pesanan: 1 unit → nama brand-nya (mis. NYENENGIN.ID, RICH PARTY) + "by Rich Gallery"; campuran → nama toko + daftar brand. */
+function judulStruk(s){
+  const toko = String(B.toko.nama_toko || "Rich Gallery"), un = (s && s.items && s.items.length) ? unitTrx(s) : [];
+  if (un.length === 1) { const u = infoUnit(un[0]); return { judul: u.brand.toUpperCase(), sub: "by " + toTitle(toko), unit: u }; }
+  if (un.length > 1) return { judul: toko.toUpperCase(), sub: un.map(id => infoUnit(id).brand).join(" · "), unit: null };
+  return { judul: toko.toUpperCase(), sub: "", unit: null };
+}
 function strukLines(s){
-  const t = B.toko, w = lebar(), garis = "-".repeat(w), L = [];
-  L.push({ t: center(t.nama_toko, w), b: 1 });
+  const t = B.toko, w = lebar(), garis = "-".repeat(w), L = [], J = judulStruk(s);
+  L.push({ t: center(J.judul, w), b: 1 });
+  if (J.sub) wrap(J.sub, w).forEach(x => L.push({ t: center(x, w) }));
   wrap(t.alamat, w).forEach(x => L.push({ t: center(x, w) }));
   if (t.telp) L.push({ t: center("Telp " + t.telp, w) });
   L.push({ t: garis }, { t: lr("No", s.no, w) }, { t: lr("Tanggal", tglPendek(s.tgl) + " " + s.jam, w) }, { t: lr("Kasir", s.kasir || "-", w) });
@@ -486,7 +494,7 @@ function simpanPdf(nama, biner){
 function dataNota(s){
   const t = B.toko;
   return {
-    no: s.no, toko: t.nama_toko, tagline: t.inv_tagline || "", billTo: s.pelanggan && s.pelanggan !== "CUSTOMER" ? toTitle(s.pelanggan) : "", hp: s.hp || "",
+    no: s.no, toko: judulStruk(s).judul, tagline: judulStruk(s).unit ? judulStruk(s).sub : (t.inv_tagline || ""), billTo: s.pelanggan && s.pelanggan !== "CUSTOMER" ? toTitle(s.pelanggan) : "", hp: s.hp || "",
     tanggal: tglID(s.tgl), rows: s.items.map(i => ({ desc: toTitle(i.nama), harga: i.harga, qty: i.qty })), ongkir: s.ongkir || 0, diskon: s.diskon || 0,
     metode: { Tunai: "Cash", Transfer: "Transfer", QRIS: "QRIS" }[s.metode] || s.metode, dibayar: s.bayar < s.total ? s.bayar : null,
     bank: t.inv_bank || "", ttdNama: t.inv_ttd_nama || "", ttdJabatan: t.inv_ttd_jabatan || "", ttdImg: t.inv_ttd || "",
@@ -1180,11 +1188,23 @@ const isianCart = () => isianKeranjang() && !cart.detail?.isi_sendiri ? Math.max
 /** Yang harus dibayar pelanggan di kasir: jasa (total) + uang isian buket uang. */
 const cartTagihan = () => cartTotal() + isianCart();
 const teksIsianCart = () => cart.detail?.isi_sendiri ? "🙋 Pelanggan isi uang sendiri — hanya jasa yang ditagih" : `Jasa <b>${rp(cartTotal())}</b> (omzet) + 💵 uang isian <b>${rp(isianCart())}</b> (titipan)`;
-let posKat = "SEMUA", posQ = "", hanyaReady = false, saleTerakhir = null;
+let posKat = "SEMUA", posQ = "", hanyaReady = false, saleTerakhir = null, posUnit = "";
+const petaUnit = () => (B && B.toko && B.toko.unit_kat) || {};
+const unitP = k => unitKategori(k, petaUnit());
+const infoUnit = id => UNIT.find(u => u.id === id);
+/** Lencana unit kecil (💐 Bouquet, 🪧 Papan, …). */
+const unitTrx = s => [...new Set(unitBarang(s.items || [], s.jenis || "", petaUnit()))];
+/** Baris saringan unit (Semua · 💐 · 🎁 …) untuk daftar transaksi / pesanan; hanya unit yang ada di daftar. */
+const saringUnit = (id, L, pilih) => { const ada = UNIT.filter(u => L.some(x => unitTrx(x).includes(u.id))); return ada.length > 1 ? `<div class="unit-chips" id="${id}"><button type="button" data-u="" class="${pilih ? "" : "on"}">Semua <b>${L.length}</b></button>${ada.map(u => `<button type="button" data-u="${u.id}" class="${pilih === u.id ? "on" : ""}" style="--c:${u.warna}">${u.ikon} ${esc(u.nama.replace(/^Rich /, ""))} <b>${L.filter(x => unitTrx(x).includes(u.id)).length}</b></button>`).join("")}</div>` : ""; };
+const lencanaUnit = (id, pendek = true) => { const u = infoUnit(id); return u ? `<span class="unit-tag" style="--c:${u.warna}" title="${esc(u.nama)}">${u.ikon}${pendek ? "" : " " + esc(u.nama)}</span>` : ""; };
 
 function vKasir(){
-  const kats = ["SEMUA", ...B.kategori.filter(k => B.produk.some(p => p.kategori === k && p.aktif))];
-  const katAdd = kats.find(k => /^additional/i.test(k)) || ""; // tombol cepat kategori Additional (topper, wrapping, cetak foto, bunga satuan…)
+  const semuaKat = B.kategori.filter(k => B.produk.some(p => p.kategori === k && p.aktif));
+  const unitAda = UNIT.filter(u => semuaKat.some(k => unitP(k) === u.id));
+  if (posUnit && !unitAda.some(u => u.id === posUnit)) posUnit = "";
+  const kats = ["SEMUA", ...semuaKat.filter(k => !posUnit || unitP(k) === posUnit)];
+  if (!kats.includes(posKat)) posKat = "SEMUA";
+  const katAdd = semuaKat.find(k => /^additional/i.test(k)) || ""; // tombol cepat kategori Additional (topper, wrapping, cetak foto, bunga satuan…)
   $("#main").innerHTML = `
   <div class="pos">
     <section class="catalog">
@@ -1196,6 +1216,7 @@ function vKasir(){
         <button class="btn btn-menu" id="posMenu" type="button" aria-label="Semua menu">${ikonMenu("menu")}<span>Menu</span></button></div>
         <label class="row small muted" style="gap:6px"><input type="checkbox" id="readyOnly" ${hanyaReady ? "checked" : ""}> Stok ready saja</label>
       </div>
+      ${unitAda.length > 1 ? `<div class="unit-chips" id="unitChips"><button type="button" class="${posUnit ? "" : "on"}" data-u="">Semua</button>${unitAda.map(u => `<button type="button" class="${posUnit === u.id ? "on" : ""}" data-u="${u.id}" style="--c:${u.warna}">${u.ikon} ${esc(u.nama.replace(/^Rich /, ""))}</button>`).join("")}</div>` : ""}
       <div class="chips" id="katChips">${kats.map(k => `<button type="button" class="chip ${k === posKat ? "on" : ""}" data-k="${esc(k)}">${esc(k === "SEMUA" ? "Semua" : toTitle(k))}</button>`).join("")}</div>
       </div>
       <div class="prodgrid" id="prodGrid"></div>
@@ -1208,7 +1229,10 @@ function vKasir(){
   $$("#katChips .chip").forEach(b => b.onclick = () => { posKat = b.dataset.k; $$("#katChips .chip").forEach(x => x.classList.toggle("on", x === b)); drawGrid(); });
   $("#manualBtn").onclick = itemManual;
   $("#posMenu").onclick = semuaMenu;
+  $$("#unitChips button").forEach(b => b.onclick = () => { posUnit = b.dataset.u; posKat = "SEMUA"; vKasir(); });
+  const uOn = $("#unitChips button.on"); if (uOn && posUnit) try { uOn.scrollIntoView({ block: "nearest", inline: "center" }); } catch {}
   const ad = $("#addBtn"); if (ad) ad.onclick = () => {
+    if (posUnit) { posUnit = ""; posKat = katAdd; return vKasir(); }
     posKat = posKat === katAdd ? "SEMUA" : katAdd; ad.classList.toggle("on", posKat === katAdd); ad.setAttribute("aria-pressed", posKat === katAdd);
     $$("#katChips .chip").forEach(x => x.classList.toggle("on", x.dataset.k === posKat));
     const c = $("#katChips .chip.on"); if (c) try { c.scrollIntoView({ block: "nearest", inline: "center" }); } catch {}
@@ -1219,10 +1243,10 @@ function vKasir(){
 }
 function drawGrid(){
   const q = posQ.trim().toUpperCase(), g = $("#prodGrid"); if (!g) return;
-  const list = B.produk.filter(p => p.aktif && (posKat === "SEMUA" || p.kategori === posKat) && (!q || p.nama.toUpperCase().includes(q) || p.kode.includes(q) || p.barcode === q) && (!hanyaReady || p.stok > 0))
+  const list = B.produk.filter(p => p.aktif && (posKat === "SEMUA" || p.kategori === posKat) && (!posUnit || unitP(p.kategori) === posUnit) && (!q || p.nama.toUpperCase().includes(q) || p.kode.includes(q) || p.barcode === q) && (!hanyaReady || p.stok > 0))
     .sort((a, b) => (b.stok > 0) - (a.stok > 0) || a.kategori.localeCompare(b.kategori) || a.harga - b.harga);
   if (!list.length) { g.innerHTML = `<div class="empty" style="grid-column:1/-1">Tidak ada produk yang cocok. Coba kata lain, atau pakai <b>+ Item manual</b>.</div>`; return; }
-  g.innerHTML = list.slice(0, 240).map(p => { const [, cl] = statusStok(p.stok, p.stok_min); return `<button type="button" class="prod" data-id="${p.id}"><span class="nm">${esc(p.nama)}</span><span class="code">${p.kode}</span><span class="meta"><span class="pr num">${rp(p.harga)}</span><span class="pill ${p.stok > 0 ? cl : "mut"}">${p.stok > 0 ? "Ready " + fq(p.stok) : "Produksi"}</span></span></button>`; }).join("")
+  g.innerHTML = list.slice(0, 240).map(p => { const [, cl] = statusStok(p.stok, p.stok_min); return `<button type="button" class="prod" data-id="${p.id}"><span class="nm">${esc(p.nama)}</span><span class="code">${p.kode}${!posUnit ? " " + lencanaUnit(unitP(p.kategori)) : ""}</span><span class="meta"><span class="pr num">${rp(p.harga)}</span><span class="pill ${p.stok > 0 ? cl : "mut"}">${p.stok > 0 ? "Ready " + fq(p.stok) : "Produksi"}</span></span></button>`; }).join("")
     + (list.length > 240 ? `<div class="empty" style="grid-column:1/-1">${list.length - 240} produk lain tersembunyi. Persempit pencarian.</div>` : "");
   $$(".prod", g).forEach(b => b.onclick = () => tambahKeKeranjang(+b.dataset.id));
 }
@@ -1264,6 +1288,7 @@ function segarkanReady(){
   }
 }
 function drawCart(){
+  const unitKeranjang = (() => { const u = unitBarang(cart.items, cart.jenis || "", petaUnit()); return { u, multi: new Set(u).size > 1 }; })(); // barang dari >1 unit → tampilkan lencana unit
   const el = $("#cart"); if (!el) return;
   segarkanReady();
   const sub = cartSub(), tot = cartTagihan(), qty = cart.items.reduce((a, i) => a + i.qty, 0);
@@ -1277,7 +1302,7 @@ function drawCart(){
     <div class="list saran-pel" id="cSaran" hidden></div>
     <div class="cart-lines">${cart.items.length ? cart.items.map((it, i) => `
       <div class="line" data-i="${i}">
-        <div><div class="nm">${esc(it.nama)}</div><div class="code">${it.manual ? "manual" : it.kode}</div></div>
+        <div><div class="nm">${esc(it.nama)}</div><div class="code">${unitKeranjang.multi ? lencanaUnit(unitKeranjang.u[i]) + " " : ""}${it.manual ? "manual" : it.kode}</div></div>
         <div class="num" style="font-weight:700">${rp(it.harga * it.qty)}</div>
         <div class="ctl">
           <span class="qty"><button type="button" data-a="-" aria-label="Kurangi">−</button><input type="number" class="qIn num" value="${it.qty}" min="0" step="0.5" inputmode="decimal" aria-label="Jumlah"><button type="button" data-a="+" aria-label="Tambah">+</button></span>
@@ -1891,7 +1916,7 @@ async function simpanTransaksi(print, tombol){
 }
 
 /* ================= TRANSAKSI ================= */
-let rDari = "", rSampai = "", rQ = "", rData = [];
+let rDari = "", rSampai = "", rQ = "", rData = [], rUnit = "";
 async function vRiwayat(){
   if (!rDari) rDari = rSampai = today();
   if (!isAdmin()) rDari = rSampai = today();
@@ -1916,13 +1941,17 @@ async function vRiwayat(){
 }
 async function muatRiwayat(){
   await coba(async () => {
-    rData = await api("GET", `/api/penjualan?dari=${rDari}&sampai=${rSampai}&q=${encodeURIComponent(rQ.trim())}`);
+    const semuaR = await api("GET", `/api/penjualan?dari=${rDari}&sampai=${rSampai}&q=${encodeURIComponent(rQ.trim())}`);
     if (view !== "riwayat") return;
+    const su = $("#rUnit"); if (su) su.remove();
+    $("#rList").insertAdjacentHTML("beforebegin", saringUnit("rUnit", semuaR, rUnit));
+    $$("#rUnit button").forEach(b => b.onclick = () => { rUnit = b.dataset.u; muatRiwayat(); });
+    rData = rUnit ? semuaR.filter(s => unitTrx(s).includes(rUnit)) : semuaR;
     const ok = rData.filter(s => !s.batal_at), omzet = ok.reduce((a, s) => a + s.total, 0), piutang = ok.reduce((a, s) => a + Math.max(0, s.total - s.bayar), 0);
     const per = m => ok.filter(s => s.metode === m).reduce((a, s) => a + Math.min(s.bayar, s.total), 0);
     $("#rSum").innerHTML = `<div class="kpi"><div class="l">Omzet</div><div class="v num">${rp(omzet)}</div></div><div class="kpi"><div class="l">Transaksi</div><div class="v num">${ok.length}</div></div><div class="kpi"><div class="l">Tunai diterima</div><div class="v num">${rp(per("Tunai"))}</div></div><div class="kpi"><div class="l">Transfer + QRIS</div><div class="v num">${rp(per("Transfer") + per("QRIS"))}</div></div>${piutang ? `<div class="kpi"><div class="l">Belum lunas (DP)</div><div class="v num" style="color:var(--warn)">${rp(piutang)}</div></div>` : ""}`;
     $("#rList").innerHTML = rData.length ? `<div class="list">${rData.map(s => `<div class="li click ${s.batal_at ? "void" : ""}" data-id="${s.id}">
-      <div class="main"><div class="t">${esc(s.pelanggan)} <span class="code">${esc(s.no)}</span></div><div class="small muted">${tglPendek(s.tgl)} ${s.jam} · ${esc(s.kasir)} · ${s.items.map(i => esc(i.nama) + (i.qty != 1 ? " ×" + fq(i.qty) : "")).join(", ")}</div></div>
+      <div class="main"><div class="t">${esc(s.pelanggan)} <span class="code">${esc(s.no)}</span> ${unitTrx(s).map(u => lencanaUnit(u)).join(" ")}</div><div class="small muted">${tglPendek(s.tgl)} ${s.jam} · ${esc(s.kasir)} · ${s.items.map(i => esc(i.nama) + (i.qty != 1 ? " ×" + fq(i.qty) : "")).join(", ")}</div></div>
       <div style="text-align:right"><div class="num" style="font-weight:700">${rp(s.total)}</div>${s.batal_at ? `<span class="pill bad">BATAL</span>` : s.bayar < s.total ? `<span class="pill warn">DP</span>` : `<span class="pill metode-${/tunai/i.test(s.metode) ? "tunai" : /qris/i.test(s.metode) ? "qris" : "tf"}">${/tunai/i.test(s.metode) ? "💵" : /qris/i.test(s.metode) ? "📱" : "🏦"} ${esc(s.metode)}</span>`}</div></div>`).join("")}</div>`
       : `<div class="list"><div class="empty">Belum ada transaksi pada periode ini. Transaksi dari menu Kasir akan muncul di sini.</div></div>`;
     $$("#rList .li").forEach(r => r.onclick = () => { const s = rData.find(x => x.id === +r.dataset.id); if (s) lihatStruk(s, () => muatRiwayat()); });
@@ -2283,7 +2312,7 @@ async function hapusRentang(){
 }
 
 /* ================= PESANAN (diambil / diantar nanti) ================= */
-let psStatus = "aktif", psJenis = "*";
+let psStatus = "aktif", psJenis = "*", psUnit = "";
 const besok = () => { const d = new Date(today() + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); };
 function labelAmbil(s){
   const t = today(), b = besok();
@@ -3026,7 +3055,9 @@ async function vPesanan(){
   const Lsemua = await coba(() => api("GET", `/api/pesanan?status=${psStatus}`)); if (!Lsemua || view !== "pesanan") return;
   // Saring per jenis: dekorasi, penyewaan, hias mahar, parcel, atau pesanan biasa
   const hit = j => Lsemua.filter(s => j === "*" || (j === "" ? !s.jenis : s.jenis === j)).length;
-  const L = Lsemua.filter(s => psJenis === "*" || (psJenis === "" ? !s.jenis : s.jenis === psJenis));
+  const L = Lsemua.filter(s => (psJenis === "*" || (psJenis === "" ? !s.jenis : s.jenis === psJenis)) && (!psUnit || unitTrx(s).includes(psUnit)));
+  $("#psList").insertAdjacentHTML("beforebegin", saringUnit("psU", Lsemua, psUnit));
+  $$("#psU button").forEach(b => b.onclick = () => { psUnit = b.dataset.u; vPesanan(); });
   $("#psList").insertAdjacentHTML("beforebegin", `<div class="jenis-saring" id="psJ">${[["*", "", "Semua"], ["", "📦", "Biasa"], ...Object.entries(JENIS_PS).map(([k, v]) => [k, v.ikon, v.label])]
     .map(([k, ik, l]) => `<button type="button" data-j="${k}" class="${psJenis === k ? "on " + (JENIS_PS[k]?.warna || "") : ""}">${ik} ${l} <b>${hit(k)}</b></button>`).join("")}</div>`);
   $$("#psJ button").forEach(b => b.onclick = () => { psJenis = b.dataset.j; vPesanan(); });
@@ -4391,6 +4422,7 @@ function vLaporan(){
       ${L.omzet ? `<div class="bars">${L.grafik.map(x => `<div class="b" style="height:${(x.v / maxB * 100).toFixed(1)}%" title="${x.label}: ${rp(x.v)}"></div>`).join("")}</div><div class="bars-x">${L.grafik.map((x, i) => `<span>${n > 16 && i % 3 ? "" : x.label}</span>`).join("")}</div><div class="small muted" style="margin-top:4px">Tertinggi ${rp(maxB)}</div>` : `<div class="empty">Belum ada penjualan pada periode ini.</div>`}
     </section>
     <div class="grid2" style="margin-top:14px;align-items:start">
+      ${L.perUnit ? `<section class="panel"><h3 style="font-size:16px;margin-bottom:10px">🏬 Per unit usaha</h3><div class="stack small" style="gap:9px">${L.perUnit.map(x => { const u = infoUnit(x.unit) || {}; return `<div><div class="row" style="justify-content:space-between"><span><b>${u.ikon || ""} ${esc(u.nama || x.unit)}</b> <span class="muted">${x.transaksi} trx · ×${fq(x.qty)}</span></span><span class="num"><b>${rp(x.nilai)}</b></span></div><div class="hbar" style="--c:${u.warna}"><i style="width:${L.bruto ? (x.nilai / L.bruto * 100).toFixed(1) : 0}%;background:${u.warna}"></i></div></div>`; }).join("")}</div><p class="small muted" style="margin:8px 0 0">Nilai barang sebelum diskon. Unit dikenali dari kategori produk / jenis pesanan; Additional ikut barang lain di transaksi yang sama.${isAdmin() ? " Atur di Pengaturan → Unit usaha." : ""}</p></section>` : ""}
       <section class="panel"><h3 style="font-size:16px;margin-bottom:10px">Per kategori</h3>${L.perKategori.length ? `<div class="stack small" style="gap:8px">${L.perKategori.map(k => `<div><div class="row" style="justify-content:space-between"><span>${esc(toTitle(k.kategori))} <span class="muted">×${fq(k.qty)}</span></span><span class="num">${rp(k.nilai)}</span></div><div class="hbar"><i style="width:${(k.nilai / L.bruto * 100).toFixed(1)}%"></i></div></div>`).join("")}</div>` : `<div class="empty">-</div>`}</section>
       <section class="panel"><h3 style="font-size:16px;margin-bottom:10px">Produk terlaris</h3>${L.terlaris.length ? `<table><tbody>${L.terlaris.map((t, i) => `<tr><td class="muted num">${i + 1}</td><td>${esc(t.nama)}</td><td class="r num">×${fq(t.qty)}</td><td class="r num">${rp(t.nilai)}</td></tr>`).join("")}</tbody></table>` : `<div class="empty">-</div>`}</section>
       <section class="panel"><h3 style="font-size:16px;margin-bottom:10px">Ringkasan</h3><table><tbody>
@@ -4408,7 +4440,7 @@ function vLaporan(){
 
 /* ================= PENGATURAN ================= */
 /* Pengaturan ringkas: tiap bagian tampil sebagai baris judul; ketuk untuk membuka isi lengkapnya (satu bagian terbuka sekali waktu). */
-const IKON_ATUR = [[/perangkat ini/i, "🖨️", "Printer, cetak uji, tema"], [/akun saya/i, "👤", "Ganti password / PIN"], [/toko/i, "🏪", "Nama, alamat, struk, insentif"], [/pengguna/i, "👥", "Akun karyawan & admin"],
+const IKON_ATUR = [[/unit usaha/i, "🏬", "Pembagian kategori ke 5 unit"], [/perangkat ini/i, "🖨️", "Printer, cetak uji, tema"], [/akun saya/i, "👤", "Ganti password / PIN"], [/toko/i, "🏪", "Nama, alamat, struk, insentif"], [/pengguna/i, "👥", "Akun karyawan & admin"],
   [/perangkat cabang|server pusat/i, "📱", "HP / tablet kasir"], [/whatsapp/i, "💬", "Pesan WA otomatis"], [/canva/i, "🎨", "Desain kartu ucapan"], [/kartu ucapan/i, "💌", "Cetak kartu"], [/nota/i, "🧾", "Nota / invoice A4"],
   [/google sheet/i, "🔄", "Sinkron pembukuan"], [/jam kerja/i, "⏱️", "Shift, lembur, insentif lain"], [/absensi/i, "🕘", "Lokasi, perangkat, wajah"], [/notifikasi/i, "🔔", "Notifikasi HP admin"],
   [/hard reset/i, "⚠️", "Hapus semua data"], [/cadangan/i, "💾", "Backup & pulihkan data"], [/mode aplikasi/i, "📲", "Versi & pembaruan aplikasi"]];
@@ -4434,6 +4466,20 @@ function pasangLipatAtur(){
   const cari = $("#atCari"); if (cari) cari.oninput = () => { const q = cari.value.trim().toLowerCase();
     $$(":scope > section", daftar).forEach(sec => { const cocok = !q || sec.textContent.toLowerCase().includes(q); sec.hidden = !cocok; if (q && cocok) sec.classList.remove("tertutup"); else if (!q) sec.classList.add("tertutup"); }); };
 }
+/** Pengaturan → Unit usaha: tiap kategori produk masuk unit mana (bawaan otomatis dari nama kategori). */
+function isiAturUnit(){
+  const el = $("#aUnit"); if (!el) return;
+  const kats = [...new Set([...B.kategori, ...B.produk.map(p => p.kategori)])].filter(k => k && !/^additional$/i.test(k)).sort();
+  const peta = { ...petaUnit() };
+  el.innerHTML = `<h3 style="font-size:17px">🏬 Unit usaha</h3>
+    <p class="small muted" style="margin:0">Kasir tetap satu. Tiap kategori produk dikenali sebagai unit di bawah ini untuk saringan kasir, pesanan, transaksi & laporan per unit. Additional ikut barang lain di transaksi yang sama.</p>
+    <div class="stack" style="gap:6px">${kats.map(k => `<label class="row small" style="gap:8px;flex-wrap:nowrap"><span style="flex:1">${esc(toTitle(k))}</span><select data-uk="${esc(k)}" style="width:auto;max-width:190px">${UNIT.map(u => `<option value="${u.id}" ${unitKategori(k, peta) === u.id ? "selected" : ""}>${u.ikon} ${esc(u.nama)}</option>`).join("")}</select></label>`).join("")}</div>
+    <button class="btn pri" id="auSimpan" type="button">Simpan pembagian unit</button>`;
+  $("#auSimpan").onclick = e => coba(async () => {
+    const unit_kat = Object.fromEntries($$("[data-uk]", el).map(x => [x.dataset.uk.toUpperCase(), x.value]));
+    await api("PUT", "/api/pengaturan", { unit_kat }); B.toko.unit_kat = unit_kat; toast("Pembagian unit disimpan");
+  }, e.target);
+}
 function vAtur(){
   $("#main").innerHTML = `
     <div class="view-head"><h2>Pengaturan</h2></div>
@@ -4455,6 +4501,7 @@ function vAtur(){
         <button class="btn" id="pwSave" type="button">Ganti password</button>
       </section>
       ${isAdmin() ? `<section class="panel stack" id="aToko"><div class="empty">Memuat…</div></section>
+      <section class="panel stack" id="aUnit"></section>
       <section class="panel stack" id="aUser"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aCabang"><div class="empty">Memuat…</div></section>
       <section class="panel stack" id="aWa"><div class="empty">Memuat…</div></section>
@@ -4480,6 +4527,7 @@ function vAtur(){
       ${TAG_PEMBUAT}
     </div>`;
   pasangLipatAtur();
+  if (isAdmin()) isiAturUnit();
   if (NATIVE) aturMode();
   $("#pK").onchange = e => { D.kertas = +e.target.value; simpanD(); vAtur(); };
   $("#pM").onchange = e => { D.modeCetak = e.target.value; D.modeDipilih = true; simpanD(); vAtur(); };

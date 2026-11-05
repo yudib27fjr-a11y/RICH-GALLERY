@@ -597,3 +597,10 @@ nav.tabs button .ic{width:36px;height:36px;border-radius:12px}
 .btn.btn-menu .ic svg{width:18px;height:18px}
 .pos-tombol{display:flex;gap:8px;flex:1 1 auto;min-width:0}
 @media (max-width:520px){.pos-tombol{flex:1 1 100%}.pos-tombol .btn{flex:1 1 auto;padding-left:8px;padding-right:8px;white-space:nowrap;justify-content:center;font-size:14px}.pos-tombol .btn-menu{flex:0 0 auto;padding-left:5px}}
+/* unit usaha */
+.unit-chips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}
+.unit-chips button{flex:0 0 auto;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:13px;font-weight:700;padding:7px 11px;border-radius:12px;cursor:pointer;white-space:nowrap}
+.unit-chips button.on{background:var(--c,var(--ink));border-color:var(--c,var(--ink));color:#fff;box-shadow:0 6px 14px -8px var(--c,#000)}
+.unit-chips button[data-u=""].on{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.unit-tag{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;line-height:1;padding:3px 6px;border-radius:99px;background:color-mix(in srgb,var(--c) 14%,transparent);color:var(--c);white-space:nowrap}
+.prod{position:relative}.prod > .unit-tag{position:absolute;top:8px;right:8px;font-size:12px;padding:3px 5px}

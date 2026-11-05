@@ -741,3 +741,16 @@ test("baca nota (OCR): pola 'qty x harga  Rp jumlah', salah baca angka diperbaik
   assert.deepEqual(B.items.map(x => [x.nama, x.qty, x.harga]), [["PITA SATIN", 2, 5000], ["KERTAS CELLO", 3, 2500], ["BUNGA MAWAR MERAH", 10, 6000]]);
   assert.equal(B.total, 77500); assert.equal(B.cocok, true);
 });
+
+test("unit usaha: kategori → unit, Additional ikut barang lain, jenis pesanan, laporan per unit", async () => {
+  const { unitKategori, unitBarang } = await import("../public/shared.js");
+  assert.equal(unitKategori("BUKET BUNGA"), "bouquet"); assert.equal(unitKategori("HAMPERS"), "hampers"); assert.equal(unitKategori("STANDING UCAPAN"), "papan");
+  assert.equal(unitKategori("MAHAR"), "hantaran"); assert.equal(unitKategori("ADDITIONAL"), ""); assert.equal(unitKategori("HOT BALON", { "HOT BALON": "party" }), "party");
+  assert.deepEqual(unitBarang([{ kategori: "STANDING FLOWER", harga: 400000, qty: 1 }, { kategori: "ADDITIONAL", harga: 5000, qty: 1 }]), ["papan", "papan"]);
+  assert.deepEqual(unitBarang([{ kategori: "ADDITIONAL", harga: 1500000, qty: 1 }], "dekorasi"), ["party"]);
+  assert.equal((await admin("PUT", "/api/pengaturan", { unit_kat: { "HOT BALON": "party", "x;bad": "papan" } })).status, 200);
+  assert.deepEqual((await admin("GET", "/api/bootstrap")).data.toko.unit_kat, { "HOT BALON": "party" });
+  const L = (await admin("GET", "/api/laporan?dari=2000-01-01&sampai=2100-01-01")).data;
+  assert.ok(Array.isArray(L.perUnit) && L.perUnit.length === 5 && L.perUnit.every(x => typeof x.nilai === "number"));
+  await admin("PUT", "/api/pengaturan", { unit_kat: {} });
+});
