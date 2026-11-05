@@ -659,3 +659,9 @@ nav.tabs button .ic{width:36px;height:36px;border-radius:12px}
 .br-unit.lebar{grid-column:1/-1;min-height:84px;flex-direction:row;align-items:center;gap:12px}
 .br-semua{margin-top:12px;width:100%;border:1.5px dashed var(--line);background:var(--surface);color:var(--ink);font:inherit;font-weight:700;padding:12px;border-radius:14px;cursor:pointer}
 @media (min-width:700px){.br-units{grid-template-columns:repeat(3,1fr)}.br-unit.lebar{grid-column:auto;flex-direction:column;align-items:flex-start;min-height:118px}}
+/* tombol Home tetap di kiri deretan menu bawah (tidak ikut gulir / geser) */
+nav.tabs button.home-tetap{position:sticky;left:0;z-index:3;background:var(--surface);flex:0 0 auto;min-width:70px;border-right:1px solid var(--line);box-shadow:6px 0 10px -8px rgba(0,0,0,.35)}
+nav.tabs .home-ic{--c:#8e1d4b;background:conic-gradient(from 210deg at 50% 50%,#f472b6,#a855f7,#6366f1,#f59e0b,#f472b6)!important;box-shadow:0 6px 14px -6px #a855f7,inset 0 1px 0 rgba(255,255,255,.55)!important}
+nav.tabs button.home-tetap.on{color:#a855f7}
+nav.tabs button.home-tetap.on .home-ic{box-shadow:0 0 0 2.5px var(--surface),0 0 0 4.5px #a855f7,0 6px 14px -6px #a855f7!important;transform:translateY(-2px)}
+@media (min-width:900px){nav.tabs button.home-tetap{position:sticky;top:0;left:auto;width:100%;border-right:0;border-bottom:1px solid var(--line);box-shadow:none}}

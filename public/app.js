@@ -870,7 +870,6 @@ let view = "beranda";
 function shell(){
   $("#root").innerHTML = `<div class="app">
     <header class="topbar">
-      <button class="tb-kembali" id="tbKembali" type="button" aria-label="Ke menu utama" title="Ke menu utama (atau geser layar ke kanan)" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 11.5L12 4l8.5 7.5"/><path d="M5.5 10v9.5h13V10" fill="currentColor" fill-opacity=".18"/><path d="M10 19.5v-5h4v5"/></svg><small>Utama</small></button>
       <button class="brand" id="tbBrand" type="button" aria-haspopup="dialog" title="Akun, pengaturan & menu admin"><img src="/monogram.png" alt="" width="34" height="34"><span class="brand-teks"><h1>${esc(toTitle(B.toko.nama_toko))}<svg class="brand-panah" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></h1><small>${esc(toTitle(B.me.nama))} · ${isAdmin() ? "Admin" : "Karyawan"}</small></span></button>
       <span class="sp"></span>
       ${isAdmin() ? `<span class="sync-dot" id="syncDot" title="Status sinkron Google Sheet"></span>` : ""}${LOKAL ? `<button class="sync-chip" id="syncChip" type="button" hidden></button>` : ""}
@@ -882,7 +881,6 @@ function shell(){
       <main id="main"></main>
     </div></div>`;
   $("#tbBrand").onclick = menuAkun;
-  $("#tbKembali").onclick = () => pindah("beranda");
   if (isAdmin() || LOKAL) { cekSync(); clearInterval(window.__rgCekSync); window.__rgCekSync = setInterval(cekSync, 30_000); }
 }
 /** Perangkat kasir: tanda jelas bila ada transaksi yang belum terkirim / ditolak server pusat (untuk semua pengguna). */
@@ -1052,12 +1050,12 @@ function pasangGeserNav(){
   nav.addEventListener("contextmenu", e => { if (e.target.closest("button[data-v]")) e.preventDefault(); });
 }
 function renderNav(){
-  $("#tabs").innerHTML = "" // tombol "Menu" (semua menu) ada di halaman Kasir & menu akun
+  $("#tabs").innerHTML = `<button type="button" class="home-tetap ${view === "beranda" ? "on" : ""}" data-home aria-label="Menu utama"><span class="ic home-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 11.2L12 3.8l8.5 7.4"/><path d="M5.6 9.6v9.9a1 1 0 0 0 1 1h10.8a1 1 0 0 0 1-1V9.6" fill="currentColor" fill-opacity=".28"/><path d="M10 20.5v-5.2a2 2 0 0 1 4 0v5.2"/></svg></span>Home</button>` // Home: selalu paling kiri, tidak ikut digeser
     + (() => { const ex = diAtas(), u = tataTombol().urut, L = daftarView().filter(v => !ex.includes(v[0]) && !v[2]); return [...u.map(k => L.find(v => v[0] === k)).filter(Boolean), ...L.filter(v => !u.includes(v[0]))]; })().map(([k, l]) => `<button type="button" data-v="${k}" class="${view === k ? "on" : ""}" aria-label="${l}" style="--c:${WARNA_MENU[k] || "#8e1d4b"}">${ikonMenu(k)}${l}</button>`).join("");
   $$("#tabs button[data-v]").forEach(b => b.onclick = () => { if (geserNav.baruSaja) return; pindah(b.dataset.v); });
   pasangGeserNav();
+  $("#tabs [data-home]").onclick = () => pindah("beranda");
   renderPintasan(); // tombol besar & pojok kanan atas, tampil di semua menu
-  const kb = $("#tbKembali"); if (kb) kb.hidden = view === "beranda";
   const br2 = $("#tbBrand small"); if (br2) br2.textContent = view === "beranda" ? `${toTitle(B.me.nama)} · ${isAdmin() ? "Admin" : "Karyawan"}` : `${view === "kasir" && posUnit ? infoUnit(posUnit).nama : namaView(view)} · ${toTitle(B.me.nama)}`;
   const br = $("#tbBrand"); if (br) br.classList.toggle("on", view === "atur" || daftarView().some(v => v[2] && v[0] === view));
   const on = $("#tabs button.on"); if (on && on.scrollIntoView) try { on.scrollIntoView({ block: "nearest", inline: "center" }); } catch {}
