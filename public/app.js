@@ -1221,7 +1221,7 @@ const SUB_UNIT = { bouquet: "buket, bloom box, boneka, wisuda", hampers: "hamper
 async function vBeranda(){
   const nProduk = id => B.produk.filter(p => p.aktif && unitP(p.kategori) === id).length;
   $("#main").innerHTML = `<div class="beranda">
-    ${isAdmin() ? `<div class="br-hero"><small>OMZET HARI INI · SEMUA UNIT</small><b id="brOmzet">…</b><span id="brTrx">memuat…</span></div>` : ""}
+    ${isAdmin() ? `<button type="button" class="br-hero" id="brHero" aria-label="Buka transaksi hari ini"><small>OMZET HARI INI · SEMUA UNIT</small><b id="brOmzet">…</b><span id="brTrx">memuat…</span><i class="br-lihat">Lihat transaksi ›</i></button>` : ""}
     <div class="br-judul">UNIT USAHA</div>
     <div class="br-units">${UNIT.map((u, i) => `<button type="button" class="br-unit ${i === UNIT.length - 1 && UNIT.length % 2 ? "lebar" : ""}" data-unit="${u.id}" style="--c:${u.warna}">
       <span class="br-ik">${u.ikon}</span><span class="br-teks"><b>${esc(u.nama)}</b><span>${esc(u.brand !== u.nama ? u.brand : SUB_UNIT[u.id])}</span></span>
@@ -1230,6 +1230,7 @@ async function vBeranda(){
   $$(".br-unit").forEach(b => b.onclick = () => { posUnit = b.dataset.unit; posKat = "SEMUA"; pindah("kasir"); });
   $("#brSemua").onclick = () => { posUnit = ""; posKat = "SEMUA"; pindah("kasir"); };
   if (!isAdmin()) return;
+  $("#brHero").onclick = () => { rQ = ""; rUnit = ""; rDari = rSampai = today(); pindah("riwayat"); }; // omzet hari ini → daftar transaksi hari ini
   const L = await api("GET", `/api/laporan?dari=${today()}&sampai=${today()}`).catch(() => null);
   if (!L || view !== "beranda") return;
   $("#brOmzet").textContent = rp(L.omzet || 0); $("#brTrx").textContent = `${L.transaksi || 0} transaksi hari ini`;

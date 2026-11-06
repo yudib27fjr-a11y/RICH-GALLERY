@@ -665,3 +665,6 @@ nav.tabs .home-ic{--c:#8e1d4b;background:conic-gradient(from 210deg at 50% 50%,#
 nav.tabs button.home-tetap.on{color:#a855f7}
 nav.tabs button.home-tetap.on .home-ic{box-shadow:0 0 0 2.5px var(--surface),0 0 0 4.5px #a855f7,0 6px 14px -6px #a855f7!important;transform:translateY(-2px)}
 @media (min-width:900px){nav.tabs button.home-tetap{position:sticky;top:0;left:auto;width:100%;border-right:0;border-bottom:1px solid var(--line);box-shadow:none}}
+
+button.br-hero{display:block;width:100%;text-align:left;border:0;font:inherit;cursor:pointer;position:relative;transition:transform .12s}button.br-hero:active{transform:scale(.98)}
+.br-hero .br-lihat{position:absolute;right:14px;bottom:12px;font-style:normal;font-size:12px;font-weight:800;background:rgba(255,255,255,.22);padding:4px 10px;border-radius:999px}
