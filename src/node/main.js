@@ -3,7 +3,7 @@ import { config } from "./config.js";
 import { bukaDb, tutupDb } from "./driver.js";
 import { pasangPlatformNode } from "./platform.js";
 import { handle } from "./http.js";
-import { migrasi, seedJikaKosong, kirimOutbox, bersihkanSesiKadaluarsa, sinkronCabang, hapusFotoAbsenLama, rekapProduksiHarian, kirimNotif, cekKontenBaru, pengingatTugasHarian } from "../core/semua.js";
+import { migrasi, seedJikaKosong, kirimOutbox, bersihkanSesiKadaluarsa, sinkronCabang, hapusFotoAbsenLama, hapusNotaBelanjaLama, rekapProduksiHarian, kirimNotif, cekKontenBaru, pengingatTugasHarian } from "../core/semua.js";
 
 pasangPlatformNode();
 bukaDb();
@@ -19,7 +19,7 @@ server.listen(config.port, config.host, () => {
 
 // Kirim antrean ke Google Sheet secara berkala, dan bersihkan sesi kedaluwarsa tiap jam.
 const syncTimer = setInterval(() => kirimOutbox().catch(e => console.error("sync:", e.message)), config.syncIntervalSec * 1000);
-const sesiTimer = setInterval(() => { bersihkanSesiKadaluarsa(); try { hapusFotoAbsenLama(); } catch (e) { console.error("hapus foto absen", e.message); } }, 3600_000);
+const sesiTimer = setInterval(() => { bersihkanSesiKadaluarsa(); try { hapusFotoAbsenLama(); } catch (e) { console.error("hapus foto absen", e.message); } try { hapusNotaBelanjaLama(); } catch (e) { console.error("hapus nota belanja", e.message); } }, 3600_000);
 // Bila server ini disambungkan sebagai cabang dari server lain: kirim transaksi & ambil data terbaru tiap 30 detik.
 // Rekap produksi harian ke HP admin (sekali sehari setelah 21.30).
 const rekapTimer = setInterval(() => { try { rekapProduksiHarian(); pengingatTugasHarian(); } catch (e) { console.error("rekap/pengingat:", e.message); } cekKontenBaru().catch(e => console.error("konten:", e.message)).finally(() => kirimNotif().catch(() => {})); }, 5 * 60_000);

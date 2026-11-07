@@ -21,6 +21,7 @@ export { seedJikaKosong } from "./seed.js";
 export { kirimOutbox } from "./sync.js";
 export { bersihkanSesiKadaluarsa } from "./auth.js";
 export { hapusFotoAbsenLama } from "./routes/absen.js";
+export { hapusNotaBelanjaLama } from "./routes/belanja.js";
 export { sinkronCabang, cabangAktif, pendengar } from "./cabang-perangkat.js";
 export { kirimNotif } from "./notif.js";
 export { rekapProduksiHarian } from "./routes/produksi.js";

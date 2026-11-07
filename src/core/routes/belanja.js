@@ -9,6 +9,7 @@ import { route } from "../router.js";
 import { one, all, run, tx } from "../db.js";
 import { bad, notFound, teks, angka, tanggal, sekarang } from "../util.js";
 import { ubahStok, antre } from "../stok.js";
+import { tambahHari } from "../../../public/shared.js";
 import { cabangAktif, mintaPusat, sinkronCabang } from "../cabang-perangkat.js";
 import { antreNotif } from "../notif.js";
 import { KAT_BAHAN } from "../../../public/shared.js";
@@ -194,7 +195,7 @@ function datang(id, body, user){
 const AKSI = {
   daftar: ({ status }, user) => all(`SELECT *, nota IS NOT NULL ada_nota FROM belanja WHERE status = ? ORDER BY ${status === "kirim" ? "tgl, id" : "id DESC"} LIMIT 200`, [["kirim", "datang", "abaikan", "batal"].includes(status) ? status : "kirim"])
     .map(({ nota, ...b }) => untuk({ ...b, items: JSON.parse(b.items || "[]") }, user)),
-  nota: ({ id }, user) => { if (user.peran !== "admin") throw bad("Nota hanya untuk admin"); const b = muat(id); const r = one("SELECT nota FROM belanja WHERE id = ?", [b.id]); if (!r || !r.nota) throw notFound("Nota tidak ada"); return { nota: r.nota }; },
+  nota: ({ id }, user) => { if (user.peran !== "admin") throw bad("Nota hanya untuk admin"); const b = muat(id); const r = one("SELECT nota FROM belanja WHERE id = ?", [b.id]); if (!r || !r.nota) throw notFound("Foto nota tidak ada (foto nota otomatis dihapus setelah 30 hari)"); return { nota: r.nota }; },
   hitung: () => ({ kirim: one("SELECT COUNT(*) n FROM belanja WHERE status = 'kirim'").n }),
   datang: ({ id, data }, user) => datang(id, data || {}, user),
   status: ({ id, status }, user) => {
@@ -254,4 +255,11 @@ export function aksiBelanjaDariPerangkat(aksi, data, userPerangkat){
   const u = one("SELECT id, nama, peran FROM users WHERE nama_key = ? AND aktif = 1", [String(userPerangkat && userPerangkat.nama_key || "")]);
   if (!u) throw bad("Pengguna perangkat tidak dikenal di server");
   return AKSI[aksi](data || {}, u);
+}
+
+export const SIMPAN_NOTA_HARI = 30;
+/** Hemat memori: foto/PDF nota belanja dihapus otomatis setelah 30 hari (data belanjanya tetap). */
+export function hapusNotaBelanjaLama(){
+  const batas = tambahHari(sekarang().tgl, -SIMPAN_NOTA_HARI);
+  return Number(run("UPDATE belanja SET nota = NULL WHERE nota IS NOT NULL AND tgl < ?", [batas]).changes || 0);
 }
