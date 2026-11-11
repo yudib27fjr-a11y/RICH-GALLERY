@@ -1,4 +1,4 @@
-import { eanValid, eanSVG, barcodeDefault, periodeDari, geserPeriode, tambahHari, pad, tebakKategori, bacaStruk, UNIT, unitKategori, unitBarang } from "./shared.js";
+import { eanValid, eanSVG, barcodeDefault, periodeDari, geserPeriode, tambahHari, pad, tebakKategori, bacaStruk, bacaPesananOnline, UNIT, unitKategori, unitBarang } from "./shared.js";
 
 /* ================= util ================= */
 const $ = (s, r = document) => r.querySelector(s);
@@ -2778,7 +2778,7 @@ const ALAMAT_BELANJA = "belanja@richgallery.my.id";
 async function vBelanja(){
   const st = blStatus;
   $("#main").innerHTML = `<div class="view-head"><h2>Belanja online</h2><span class="sp"></span>
-      <button class="btn sm pri" id="blOffline" type="button">🧾 Belanja offline (nota)</button><button class="btn sm" id="blManual" type="button">+ Catat belanja</button>${isAdmin() ? `<button class="btn sm" id="blTempel" type="button">📋 Tempel email Shopee</button>` : ""}</div>
+      <button class="btn sm pri" id="blOffline" type="button">🧾 Belanja offline (nota)</button><button class="btn sm bl-tt" id="blTiktok" type="button">🎵 TikTok Shop</button><button class="btn sm" id="blManual" type="button">+ Catat belanja</button>${isAdmin() ? `<button class="btn sm" id="blTempel" type="button">📋 Tempel email Shopee</button>` : ""}</div>
     <div class="seg" id="blS" style="display:flex;margin-bottom:10px">${[["kirim", "🚚 Dikirim"], ["datang", "📦 Datang"], ...(isAdmin() ? [["abaikan", "Diabaikan"], ["batal", "Batal"]] : [])]
       .map(([k, l]) => `<button type="button" data-s="${k}" style="flex:1" class="${st === k ? "on" : ""}">${l}</button>`).join("")}</div>
     <div id="blL"><div class="empty">Memuat…</div></div>
@@ -2790,7 +2790,8 @@ async function vBelanja(){
       <button class="btn sm" id="blSurat" type="button" style="align-self:flex-start">📧 Lihat email masuk lain (kode konfirmasi Gmail)</button><div id="blSuratL"></div></div></details>` : ""}`;
   $$("#blS button").forEach(b => b.onclick = () => { blStatus = b.dataset.s; vBelanja(); });
   $("#blManual").onclick = belanjaManual;
-  $("#blOffline").onclick = belanjaOffline;
+  $("#blOffline").onclick = () => belanjaOffline();
+  $("#blTiktok").onclick = () => belanjaOffline("tiktok");
   const tp = $("#blTempel"); if (tp) tp.onclick = tempelEmail;
   const pn = $("#blPanel"); if (pn) pn.ontoggle = () => { blPanelBuka = pn.open; };
   const muatSurat = async () => {
@@ -2808,7 +2809,7 @@ async function vBelanja(){
   $("#blL").innerHTML = L.length ? `<div class="stack">${L.map(b => {
     const lama = st === "kirim" && (Date.parse(today()) - Date.parse(b.tgl)) / 864e5;
     return `<div class="panel stack bl-kartu" style="gap:6px">
-      <div class="row" style="align-items:center;gap:6px"><span class="pill ${b.sumber === "shopee" ? "bl-shopee" : b.sumber === "offline" ? "ok" : "mut"}">${b.sumber === "shopee" ? "🛒 Shopee" : b.sumber === "offline" ? "🧾 Offline" : "✍️ Manual"}</span><b style="flex:1">${b.sumber === "shopee" ? "Belanja Shopee" : b.sumber === "offline" ? "Belanja offline" : "Belanja online"}${isAdmin() && (b.toko || b.no_pesanan) ? ` <button class="btn sm ghost bl-intip" type="button" title="Lihat nama toko (admin)" aria-label="Lihat nama toko">👁</button><span class="bl-rahasia muted" hidden> · ${esc(b.toko || "")}${b.no_pesanan && b.sumber !== "manual" ? " #" + esc(b.no_pesanan) : ""}</span>` : ""}</b>${totalBelanja(b) ? `<b class="num">${rp(totalBelanja(b))}</b>` : ""}</div>
+      <div class="row" style="align-items:center;gap:6px"><span class="pill ${b.sumber === "shopee" ? "bl-shopee" : b.sumber === "tiktok" ? "bl-tiktok" : b.sumber === "offline" ? "ok" : "mut"}">${b.sumber === "shopee" ? "🛒 Shopee" : b.sumber === "tiktok" ? "🎵 TikTok Shop" : b.sumber === "offline" ? "🧾 Offline" : "✍️ Manual"}</span><b style="flex:1">${b.sumber === "shopee" ? "Belanja Shopee" : b.sumber === "tiktok" ? "Belanja TikTok Shop" : b.sumber === "offline" ? "Belanja offline" : "Belanja online"}${isAdmin() && (b.toko || b.no_pesanan) ? ` <button class="btn sm ghost bl-intip" type="button" title="Lihat nama toko (admin)" aria-label="Lihat nama toko">👁</button><span class="bl-rahasia muted" hidden> · ${esc(b.toko || "")}${b.no_pesanan && b.sumber !== "manual" ? " #" + esc(b.no_pesanan) : ""}</span>` : ""}</b>${totalBelanja(b) ? `<b class="num">${rp(totalBelanja(b))}</b>` : ""}</div>
       <div class="small muted">dipesan ${esc(tglID(b.tgl))}${b.metode ? " · " + esc(b.metode) : ""}${lama >= 5 ? ` · <b style="color:var(--warn)">sudah ${Math.round(lama)} hari</b>` : ""}${b.alasan ? " · " + esc(b.alasan) : ""}</div>
       <div class="stack" style="gap:4px">${b.items.map(i => `<div class="small bl-item ${i.toko ? "" : "bukan"}"><b>${esc(i.nama)}</b>${i.variasi ? ` <span class="pill mut">${esc(i.variasi)}</span>` : ""} ×${fq(i.qty)}${i.harga != null && i.harga ? ` · ${rp(i.harga)}` : ""}
         ${i.masuk ? `<div class="ok-teks">✅ masuk stok: ${esc(i.masuk.nama)} +${fq(i.masuk.qty)}${i.datang !== i.qty ? ` (datang ${fq(i.datang)} dari ${fq(i.qty)})` : ""}</div>` : st === "datang" ? `<div class="muted">tidak masuk stok${i.datang != null && i.datang !== i.qty ? ` · datang ${fq(i.datang)} dari ${fq(i.qty)}` : ""}</div>`
@@ -2877,7 +2878,7 @@ async function bacaNota(file){
 }
 /** OCR nota di perangkat: rapikan foto (potong ke kertas, hitam-putih) lalu baca dengan Tesseract di Web Worker. */
 let ocrWorker = null, ocrId = 0;
-async function ocrNota(file){
+async function ocrNota(file, { layar = false } = {}){
   const url = URL.createObjectURL(file), img = new Image(); img.src = url; await img.decode(); URL.revokeObjectURL(url);
   const sk = Math.min(1, 1800 / Math.max(img.naturalWidth, img.naturalHeight)), W0 = Math.round(img.naturalWidth * sk), H0 = Math.round(img.naturalHeight * sk);
   const c = document.createElement("canvas"); c.width = W0; c.height = H0; const g = c.getContext("2d", { willReadFrequently: true }); g.drawImage(img, 0, 0, W0, H0);
@@ -2888,8 +2889,13 @@ async function ocrNota(file){
   }
   // batas kertas nota (baris / kolom yang ≥25% putih); bila tidak jelas pakai seluruh foto
   let y0 = 0, y1 = H0 - 1, x0 = 0, x1 = W0 - 1;
-  const rs = [...kertasR].map((v, y) => v / W0 > 0.25 ? y : -1).filter(v => v >= 0), ks = [...kertasK].map((v, x) => v / H0 > 0.25 ? x : -1).filter(v => v >= 0);
-  if (rs.length > H0 * 0.15 && ks.length > W0 * 0.15) { y0 = rs[0]; y1 = rs[rs.length - 1]; x0 = ks[0]; x1 = ks[ks.length - 1]; }
+  if (layar) { // screenshot HP: pakai seluruh layar; tema gelap (teks putih) dibalik jadi teks hitam
+    let rata = 0; for (let i = 0; i < lum.length; i++) rata += lum[i]; rata /= lum.length;
+    if (rata < 110) for (let i = 0; i < lum.length; i++) lum[i] = 255 - lum[i];
+  } else {
+    const rs = [...kertasR].map((v, y) => v / W0 > 0.25 ? y : -1).filter(v => v >= 0), ks = [...kertasK].map((v, x) => v / H0 > 0.25 ? x : -1).filter(v => v >= 0);
+    if (rs.length > H0 * 0.15 && ks.length > W0 * 0.15) { y0 = rs[0]; y1 = rs[rs.length - 1]; x0 = ks[0]; x1 = ks[ks.length - 1]; }
+  }
   const W = x1 - x0 + 1, H = y1 - y0 + 1, k = 35, h = k >> 1;
   // ambang adaptif (rata-rata lokal) memakai citra integral → teks hitam di kertas putih
   const II = new Float64Array((W + 1) * (H + 1));
@@ -2920,24 +2926,48 @@ function cocokMitra(t){
   for (const mt of daftarMitra()) { const b = String(mt.nama || "").toLowerCase().replace(/[^a-z0-9]/g, ""); if (!b) continue; const d = jarak(a, b) / Math.max(a.length, b.length); if (d <= 0.34 && (!terbaik || d < terbaik.d)) terbaik = { d, nama: mt.nama }; }
   return terbaik ? terbaik.nama : "";
 }
-function belanjaOffline(){
+/** Belanja offline (foto nota) atau TikTok Shop (screenshot "Rincian pesanan" → dibaca otomatis). */
+function belanjaOffline(jenis = "offline"){
+  const tt = jenis === "tiktok";
   let nota = "";
   const baris = (x = {}) => `<div class="row bm-b" style="flex-wrap:nowrap;gap:6px;align-items:flex-end"><label class="f" style="flex:2;min-width:0">Barang${x.kode ? ` <span class="pill mut" style="font-size:10px">${esc(x.kode)}</span>` : ""}<input type="text" class="bmN" list="bmL" placeholder="${x.kode ? "Barang apa? (pilih dari daftar)" : "Nama barang di nota"}" value="${esc(x.nama || "")}" data-kode="${esc(x.kode || "")}"></label><label class="f" style="width:64px">Jml<input class="bmQ" type="number" value="${x.qty || 1}" min="0.01" step="any" inputmode="decimal"></label>${isAdmin() ? `<label class="f" style="width:96px">Harga/pcs<input class="bmH" type="number" min="0" step="500" inputmode="numeric" value="${x.harga || ""}"></label>` : ""}<button class="btn sm ghost" data-hps type="button" aria-label="Hapus baris">✕</button></div>`;
-  modal(`<div class="modal-kepala"><h3>🧾 Belanja offline</h3>${tombolTutup()}</div>
-    <p class="small muted" style="margin:0 0 6px">Untuk belanja langsung di toko / pasar. Foto atau unggah PDF notanya sebagai bukti, lalu tulis barangnya.</p>
-    <label class="nota-unggah" id="noBox"><input type="file" id="noF" accept="image/*,application/pdf" hidden><span id="noIsi">📷 <b>Foto / pilih nota</b><br><span class="small muted">JPG, PNG, atau PDF · foto disimpan 30 hari</span></span></label>
+  const kosongIsi = tt ? `🎵 <b>Pilih screenshot rincian pesanan</b><br><span class="small muted">Boleh 2–3 gambar bila panjang · disimpan 30 hari</span>` : `📷 <b>Foto / pilih nota</b><br><span class="small muted">JPG, PNG, atau PDF · foto disimpan 30 hari</span>`;
+  modal(`<div class="modal-kepala"><h3>${tt ? "🎵 Belanja TikTok Shop" : "🧾 Belanja offline"}</h3>${tombolTutup()}</div>
+    <p class="small muted" style="margin:0 0 6px">${tt ? `Di TikTok: <b>Profil → Pesanan</b> → buka pesanannya → <b>screenshot</b> sampai terlihat barang, total &amp; ID pesanan. Pilih screenshot-nya di sini: barang, harga, ongkir &amp; total terisi otomatis.` : "Untuk belanja langsung di toko / pasar. Foto atau unggah PDF notanya sebagai bukti, lalu tulis barangnya."}</p>
+    <label class="nota-unggah" id="noBox"><input type="file" id="noF" accept="${tt ? "image/*" : "image/*,application/pdf"}" ${tt ? "multiple" : ""} hidden><span id="noIsi">${kosongIsi}</span></label>
     <div id="noOcr"></div>
-    <div class="row"><label class="f grow">Nama toko<input type="text" id="bmT" placeholder="Mis. Toko Pita Jaya, Pasar Baru"></label><label class="f" style="width:150px">Tanggal<input id="bmD" type="date" value="${today()}" max="${today()}"></label></div>
+    ${tt ? `<details class="small" id="ttTempelBox"><summary>📋 Atau tempel teks rincian pesanan</summary><textarea id="ttTempel" rows="5" placeholder="Tempel teks pesanan (mis. dari email TikTok Shop)…" style="width:100%;margin-top:6px"></textarea><button class="btn sm" id="ttBaca" type="button">Baca teks</button></details>` : ""}
+    <div class="row"><label class="f grow">Nama toko${tt ? " penjual" : ""}<input type="text" id="bmT" placeholder="${tt ? "Nama toko di TikTok" : "Mis. Toko Pita Jaya, Pasar Baru"}"></label><label class="f" style="width:150px">Tanggal<input id="bmD" type="date" value="${today()}" max="${today()}"></label></div>
     <datalist id="bmL">${[...B.bahan, ...B.produk].map(x => `<option value="${esc(x.nama)}">`).join("")}</datalist>
     <div class="stack" id="bmI">${baris()}</div><button class="btn sm" id="bmTambah" type="button">+ Barang</button>
-    ${isAdmin() ? `<div class="row"><label class="f grow">No. nota<input type="text" id="bmNo" placeholder="Opsional"></label><label class="f grow">Ongkos / biaya lain<input id="bmO" type="number" min="0" step="1000" inputmode="numeric"></label></div><div class="small" id="bmTot"></div>` : ""}
-    <label class="row small" style="gap:8px;flex-wrap:nowrap;align-items:flex-start;margin-bottom:6px"><input type="checkbox" id="bmLangsung" checked style="margin-top:2px"><span>Barang sudah diterima — langsung cek &amp; masukkan ke stok</span></label>
+    ${isAdmin() ? `<div class="row"><label class="f grow">${tt ? "ID pesanan" : "No. nota"}<input type="text" id="bmNo" placeholder="Opsional"></label><label class="f grow">${tt ? "Ongkir + biaya" : "Ongkos / biaya lain"}<input id="bmO" type="number" min="0" step="1000" inputmode="numeric"></label>${tt ? `<label class="f grow">Diskon / voucher<input id="bmDs" type="number" min="0" step="500" inputmode="numeric"></label>` : ""}</div><div class="small" id="bmTot"></div>` : ""}
+    <label class="row small" style="gap:8px;flex-wrap:nowrap;align-items:flex-start;margin-bottom:6px"><input type="checkbox" id="bmLangsung" ${tt ? "" : "checked"} style="margin-top:2px"><span>Barang sudah diterima — langsung cek &amp; masukkan ke stok</span></label>
     <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="bmOk" type="button">Simpan</button></div>`, m => {
-    const hitung = () => { const t = $("#bmTot", m); if (!t) return; const sub = $$(".bm-b", m).reduce((a, r) => a + (num($(".bmQ", r).value) || 0) * (num($(".bmH", r)?.value) || 0), 0) + (num($("#bmO", m)?.value) || 0); t.innerHTML = sub ? `Total: <b>${rp(sub)}</b>` : ""; };
+    const hitung = () => { const t = $("#bmTot", m); if (!t) return; const sub = $$(".bm-b", m).reduce((a, r) => a + (num($(".bmQ", r).value) || 0) * (num($(".bmH", r)?.value) || 0), 0) + (num($("#bmO", m)?.value) || 0) - (num($("#bmDs", m)?.value) || 0); t.innerHTML = sub ? `Total: <b>${rp(sub)}</b>` : ""; };
     const pasang = () => { $$("[data-hps]", m).forEach(b => b.onclick = () => { if ($$(".bm-b", m).length > 1) b.closest(".bm-b").remove(); hitung(); }); $$(".bmQ,.bmH", m).forEach(x => x.oninput = hitung); };
-    pasang(); if ($("#bmO", m)) $("#bmO", m).oninput = hitung;
+    pasang(); if ($("#bmO", m)) $("#bmO", m).oninput = hitung; if ($("#bmDs", m)) $("#bmDs", m).oninput = hitung;
     $("#bmTambah", m).onclick = () => { $("#bmI", m).insertAdjacentHTML("beforeend", baris()); pasang(); };
     // Baca otomatis isi nota dari foto (OCR di HP) → toko, tanggal, no nota, barang, jumlah & harga terisi; tinggal cocokkan nama barang.
+    // TikTok Shop: hasil baca screenshot / teks tempelan → isi formulir
+    const isiPesanan = R => {
+      const kotak = $("#noOcr", m);
+      if (!R.items.length) { kotak.innerHTML = `<div class="note small">⚠️ Barang belum terbaca. Pastikan screenshot memperlihatkan nama barang &amp; harganya (tidak terpotong) — atau isi manual di bawah.</div>`; return; }
+      if (R.toko && !$("#bmT", m).value) $("#bmT", m).value = R.toko;
+      if (R.tgl) $("#bmD", m).value = R.tgl > today() ? today() : R.tgl;
+      if (R.no && $("#bmNo", m)) $("#bmNo", m).value = R.no;
+      if ($("#bmO", m)) $("#bmO", m).value = (R.ongkir + R.biaya) || "";
+      if ($("#bmDs", m)) $("#bmDs", m).value = R.diskon || "";
+      $("#bmI", m).innerHTML = R.items.map(x => baris({ nama: x.nama + (x.variasi ? " · " + x.variasi : ""), qty: x.qty, harga: x.harga })).join(""); pasang(); hitung();
+      const jml = R.items.reduce((a, x) => a + x.harga * x.qty, 0);
+      kotak.innerHTML = `<div class="note small ${R.cocok ? "ok-note" : ""}">${R.cocok ? "✅" : "⚠️"} Terbaca <b>${R.items.length} barang</b> · ${rp(jml)}${R.adaTotal ? ` · total pesanan ${rp(R.total)}` : ""}${R.cocok ? " — cocok." : " — <b>cek lagi</b> jumlah &amp; harganya."}${R.no ? "" : " ID pesanan tidak terbaca (boleh dikosongkan)."}</div>`;
+    };
+    const bacaLayar = async files => {
+      const kotak = $("#noOcr", m);
+      kotak.innerHTML = `<div class="note small">🔍 Membaca screenshot… <span class="muted">(pertama kali memuat pembaca ±7 MB)</span></div>`;
+      try { let teks = ""; for (const f of files) teks += (await ocrNota(f, { layar: true })) + "\n"; window.__rgOcrTeks = teks; isiPesanan(bacaPesananOnline(teks, today())); }
+      catch (err) { kotak.innerHTML = `<div class="note small">⚠️ Baca otomatis belum bisa di perangkat ini (${esc(err.message || err)}). Isi manual di bawah.</div>`; }
+    };
+    const tb = $("#ttBaca", m); if (tb) tb.onclick = () => { const t = $("#ttTempel", m).value.trim(); if (!t) return toast("Tempel teks pesanannya dulu"); isiPesanan(bacaPesananOnline(t, today())); };
     const bacaOtomatis = async f => {
       const kotak = $("#noOcr", m);
       kotak.innerHTML = `<div class="note small">🔍 Membaca isi nota… <span class="muted">(pertama kali memuat pembaca ±7 MB)</span></div>`;
@@ -2958,20 +2988,21 @@ function belanjaOffline(){
       const f = e.target.files[0]; if (!f) return;
       $("#noIsi", m).innerHTML = "Memproses…";
       nota = await bacaNota(f);
+      if (tt) { const n = e.target.files.length; $("#noIsi", m).innerHTML = `<img src="${nota}" alt="Screenshot pesanan"><span class="small muted">${n > 1 ? n + " screenshot · " : ""}ketuk untuk ganti</span>`; bacaLayar([...e.target.files]); return; }
       $("#noIsi", m).innerHTML = nota.startsWith("data:application/pdf") ? `📄 <b>${esc(f.name)}</b><br><span class="small muted">PDF siap · ketuk untuk ganti</span>` : `<img src="${nota}" alt="Nota"><span class="small muted">ketuk untuk ganti</span>`;
       if (!nota.startsWith("data:application/pdf")) bacaOtomatis(f);
       else $("#noOcr", m).innerHTML = `<div class="note small">PDF disimpan sebagai bukti. Baca otomatis hanya untuk <b>foto</b> nota — isi barangnya di bawah.</div>`;
-    }).then(() => { if (!nota) $("#noIsi", m).innerHTML = "📷 <b>Foto / pilih nota</b><br><span class=\"small muted\">JPG, PNG, atau PDF</span>"; });
+    }).then(() => { if (!nota) $("#noIsi", m).innerHTML = kosongIsi; });
     $("#bmOk", m).onclick = e => coba(async () => {
       const kosong = $$(".bm-b", m).filter(r => !$(".bmN", r).value.trim() && $(".bmN", r).dataset.kode);
       if (kosong.length) { $(".bmN", kosong[0]).focus(); throw new Error(`Pilih nama barang untuk ${kosong.length} baris yang belum diisi`); }
       const items = $$(".bm-b", m).map(r => ({ nama: $(".bmN", r).value.trim(), variasi: $(".bmN", r).dataset.kode || "", qty: num($(".bmQ", r).value) || 1, harga: $(".bmH", r) ? num($(".bmH", r).value) || 0 : 0 })).filter(x => x.nama);
-      if (!items.length) throw new Error("Tulis minimal satu barang dari nota");
-      if (!nota && !confirm("Belum ada foto nota. Simpan tanpa nota?")) return;
-      const r = await api("POST", "/api/belanja", { offline: true, nota: nota || undefined, toko: $("#bmT", m).value.trim(), tgl: $("#bmD", m).value, no: $("#bmNo", m) ? $("#bmNo", m).value.trim() : "", ongkir: $("#bmO", m) ? num($("#bmO", m).value) : 0, items });
+      if (!items.length) throw new Error(tt ? "Isi minimal satu barang" : "Tulis minimal satu barang dari nota");
+      if (!nota && !tt && !confirm("Belum ada foto nota. Simpan tanpa nota?")) return;
+      const r = await api("POST", "/api/belanja", { offline: !tt, sumber: tt ? "tiktok" : undefined, diskon: $("#bmDs", m) ? num($("#bmDs", m).value) || 0 : undefined, nota: nota || undefined, toko: $("#bmT", m).value.trim(), tgl: $("#bmD", m).value, no: $("#bmNo", m) ? $("#bmNo", m).value.trim() : "", ongkir: $("#bmO", m) ? num($("#bmO", m).value) : 0, items });
       const langsung = $("#bmLangsung", m).checked; closeModal(); blStatus = "kirim";
       if (langsung) { const L = await api("GET", "/api/belanja?status=kirim").catch(() => []); const b = L.find(x => x.id === r.id); if (b) { await vBelanja(); return barangDatang(b); } }
-      toast("Belanja offline dicatat"); vBelanja();
+      toast(tt ? "Belanja TikTok Shop dicatat · dalam pengiriman" : "Belanja offline dicatat"); vBelanja();
     }, e.target);
   });
 }

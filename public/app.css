@@ -668,3 +668,5 @@ nav.tabs button.home-tetap.on .home-ic{box-shadow:0 0 0 2.5px var(--surface),0 0
 
 button.br-hero{display:block;width:100%;text-align:left;border:0;font:inherit;cursor:pointer;position:relative;transition:transform .12s}button.br-hero:active{transform:scale(.98)}
 .br-hero .br-lihat{position:absolute;right:14px;bottom:12px;font-style:normal;font-size:12px;font-weight:800;background:rgba(255,255,255,.22);padding:4px 10px;border-radius:999px}
+.bl-tiktok{background:#111;color:#fff}
+.btn.bl-tt{background:linear-gradient(135deg,#25f4ee,#111 45%,#fe2c55);color:#fff;border-color:transparent}

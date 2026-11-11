@@ -159,7 +159,7 @@ function datang(id, body, user){
     const b = muat(id);
     if (b.status !== "kirim") throw bad("Belanja ini tidak sedang dalam pengiriman");
     const terima = Array.isArray(body.items) ? body.items : [];
-    const tgl = sekarang().tgl, ref = `Belanja ${b.sumber === "shopee" ? "Shopee " : ""}#${b.no_pesanan || b.id}`;
+    const tgl = sekarang().tgl, ref = `Belanja ${b.sumber === "shopee" ? "Shopee " : b.sumber === "tiktok" ? "TikTok Shop " : ""}#${b.no_pesanan || b.id}`;
     const hasil = b.items.map((it, i) => {
       const t = terima.find(x => +x.i === i) || {};
       const qtyDatang = angka(t.datang ?? it.qty, { min: 0, max: 1e7, nama: `Jumlah datang ${it.nama}` }) ?? 0;
@@ -218,15 +218,16 @@ const AKSI = {
       qty: angka(i.qty, { min: 0.01, max: 1e7, wajib: true, nama: "Jumlah" }), harga: user.peran === "admin" ? (angka(i.harga, { min: 0, max: 1e10, bulat: true, nama: "Harga" }) ?? 0) : 0 }));
     if (!items.length) throw bad("Isi minimal satu barang");
     const sub = items.reduce((a, i) => a + i.harga * i.qty, 0), ongkir = user.peran === "admin" ? (angka(d.ongkir, { min: 0, max: 1e9, bulat: true }) ?? 0) : 0;
+    const diskon = user.peran === "admin" ? (angka(d.diskon, { min: 0, max: 1e9, bulat: true }) ?? 0) : 0; // voucher / potongan marketplace
     // Belanja offline (beli langsung di toko): foto / PDF nota sebagai bukti
     const offline = !!d.offline, nota = d.nota ? String(d.nota) : null;
     if (nota && (!/^data:(image\/(jpeg|png|webp)|application\/pdf);base64,[A-Za-z0-9+/=]+$/.test(nota) || nota.length > 1_900_000)) throw bad("Nota harus foto (JPG/PNG) atau PDF, maksimal ±1,4 MB");
-    const sumber = offline ? "offline" : "manual";
-    const no = teks(d.no, { max: 30, nama: "No pesanan" }) || `${offline ? "N" : "M"}${Date.now().toString(36).toUpperCase()}`;
+    const sumber = offline ? "offline" : d.sumber === "tiktok" ? "tiktok" : "manual"; // tiktok = TikTok Shop (dibaca dari screenshot rincian pesanan)
+    const no = teks(d.no, { max: 30, nama: "No pesanan" }) || `${offline ? "N" : sumber === "tiktok" ? "T" : "M"}${Date.now().toString(36).toUpperCase()}`;
     if (one("SELECT 1 x FROM belanja WHERE sumber = ? AND no_pesanan = ?", [sumber, no])) throw bad("Nomor nota / pesanan itu sudah dicatat");
     const id = Number(run(`INSERT INTO belanja(sumber, no_pesanan, toko, tgl, items, subtotal, ongkir, biaya, total, metode, status, oleh, nota) VALUES (?,?,?,?,?,?,?,0,?,?,'kirim',?,?)`,
-      [sumber, no, teks(d.toko, { max: 80, nama: "Toko" }) || (offline ? "Belanja offline" : "Belanja online"), tanggal(d.tgl || sekarang().tgl), JSON.stringify(items.map(i => { const c = cocokkanBarang(i.nama); return { ...i, toko: true, kata: c.kata, barang: c.barang }; })),
-        Math.round(sub), ongkir, Math.round(sub + ongkir), teks(d.metode, { max: 40 }) || "", user.nama, nota]).lastInsertRowid);
+      [sumber, no, teks(d.toko, { max: 80, nama: "Toko" }) || (offline ? "Belanja offline" : sumber === "tiktok" ? "TikTok Shop" : "Belanja online"), tanggal(d.tgl || sekarang().tgl), JSON.stringify(items.map(i => { const c = cocokkanBarang(i.nama); return { ...i, toko: true, kata: c.kata, barang: c.barang }; })),
+        Math.round(sub), ongkir, Math.max(0, Math.round(sub + ongkir - diskon)), teks(d.metode, { max: 40 }) || "", user.nama, nota]).lastInsertRowid);
     return { id };
   },
   hapus: ({ id }, user) => { if (user.peran !== "admin") throw bad("Hanya admin"); const b = muat(id); if (b.status === "datang") throw bad("Belanja yang sudah datang tidak bisa dihapus (stok sudah masuk)"); run("DELETE FROM belanja WHERE id = ?", [b.id]); return { ok: true }; },

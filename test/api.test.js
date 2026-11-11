@@ -730,6 +730,24 @@ test("belanja offline: nota foto/PDF disimpan, daftar tidak membawa isi nota, no
   await admin("DELETE", `/api/belanja/${b.id}`); await admin("DELETE", `/api/belanja/${pdf.data.id}`);
 });
 
+test("belanja TikTok Shop: rincian pesanan dibaca dari teks screenshot, tersimpan sebagai sumber tiktok (diskon mengurangi total)", async () => {
+  const { bacaPesananOnline } = await import("../public/shared.js");
+  const R = bacaPesananOnline(["< Detail pesanan", "Sedang dikirim", "Alamat pengiriman", "Yudi 081234567890", "Jl. Perintis Kemerdekaan No 10, Kec. Tamalanrea", "Grosir Florist Makassar >",
+    "Kertas Buket Korea Waterproof 20 lembar", "Variasi: Pink, 20 lembar", "Rp35.000 Rp28.500", "x2", "Pita Satin 2,5cm 1 roll", "Rp12.000 x1", "Subtotal produk Rp69.000",
+    "Ongkos kirim Rp12.000", "Diskon ongkos kirim -Rp12.000", "Voucher toko -Rp5.000", "Biaya layanan Rp1.000", "Total Rp65.000", "ID pesanan 577912345678901234 Salin",
+    "Waktu pemesanan 11/11/2026 23:10", "Metode pembayaran Bayar di tempat"].join("\n"), "2026-11-12");
+  assert.equal(R.toko, "Grosir Florist Makassar"); assert.equal(R.no, "577912345678901234"); assert.equal(R.tgl, "2026-11-11"); assert.equal(R.metode, "COD");
+  assert.deepEqual(R.items.map(x => [x.qty, x.harga]), [[2, 28500], [1, 12000]]); assert.equal(R.items[0].variasi, "Pink, 20 lembar");
+  assert.equal(R.total, 65000); assert.equal(R.diskon, 17000); assert.ok(R.cocok);
+  // tema gelap / baris aneh: tanpa barang → kosong, tidak error
+  assert.equal(bacaPesananOnline("Pesanan saya\nChat penjual", "").items.length, 0);
+  const r = await admin("POST", "/api/belanja", { sumber: "tiktok", toko: R.toko, no: R.no, tgl: R.tgl, ongkir: R.ongkir + R.biaya, diskon: R.diskon, items: R.items });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const b = (await admin("GET", "/api/belanja?status=kirim")).data.find(x => x.id === r.data.id);
+  assert.equal(b.sumber, "tiktok"); assert.equal(b.total, 69000 + 13000 - 17000); assert.equal(b.no_pesanan, R.no);
+  assert.equal((await admin("POST", "/api/belanja", { sumber: "tiktok", no: R.no, items: R.items })).status, 400, "ID pesanan yang sama tidak dobel");
+  await admin("DELETE", `/api/belanja/${b.id}`);
+});
 test("baca nota (OCR): pola 'qty x harga  Rp jumlah', salah baca angka diperbaiki, nama barang & total", async () => {
   const { bacaStruk } = await import("../public/shared.js");
   const A = bacaStruk(`YOU N HEL.\nCIREBON ONE STOP SHOPPING\n#000040 02/11/2026 10:11\n01 Fio 000000\n12x 14000 ~ Rp168600\nDPT.O7\n3x 39500 Rpl06500\nDPT.O7 * #\n2x 32500 " pp65000 » *\nDPT.O7\nIx 14500 Re1 45000\nDPT.O7\n1x 1500 e RPTSOO\nDPT.13\nCREDIT! Re521000\nTERIMA KASIH`, "2026-11-02");

@@ -123,6 +123,71 @@ export function bacaStruk(teks, hariIni = ""){
   return res;
 }
 
+/* ---------- Baca rincian pesanan marketplace (TikTok Shop, dll.) dari teks hasil OCR screenshot / salinan teks ---------- */
+const BULAN_ID = { jan: 1, feb: 2, peb: 2, mar: 3, apr: 4, mei: 5, may: 5, jun: 6, jul: 7, agu: 8, agt: 8, aug: 8, sep: 9, okt: 10, oct: 10, nov: 11, des: 12, dec: 12 };
+const RINGKAS_OL = /^(sub\s?total|total|ongkos|ongkir|biaya|diskon|voucher|potongan|gratis|koin|bonus|hemat|cashback|metode|pembayaran|bayar|id\s?pesanan|no\.?\s?pesanan|nomor|order\s?id|waktu|tanggal|alamat|status|kurir|jasa\s?kirim|opsi\s?pengiriman|pengiriman|resi|no\.?\s?resi|dibayar|harga\s?total|rincian\s?pembayaran)/i;
+const ABAIKAN_OL = /^(chat|kunjungi|beli\s?lagi|lacak|hubungi|lihat|rincian|detail|pesanan\s?(saya|dikirim|selesai|diproses|tiba)|sedang|dikirim|selesai|tiba|diterima|kembali|ajukan|nilai|ulasan|minta|batalkan|salin|copy|tiktok\s?shop|shop\s?\|?\s?tokopedia|informasi|penerima)/i;
+const ALAMAT_OL = /\b(jl|jln|jalan|kec|kecamatan|kab|kabupaten|kota|kel|kelurahan|desa|rt|rw|provinsi|sulawesi|jawa|sumatera|kalimantan|indonesia|perumahan|perum|blok|lorong|lr|btn|kompleks)\b\.?/i;
+const uangOL = l => {
+  const o = [];
+  for (const m of l.matchAll(/(-|−)?\s?R[pP]\s?([\dOoIl][\dOoIl.,]*)/g)) { const v = angkaOCR(m[2].replace(/[.,]\d{1,2}$/, "")); if (v > 0) o.push(m[1] ? -v : v); }
+  if (!o.length) for (const m of l.matchAll(/(-|−)?\s?\b(\d{1,3}(?:[.,]\d{3})+)\b(?![.,]?\d)/g)) { const v = +m[2].replace(/[.,]/g, ""); if (v > 0) o.push(m[1] ? -v : v); }
+  return o;
+};
+/** Teks rincian pesanan (OCR screenshot "Detail pesanan" TikTok Shop / Tokopedia / Shopee, atau teks yang disalin) → { toko, no, tgl, items[{nama,variasi,qty,harga}], subtotal, ongkir, biaya, diskon, total, metode, adaTotal, cocok }. */
+export function bacaPesananOnline(teks, hariIni = ""){
+  const L0 = String(teks || "").replace(/\r/g, "").split("\n").map(x => x.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const tandaToko = L0.map(x => /[>›»]\s*$/.test(x) && !/^[<‹«]/.test(x)); // "Nama Toko >" = baris toko penjual
+  const L = L0.map(x => x.replace(/[|‹›»«>]+\s*$/, "").trim());
+  const huruf = s => (s.match(/[A-Za-z]/g) || []).length;
+  const R = { toko: "", no: "", tgl: "", items: [], subtotal: 0, ongkir: 0, biaya: 0, diskon: 0, total: 0, metode: "" };
+  let buf = [];
+  const nilaiDi = i => { const a = uangOL(L[i]); if (a.length) return a[a.length - 1]; const b = L[i + 1] && !huruf(L[i + 1].replace(/R[pP]/g, "")) ? uangOL(L[i + 1]) : []; return b.length ? b[b.length - 1] : 0; };
+  for (let i = 0; i < L.length; i++) {
+    const l = L[i];
+    // tanggal: 11/11/2026, 11-11-2026, 11 Nov 2026
+    if (!R.tgl) { let m = l.match(/\b(\d{1,2})[/-](\d{1,2})[/-](20\d{2})\b/); if (m && +m[2] <= 12) R.tgl = `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+      else if ((m = l.match(/\b(\d{1,2})\s([A-Za-z]{3})[a-z]*\.?\s(20\d{2})\b/)) && BULAN_ID[m[2].toLowerCase()]) R.tgl = `${m[3]}-${pad(BULAN_ID[m[2].toLowerCase()])}-${m[1].padStart(2, "0")}`; }
+    if (/(id|no\.?|nomor)\s?pesanan|order\s?id/i.test(l)) { const m = (l + " " + (L[i + 1] || "")).match(/\b(\d{10,22}|[0-9]{6}[0-9A-Z]{6,16})\b/); if (m) R.no = m[1]; buf = []; continue; }
+    if (/bayar di tempat|\bCOD\b|cash on delivery/i.test(l)) R.metode = "COD";
+    if (RINGKAS_OL.test(l)) {
+      const v = Math.abs(nilaiDi(i));
+      if (/^sub\s?total/i.test(l)) { if (!/pengiriman|ongkir/i.test(l)) R.subtotal = R.subtotal || v; else R.ongkir = R.ongkir || v; }
+      else if (/diskon|voucher|potongan|gratis|koin|hemat|cashback|bonus/i.test(l)) R.diskon += v;
+      else if (/ongkos|ongkir|biaya\s?pengiriman|^pengiriman/i.test(l)) R.ongkir += v;
+      else if (/^biaya/i.test(l)) R.biaya += v;
+      else if (/^(total|harga\s?total)/i.test(l) && v) R.total = v;
+      else if (/^metode|^pembayaran/i.test(l) && !R.metode) { const s = l.replace(/^(metode\s?pembayaran|pembayaran)\s*:?\s*/i, "").replace(/R[pP].*$/, "").trim(); if (huruf(s) >= 3) R.metode = s.slice(0, 40); }
+      buf = []; continue;
+    }
+    if (tandaToko[i] && !R.items.length && huruf(l) >= 3 && !RINGKAS_OL.test(l)) { R.toko = l.slice(0, 80); buf = []; continue; }
+    if (/^[x×]\s?\d{1,3}$/i.test(l)) { const it = R.items[R.items.length - 1]; if (it) it.qty = +l.replace(/\D/g, ""); continue; }
+    const amt = uangOL(l), qm = l.match(/(?:^|\s)[x×]\s?(\d{1,3})\b/i);
+    if (amt.length || qm) {
+      const sisa = l.replace(/(-|−)?\s?R[pP]\s?[\dOoIl][\dOoIl.,]*/g, " ").replace(/(?:^|\s)[x×]\s?\d{1,3}\b/gi, " ").replace(/\s+/g, " ").trim();
+      if (huruf(sisa) >= 4 && !ABAIKAN_OL.test(sisa)) buf.push(sisa);
+      const harga = amt.length ? Math.min(...amt.filter(v => v > 0)) : 0, qty = qm ? +qm[1] : 1;
+      if (!buf.length && R.items.length) { const it = R.items[R.items.length - 1]; if (!it.harga && harga) { it.harga = harga; if (qm) it.qty = qty; continue; } if (qm && !amt.length) { it.qty = qty; continue; } }
+      if (!buf.length) continue;
+      // baris toko (sebelum barang pertama): berakhiran ">" sudah dibuang; kenali dari kata toko / official / store
+      let nama = buf.filter(x => !/^varia(si|n)\b/i.test(x)), variasi = (buf.find(x => /^varia(si|n)\b/i.test(x)) || "").replace(/^varia(si|n)\s*:?\s*/i, "");
+      const akhir = nama[nama.length - 1] || "";
+      if (!variasi && nama.length >= 2 && akhir.length <= 40 && (/[,/]|\d\s?(pcs|pc|cm|m|ikat|tangkai|lembar|meter|yard|roll|pack)\b/i.test(akhir) || (akhir.length <= 20 && akhir.split(" ").length <= 2))) variasi = nama.pop();
+      if (!R.items.length && !R.toko && nama.length >= 3) R.toko = nama[nama.length - 3].slice(0, 80);
+      R.items.push({ nama: nama.slice(-2).join(" ").slice(0, 160), variasi: variasi.slice(0, 80), qty, harga });
+      buf = []; continue;
+    }
+    if (huruf(l) >= 3 && !ABAIKAN_OL.test(l) && !ALAMAT_OL.test(l) && l.replace(/\D/g, "").length < 8 /* bukan baris no. HP */) { buf.push(l); if (buf.length > 4) buf.shift(); }
+  }
+  if (!R.no) { const m = L.join(" ").match(/\b(\d{15,22})\b/); if (m) R.no = m[1]; }
+  if (!R.tgl) R.tgl = hariIni;
+  R.items = R.items.filter(x => x.nama && huruf(x.nama) >= 3);
+  const jml = R.items.reduce((a, x) => a + x.harga * x.qty, 0);
+  R.adaTotal = R.total > 0;
+  R.cocok = !!R.items.length && ((R.subtotal > 0 && Math.abs(jml - R.subtotal) < 1) || (R.adaTotal && Math.abs(jml + R.ongkir + R.biaya - R.diskon - R.total) < 1));
+  return R;
+}
+
 /* ---- Unit usaha Rich Gallery: 1 kasir untuk semua, unit dikenali otomatis dari kategori produk / jenis pesanan ---- */
 export const UNIT = [
   { id: "bouquet", nama: "Gift & Bouquet", brand: "nyenengin.id", ikon: "💐", warna: "#db2777" },
