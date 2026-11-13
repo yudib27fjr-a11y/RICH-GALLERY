@@ -2927,7 +2927,7 @@ function cocokMitra(t){
   return terbaik ? terbaik.nama : "";
 }
 /** Belanja offline (foto nota) atau TikTok Shop (screenshot "Rincian pesanan" → dibaca otomatis). */
-function belanjaOffline(jenis = "offline"){
+function belanjaOffline(jenis = "offline", berkasAwal = null){
   const tt = jenis === "tiktok";
   let nota = "";
   const baris = (x = {}) => `<div class="row bm-b" style="flex-wrap:nowrap;gap:6px;align-items:flex-end"><label class="f" style="flex:2;min-width:0">Barang${x.kode ? ` <span class="pill mut" style="font-size:10px">${esc(x.kode)}</span>` : ""}<input type="text" class="bmN" list="bmL" placeholder="${x.kode ? "Barang apa? (pilih dari daftar)" : "Nama barang di nota"}" value="${esc(x.nama || "")}" data-kode="${esc(x.kode || "")}"></label><label class="f" style="width:64px">Jml<input class="bmQ" type="number" value="${x.qty || 1}" min="0.01" step="any" inputmode="decimal"></label>${isAdmin() ? `<label class="f" style="width:96px">Harga/pcs<input class="bmH" type="number" min="0" step="500" inputmode="numeric" value="${x.harga || ""}"></label>` : ""}<button class="btn sm ghost" data-hps type="button" aria-label="Hapus baris">✕</button></div>`;
@@ -2984,15 +2984,17 @@ function belanjaOffline(jenis = "offline"){
         kotak.innerHTML = `<div class="note small ${R.cocok ? "ok-note" : ""}">${R.cocok ? "✅" : "⚠️"} Terbaca <b>${R.items.length} barang</b> · jumlah ${rp(jml)}${!R.adaTotal ? " · total nota tidak terbaca — <b>cek lagi</b> jumlah & harganya" : !R.cocok ? ` · total di nota ${rp(R.total)} — <b>cek lagi</b> jumlah & harganya` : " · sama dengan total nota"}.${R.items.some(x => !x.nama) ? " Nota ini tidak mencantumkan nama barang: <b>pilih nama barangnya</b> di tiap baris." : " Cek nama barangnya."}</div>`;
       } catch (err) { kotak.innerHTML = `<div class="note small">⚠️ Baca otomatis belum bisa di perangkat ini (${esc(err.message || err)}). Isi manual di bawah.</div>`; }
     };
-    $("#noF", m).onchange = e => coba(async () => {
-      const f = e.target.files[0]; if (!f) return;
+    const pakaiBerkas = files => coba(async () => {
+      const f = files[0]; if (!f) return;
       $("#noIsi", m).innerHTML = "Memproses…";
       nota = await bacaNota(f);
-      if (tt) { const n = e.target.files.length; $("#noIsi", m).innerHTML = `<img src="${nota}" alt="Screenshot pesanan"><span class="small muted">${n > 1 ? n + " screenshot · " : ""}ketuk untuk ganti</span>`; bacaLayar([...e.target.files]); return; }
+      if (tt) { const n = files.length; $("#noIsi", m).innerHTML = `<img src="${nota}" alt="Screenshot pesanan"><span class="small muted">${n > 1 ? n + " screenshot · " : ""}ketuk untuk ganti</span>`; bacaLayar([...files]); return; }
       $("#noIsi", m).innerHTML = nota.startsWith("data:application/pdf") ? `📄 <b>${esc(f.name)}</b><br><span class="small muted">PDF siap · ketuk untuk ganti</span>` : `<img src="${nota}" alt="Nota"><span class="small muted">ketuk untuk ganti</span>`;
       if (!nota.startsWith("data:application/pdf")) bacaOtomatis(f);
       else $("#noOcr", m).innerHTML = `<div class="note small">PDF disimpan sebagai bukti. Baca otomatis hanya untuk <b>foto</b> nota — isi barangnya di bawah.</div>`;
     }).then(() => { if (!nota) $("#noIsi", m).innerHTML = kosongIsi; });
+    $("#noF", m).onchange = e => pakaiBerkas([...e.target.files]);
+    if (berkasAwal?.length) pakaiBerkas(berkasAwal); // dibagikan dari aplikasi lain (Bagikan → Rich Gallery)
     $("#bmOk", m).onclick = e => coba(async () => {
       const kosong = $$(".bm-b", m).filter(r => !$(".bmN", r).value.trim() && $(".bmN", r).dataset.kode);
       if (kosong.length) { $(".bmN", kosong[0]).focus(); throw new Error(`Pilih nama barang untuk ${kosong.length} baris yang belum diisi`); }
@@ -5092,6 +5094,20 @@ async function aturCabang(){
 /* ---------- Pembaruan otomatis (aplikasi Android) ----------
    Native mengunduh pembaruan di latar belakang lalu memanggil window.rgPembaruan(jenis, teks):
    "web" = tampilan & aturan baru siap, tinggal muat ulang; "apk" = versi aplikasi baru; "info" = pesan biasa. */
+/** Screenshot dibagikan dari TikTok/Galeri ke aplikasi Android (Bagikan → Rich Gallery) → buka Belanja TikTok Shop & baca otomatis. */
+window.rgBagikan = () => {
+  const N = window.RGNative; if (!N || typeof N.ambilBagikan !== "function" || !B) return; // belum masuk: diambil lagi sesudah masuk
+  let daftar = []; try { daftar = JSON.parse(N.ambilBagikan() || "[]"); } catch {}
+  if (!daftar.length) return;
+  const files = daftar.map((d, i) => {
+    const [kepala, isi] = d.split(","), tipe = (kepala.match(/data:([^;]+)/) || [])[1] || "image/jpeg";
+    const bin = atob(isi), u = new Uint8Array(bin.length); for (let j = 0; j < bin.length; j++) u[j] = bin.charCodeAt(j);
+    return new File([u], `bagikan-${i + 1}.${tipe.split("/")[1] || "jpg"}`, { type: tipe });
+  });
+  if (!daftarView().some(v => v[0] === "belanja")) return toast("Menu Belanja tidak tersedia untuk akun ini");
+  closeModal(); pindah("belanja");
+  setTimeout(() => belanjaOffline("tiktok", files), 350);
+};
 window.rgPembaruan = (jenis, teks) => {
   if (jenis === "info") return toast(teks);
   let b = $("#spandukUpdate");
@@ -5148,6 +5164,7 @@ async function mulai(){
   halamanTampil();
   bukaTautanNotif();
   selesaiSambungSosmed();
+  if (window.rgBagikan) setTimeout(window.rgBagikan, 300); // aplikasi dibuka lewat "Bagikan" sebelum halaman siap
   setTimeout(async () => { if (dariNotif) return; await pengingatPesanan(); setTimeout(pengingatTugas, 400); }, 800); // dibuka dari notifikasi: jangan ditutupi pengingat
 }
 /** Ketuk notifikasi → langsung ke halamannya: transaksi & pesanan → halaman Transaksi (baris transaksinya disorot),

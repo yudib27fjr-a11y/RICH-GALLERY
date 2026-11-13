@@ -23,7 +23,7 @@ public class RgNative {
     private final MainActivity act;
     private static final int ITERASI = 60000;
     /** Versi kemampuan native. Naikkan bila menambah metode baru yang dipakai halaman; paket web yang butuh versi lebih tinggi tidak akan dipasang di APK lama. */
-    static final int API = 8; // 8: bukaAplikasi (Gojek, Grab, Maxim)
+    static final int API = 9; // 8: bukaAplikasi (Gojek, Grab, Maxim) · 9: ambilBagikan (gambar dibagikan dari aplikasi lain)
     /** Versi native minimum yang dibutuhkan paket tampilan saat ini. Halaman memeriksa sendiri metode baru (mis. cetakLangsung),
      *  jadi angka ini hanya dinaikkan bila halaman benar-benar tidak bisa jalan di APK lama. Dibaca oleh workflow rilis. */
     static final int WEB_BUTUH_API = 2;
@@ -137,6 +137,10 @@ public class RgNative {
     /* ---------- Buka link di aplikasi tertentu (Canva, WhatsApp / WhatsApp Business) atau di browser ---------- */
     /** paket: nama paket aplikasi (mis. "com.canva.editor", "com.whatsapp.w4b"), "browser" untuk peramban, atau "" (pilihan Android).
      *  Bila aplikasinya belum terpasang, link dibuka dengan cara biasa. */
+    /** Gambar yang dibagikan ke aplikasi ini (mis. screenshot pesanan TikTok Shop): JSON array data URL, sekali ambil. */
+    @JavascriptInterface
+    public String ambilBagikan() { return act.ambilBagikan(); }
+
     @JavascriptInterface
     public void bukaDengan(final String url, final String paket) { act.runOnUiThread(() -> act.bukaDengan(url, paket)); }
 

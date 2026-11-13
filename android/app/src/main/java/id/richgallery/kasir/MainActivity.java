@@ -39,6 +39,9 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
+import java.util.ArrayList;
+import org.json.JSONArray;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -92,7 +95,55 @@ public class MainActivity extends Activity {
 
         new Thread(() -> Berkas.cadanganHarian(this, db)).start();
         muat();
+        terimaBagikan(getIntent());
         web.postDelayed(() -> pembaru.periksa(false), 4000);
+    }
+
+    /* ---------- Gambar yang dibagikan dari aplikasi lain (screenshot pesanan TikTok Shop) ---------- */
+    private final ArrayList<String> bagikan = new ArrayList<>();
+
+    @Override
+    protected void onNewIntent(Intent it) {
+        super.onNewIntent(it);
+        setIntent(it);
+        terimaBagikan(it);
+    }
+
+    @SuppressWarnings("deprecation")
+    private void terimaBagikan(Intent it) {
+        if (it == null) return;
+        String a = it.getAction();
+        final ArrayList<Uri> uris = new ArrayList<>();
+        try {
+            if (Intent.ACTION_SEND.equals(a)) { Uri u = it.getParcelableExtra(Intent.EXTRA_STREAM); if (u != null) uris.add(u); }
+            else if (Intent.ACTION_SEND_MULTIPLE.equals(a)) { ArrayList<Uri> l = it.getParcelableArrayListExtra(Intent.EXTRA_STREAM); if (l != null) uris.addAll(l); }
+        } catch (Exception e) { return; }
+        if (uris.isEmpty()) return;
+        it.setAction(Intent.ACTION_MAIN); // jangan diproses ulang saat layar diputar
+        new Thread(() -> {
+            ArrayList<String> hasil = new ArrayList<>();
+            for (Uri u : uris) {
+                if (hasil.size() >= 4) break;
+                try (InputStream in = getContentResolver().openInputStream(u)) {
+                    if (in == null) continue;
+                    ByteArrayOutputStream out = new ByteArrayOutputStream();
+                    byte[] buf = new byte[65536]; int n, total = 0;
+                    while ((n = in.read(buf)) > 0) { total += n; if (total > 15_000_000) break; out.write(buf, 0, n); }
+                    if (total > 15_000_000) continue;
+                    String mime = getContentResolver().getType(u);
+                    if (mime == null || !mime.startsWith("image/")) mime = "image/jpeg";
+                    hasil.add("data:" + mime + ";base64," + android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP));
+                } catch (Exception e) { Log.w("RG", "bagikan: " + e.getMessage()); }
+            }
+            if (hasil.isEmpty()) { toast("Gambar tidak bisa dibaca"); return; }
+            synchronized (bagikan) { bagikan.clear(); bagikan.addAll(hasil); }
+            jalankanJs("window.rgBagikan ? window.rgBagikan() : 0");
+        }).start();
+    }
+
+    /** Diambil halaman sekali saja (lalu dikosongkan): JSON array data URL gambar. */
+    String ambilBagikan() {
+        synchronized (bagikan) { String j = new JSONArray(bagikan).toString(); bagikan.clear(); return j; }
     }
 
     /* ---------- Mode ---------- */
