@@ -4019,6 +4019,13 @@ function slipGaji(G, r){
 
 /* ================= PRODUKSI & INSENTIF ================= */
 let pPer = null, pOleh = null;
+/** Keterangan insentif per catatan produksi: besar (tarif umum ke atas) atau kecil (barang murah, mis. Rp500). */
+function lencanaInsentif(tarif){
+  tarif = Number(tarif) || 0;
+  if (!tarif) return `<span class="pill mut ins-lencana">tanpa insentif</span>`;
+  const besar = tarif >= (Number(B.toko.insentif) || 0);
+  return `<span class="pill ins-lencana ${besar ? "ins-besar" : "ins-kecil"}" title="${besar ? "Insentif besar" : `Insentif kecil: harga jual di bawah ${rp(B.toko.ins_murah_batas ?? 50000)}`}">${besar ? "💰 Insentif besar" : "🪙 Insentif kecil"} · ${rp(tarif)}</span>`;
+}
 async function vProduksi(){
   if (!pPer) pPer = periodeDari(today(), B.toko.periode_mulai);
   const [a, b] = pPer;
@@ -4120,7 +4127,7 @@ async function vProduksi(){
     }
     $("#pLog").innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>Tanggal</th><th>Barang</th><th class="r">Qty</th><th>Pembuat</th>${isAdmin() ? `<th class="r">Insentif</th>` : ""}<th></th></tr></thead><tbody>
       ${log.length ? log.map(x => { const bolehHapus = !x.dibayar && (isAdmin() || (x.user_id === B.me.id && x.tgl === today()));
-        return `<tr><td class="small">${tglPendek(x.tgl)}</td><td>${esc(x.nama)} <span class="code">${x.kode || ""}</span>${x.restock ? "" : ' <span class="pill mut">pesanan</span>'}</td><td class="r num">${fq(x.qty)}</td><td>${esc(x.pembuat)}</td>${isAdmin() ? `<td class="r num">${rp(x.qty * x.tarif)}</td>` : ""}
+        return `<tr><td class="small">${tglPendek(x.tgl)}</td><td>${esc(x.nama)} <span class="code">${x.kode || ""}</span>${x.restock ? "" : ' <span class="pill mut">pesanan</span>'} ${lencanaInsentif(x.tarif)}</td><td class="r num">${fq(x.qty)}</td><td>${esc(x.pembuat)}</td>${isAdmin() ? `<td class="r num">${rp(x.qty * x.tarif)}</td>` : ""}
           <td class="r" style="white-space:nowrap">${bolehHapus ? `<button class="btn sm" data-ubah="${x.id}" type="button">Ubah</button> <button class="btn ghost sm" data-del="${x.id}" type="button">Hapus</button>` : x.dibayar ? `<span class="small muted">dibayar</span>` : ""}</td></tr>`; }).join("")
         : `<tr><td colspan="6" class="empty">Belum ada catatan produksi di periode ini.</td></tr>`}</tbody></table></div>`;
     $$("[data-ubah]").forEach(bt => bt.onclick = () => ubahProduksi(log.find(p => p.id === +bt.dataset.ubah)));
