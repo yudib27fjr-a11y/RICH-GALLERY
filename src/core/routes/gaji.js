@@ -1,5 +1,5 @@
 /* Penggajian karyawan (khusus admin).
-   Gaji kotor  = gaji pokok + insentif produksi + insentif lain + lembur + bonus
+   Gaji kotor  = gaji pokok + tambahan tetap + insentif produksi + insentif lain + lembur + bonus
    Gaji bersih = gaji kotor − potongan kasbon/hutang
    Gaji dibayar tanggal mulai periode (bawaan tanggal 15) untuk periode sebelumnya, tunai atau transfer.
    Setiap pembayaran gaji & kasbon otomatis tercatat di Pengeluaran dengan keterangan singkat.
@@ -23,6 +23,12 @@ export function saldoKasbon(userId){
   return r.n;
 }
 
+/** Tambahan gaji tetap tiap bulan (bonus tetap, transport, …) dari kolom users.tambahan (JSON). */
+export function tambahanTetap(json){
+  let a = []; try { a = JSON.parse(json || "[]"); } catch {}
+  return (Array.isArray(a) ? a : []).map(x => ({ ket: String((x && x.ket) || "").slice(0, 60), nominal: Math.max(0, Math.round(Number(x && x.nominal) || 0)) })).filter(x => x.ket && x.nominal);
+}
+
 /** Rincian gaji satu periode untuk semua karyawan (atau satu karyawan). */
 export function rekapGaji(tglDalam, hanyaUser = null){
   const s = getSettings();
@@ -32,24 +38,26 @@ export function rekapGaji(tglDalam, hanyaUser = null){
   const ins = rekapInsentif(dari, null, lembur);
   const perIns = new Map(ins.rows.map(r => [r.pembuat_id, r]));
   const hadir = new Map(absen.ringkas.map(r => [r.user_id, r]));
-  const users = all(`SELECT id, nama, peran, aktif, gaji_pokok FROM users
-    WHERE (aktif = 1 AND (peran = 'karyawan' OR gaji_pokok > 0)) OR id IN (SELECT user_id FROM gaji_bayar WHERE periode_dari = ? AND batal_at IS NULL) ORDER BY nama`, [dari])
+  const users = all(`SELECT id, nama, peran, aktif, gaji_pokok, tambahan FROM users
+    WHERE (aktif = 1 AND (peran = 'karyawan' OR gaji_pokok > 0 OR tambahan IS NOT NULL)) OR id IN (SELECT user_id FROM gaji_bayar WHERE periode_dari = ? AND batal_at IS NULL) ORDER BY nama`, [dari])
     .filter(u => !hanyaUser || u.id === hanyaUser);
   for (const r of ins.rows) if (r.total > 0 && !users.some(u => u.id === r.pembuat_id) && (!hanyaUser || r.pembuat_id === hanyaUser)) {
-    const u = one("SELECT id, nama, peran, aktif, gaji_pokok FROM users WHERE id = ?", [r.pembuat_id]); if (u) users.push(u);
+    const u = one("SELECT id, nama, peran, aktif, gaji_pokok, tambahan FROM users WHERE id = ?", [r.pembuat_id]); if (u) users.push(u);
   }
   const rows = users.map(u => {
     const i = perIns.get(u.id) || { qty: 0, insentif: 0, lain: 0, lainDetail: [], lembur_menit: 0, lembur_rp: 0, bayar: null };
     const bayar = one("SELECT * FROM gaji_bayar WHERE user_id = ? AND periode_dari = ? AND batal_at IS NULL", [u.id, dari]);
     const h = hadir.get(u.id);
-    const dasar = { user_id: u.id, nama: u.nama, peran: u.peran, gaji_pokok: u.gaji_pokok, hadir: h ? h.hadir : 0, terlambat: h ? h.terlambat : 0, hutang: saldoKasbon(u.id), lainDetail: i.lainDetail };
+    const tetap = tambahanTetap(u.tambahan);
+    const dasar = { user_id: u.id, nama: u.nama, peran: u.peran, gaji_pokok: u.gaji_pokok, tambahan_tetap: tetap, hadir: h ? h.hadir : 0, terlambat: h ? h.terlambat : 0, hutang: saldoKasbon(u.id), lainDetail: i.lainDetail };
     if (bayar) return { ...dasar, pokok: bayar.pokok, qty: bayar.qty, ins_produksi: bayar.ins_produksi, ins_lain: bayar.ins_lain, lembur_menit: bayar.lembur_menit, lembur: bayar.lembur,
-      bonus: bayar.bonus, kotor: bayar.kotor, potong_hutang: bayar.potong_hutang, bersih: bayar.bersih, bayar };
+      tambahan: bayar.tambahan || 0, tambahanDetail: tambahanTetap(bayar.tambahan_ket), bonus: bayar.bonus, kotor: bayar.kotor, potong_hutang: bayar.potong_hutang, bersih: bayar.bersih, bayar };
     // Insentif periode ini yang sudah dibayar terpisah (cara lama) tidak dihitung lagi.
     const terpisah = i.bayar ? i.bayar.nominal : 0;
     const ins_produksi = terpisah ? 0 : i.insentif, ins_lain = terpisah ? 0 : i.lain, lemburRp = terpisah ? 0 : i.lembur_rp;
-    const kotor = u.gaji_pokok + ins_produksi + ins_lain + lemburRp;
-    return { ...dasar, pokok: u.gaji_pokok, qty: i.qty, ins_produksi, ins_lain, lembur_menit: i.lembur_menit, lembur: lemburRp, bonus: 0, kotor,
+    const tambahan = tetap.reduce((a, x) => a + x.nominal, 0);
+    const kotor = u.gaji_pokok + tambahan + ins_produksi + ins_lain + lemburRp;
+    return { ...dasar, pokok: u.gaji_pokok, tambahan, tambahanDetail: tetap, qty: i.qty, ins_produksi, ins_lain, lembur_menit: i.lembur_menit, lembur: lemburRp, bonus: 0, kotor,
       potong_hutang: 0, bersih: kotor, insentif_terpisah: terpisah, bayar: null };
   });
   return { dari, sampai, tgl_gajian: tambahHari(sampai, 1), lembur_per_jam: Number(s.lembur_per_jam) || 0, lemburTersedia: true, rows };
@@ -86,6 +94,21 @@ route("PUT", "/api/gaji/pokok", "admin", ({ body }) => tx(() => {
   return { ok: true };
 }), { pusatSaja: true });
 
+/* Tambahan gaji tetap tiap bulan per karyawan: { daftar: [{ user_id, tambahan: [{ ket, nominal }] }] } (mengganti isi lama). */
+route("PUT", "/api/gaji/tambahan", "admin", ({ body }) => tx(() => {
+  for (const x of Array.isArray(body.daftar) ? body.daftar : []) {
+    const u = one("SELECT id, nama FROM users WHERE id = ?", [+(x && x.user_id)]);
+    if (!u) throw notFound("Karyawan tidak ditemukan");
+    const isi = (Array.isArray(x.tambahan) ? x.tambahan : []).slice(0, 10).map(t => ({
+      ket: teks(t && t.ket, { max: 60, nama: `Keterangan tambahan ${u.nama}` }),
+      nominal: angka(t && t.nominal, { min: 0, max: 1e9, bulat: true, nama: `Nominal tambahan ${u.nama}` }) ?? 0 }));
+    for (const t of isi) if (t.nominal && !t.ket) throw bad(`Tulis keterangan tambahan ${u.nama} (contoh: Transport)`);
+    const ok = isi.filter(t => t.ket && t.nominal);
+    run("UPDATE users SET tambahan = ? WHERE id = ?", [ok.length ? JSON.stringify(ok) : null, u.id]);
+  }
+  return { ok: true };
+}), { pusatSaja: true });
+
 /* Bayar gaji satu karyawan untuk satu periode. */
 route("POST", "/api/gaji/bayar", "admin", ({ body, user }) => tx(() => {
   const s = getSettings();
@@ -115,7 +138,7 @@ route("POST", "/api/gaji/bayar", "admin", ({ body, user }) => tx(() => {
     insId = Number(run(`INSERT INTO insentif_bayar(pembuat_id, periode_dari, periode_sampai, qty, hitung, nominal, tgl, ket, user_id, oleh) VALUES (?,?,?,?,?,?,?, 'Dibayar bersama gaji', ?, ?)`,
       [r.user_id, rek.dari, rek.sampai, r.qty || 0, nIns, nIns, tgl, user.id, user.nama]).lastInsertRowid);
   }
-  const rincian = [r.pokok && `pokok ${rpTeks(r.pokok)}`, r.ins_produksi && `insentif ${rpTeks(r.ins_produksi)}`, r.ins_lain && `insentif lain ${rpTeks(r.ins_lain)}`,
+  const rincian = [r.pokok && `pokok ${rpTeks(r.pokok)}`, ...r.tambahanDetail.map(t => `${t.ket.toLowerCase()} ${rpTeks(t.nominal)}`), r.ins_produksi && `insentif ${rpTeks(r.ins_produksi)}`, r.ins_lain && `insentif lain ${rpTeks(r.ins_lain)}`,
     r.lembur && `lembur ${rpTeks(r.lembur)}`, bonus && `bonus ${rpTeks(bonus)}`].filter(Boolean).join(" + ") + (potong ? ` − kasbon ${rpTeks(potong)}` : "");
   const desk = `Gaji ${r.nama} ${tglPendek(rek.dari)}–${tglPendek(rek.sampai)} (${metode}): ${rincian}`.slice(0, 200);
   let expenseId = null;
@@ -123,15 +146,16 @@ route("POST", "/api/gaji/bayar", "admin", ({ body, user }) => tx(() => {
     expenseId = Number(run("INSERT INTO expenses(tgl, kategori, ket, nominal, user_id, oleh) VALUES (?, 'Gaji Karyawan', ?, ?, ?, ?)", [tgl, desk, bersih, user.id, user.nama]).lastInsertRowid);
     antre("pengeluaran", [[String(expenseId), tgl, "Gaji Karyawan", desk, bersih, user.nama]]);
   }
-  const gajiId = Number(run(`INSERT INTO gaji_bayar(user_id, periode_dari, periode_sampai, tgl, pokok, ins_produksi, qty, ins_lain, lembur_menit, lembur, bonus, bonus_ket, kotor, potong_hutang, bersih, metode, ket, expense_id, insentif_bayar_id, oleh)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [r.user_id, rek.dari, rek.sampai, tgl, r.pokok, r.ins_produksi, r.qty || 0, r.ins_lain, r.lembur_menit, r.lembur, bonus, bonusKet, kotor, potong, bersih, metode, ket, expenseId, insId, user.nama]).lastInsertRowid);
+  const gajiId = Number(run(`INSERT INTO gaji_bayar(user_id, periode_dari, periode_sampai, tgl, pokok, ins_produksi, qty, ins_lain, lembur_menit, lembur, bonus, bonus_ket, kotor, potong_hutang, bersih, metode, ket, expense_id, insentif_bayar_id, oleh, tambahan, tambahan_ket)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [r.user_id, rek.dari, rek.sampai, tgl, r.pokok, r.ins_produksi, r.qty || 0, r.ins_lain, r.lembur_menit, r.lembur, bonus, bonusKet, kotor, potong, bersih, metode, ket, expenseId, insId, user.nama,
+      r.tambahan, r.tambahanDetail.length ? JSON.stringify(r.tambahanDetail) : null]).lastInsertRowid);
   if (potong) {
     run("INSERT INTO kasbon(tgl, user_id, jenis, nominal, ket, metode, gaji_id, oleh) VALUES (?,?, 'potong', ?, ?, 'Potong gaji', ?, ?)",
       [tgl, r.user_id, potong, `Potong gaji ${tglPendek(rek.dari)}–${tglPendek(rek.sampai)}`, gajiId, user.nama]);
     antre("kasbon", [[tgl, r.nama, "Potong gaji", potong, saldoKasbon(r.user_id), "Potong gaji", `Gaji ${tglPendek(rek.dari)}–${tglPendek(rek.sampai)}`, user.nama]]);
   }
-  antre("gaji", [[tgl, r.nama, rek.dari, rek.sampai, r.pokok, r.ins_produksi, r.ins_lain, r.lembur, bonus, kotor, potong, bersih, metode, [bonusKet && "Bonus: " + bonusKet, ket].filter(Boolean).join(" · "), user.nama]]);
+  antre("gaji", [[tgl, r.nama, rek.dari, rek.sampai, r.pokok, r.ins_produksi, r.ins_lain, r.lembur, bonus, kotor, potong, bersih, metode, [r.tambahanDetail.length && "Tambahan: " + r.tambahanDetail.map(t => `${t.ket} ${rpTeks(t.nominal)}`).join(", "), bonusKet && "Bonus: " + bonusKet, ket].filter(Boolean).join(" · "), user.nama]]);
   return { ok: true, id: gajiId, kotor, bersih };
 }), { pusatSaja: true });
 

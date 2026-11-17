@@ -302,6 +302,29 @@ test("gaji: ubah produksi (stok ikut), kasbon, gaji kotor/bersih, pengeluaran ot
   assert.equal((await admin("POST", "/api/gaji/bayar", { user_id: rina.id, periode_dari: G.dari, metode: "Tunai" })).status, 200);
 });
 
+test("gaji: tambahan tetap tiap bulan (bonus/transport) ikut gaji kotor, pengeluaran & slip", async () => {
+  const boot = (await admin("GET", "/api/bootstrap")).data, hari = boot.hariIni;
+  const s = boot.staf.find(x => x.nama !== "RINA" && x.peran !== "admin");
+  assert.equal((await kasir("PUT", "/api/gaji/tambahan", { daftar: [] })).status, 403);
+  assert.equal((await admin("PUT", "/api/gaji/tambahan", { daftar: [{ user_id: s.id, tambahan: [{ ket: "", nominal: 5000 }] }] })).status, 400, "keterangan wajib");
+  assert.equal((await admin("PUT", "/api/gaji/tambahan", { daftar: [{ user_id: s.id, tambahan: [{ ket: "Transport", nominal: 150000 }, { ket: "Bonus bawa motor", nominal: 100000 }] }] })).status, 200);
+  let r = (await admin("GET", `/api/gaji?tgl=${hari}`)).data.rows.find(x => x.user_id === s.id);
+  assert.equal(r.tambahan, 250000); assert.deepEqual(r.tambahan_tetap.map(t => t.ket), ["Transport", "Bonus bawa motor"]);
+  assert.equal(r.kotor, r.pokok + 250000 + r.ins_produksi + r.ins_lain + r.lembur);
+  const G = (await admin("GET", `/api/gaji?tgl=${hari}`)).data;
+  const g = await admin("POST", "/api/gaji/bayar", { user_id: s.id, periode_dari: G.dari, metode: "Tunai" });
+  assert.equal(g.status, 200, JSON.stringify(g.data)); assert.equal(g.data.kotor, r.kotor);
+  r = (await admin("GET", `/api/gaji?tgl=${hari}`)).data.rows.find(x => x.user_id === s.id);
+  assert.equal(r.tambahan, 250000); assert.equal(r.tambahanDetail.length, 2, "rincian tersimpan di pembayaran (slip)");
+  const pg = (await admin("GET", `/api/pengeluaran?dari=${hari}&sampai=${hari}`)).data.find(e => e.kategori === "Gaji Karyawan" && e.ket.includes(s.nama));
+  assert.match(pg.ket, /transport Rp150\.000/);
+  // Diubah sesudah dibayar: periode yang sudah dibayar tidak berubah
+  assert.equal((await admin("PUT", "/api/gaji/tambahan", { daftar: [{ user_id: s.id, tambahan: [] }] })).status, 200);
+  r = (await admin("GET", `/api/gaji?tgl=${hari}`)).data.rows.find(x => x.user_id === s.id);
+  assert.equal(r.tambahan, 250000); assert.equal(r.tambahan_tetap.length, 0);
+  await admin("DELETE", `/api/gaji/${r.bayar.id}`);
+});
+
 test("sinkron: antrean terkirim ke Apps Script (lewat redirect 302) dengan jumlah kolom sesuai tab sheet", async () => {
   const { createServer } = await import("node:http");
   const { DatabaseSync } = await import("node:sqlite");

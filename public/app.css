@@ -683,3 +683,4 @@ button.br-hero{display:block;width:100%;text-align:left;border:0;font:inherit;cu
   .prod.prod-u .pill{font-size:8.5px;padding:1px 5px}
   .prod.prod-u .pill.mut{display:none}
 }
+.gt-orang{border:1px solid var(--line);border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;gap:6px}.gt-orang .gt-plus{align-self:flex-start}

@@ -3896,7 +3896,7 @@ async function vGaji(){
     </div>
     <div class="tbl-wrap"><table><thead><tr><th>Nama</th><th class="r">Pokok</th><th class="r">Insentif</th><th class="r">Lembur</th><th class="r">Kotor</th><th class="r">Kasbon</th><th class="r">Bersih</th><th>Status</th><th></th></tr></thead><tbody>
     ${G.rows.map(r => `<tr><td><b>${esc(r.nama)}</b><div class="small muted">${r.hadir} hari hadir${r.terlambat ? ` · ${r.terlambat}× telat` : ""}</div></td>
-      <td class="r num">${rp(r.pokok)}</td>
+      <td class="r num">${rp(r.pokok)}${r.tambahan ? `<div class="small" style="color:var(--ok)">+ tambahan ${rp(r.tambahan)}</div>` : ""}</td>
       <td class="r num">${rp(r.ins_produksi + r.ins_lain)}${r.insentif_terpisah ? `<div class="small muted">sudah dibayar terpisah</div>` : ""}</td>
       <td class="r num">${r.lembur_menit ? `${rp(r.lembur)}<div class="small muted">${jamMenit(r.lembur_menit)}</div>` : "-"}</td>
       <td class="r num">${rp(r.kotor)}${r.bonus ? `<div class="small muted">bonus ${rp(r.bonus)}</div>` : ""}</td>
@@ -3906,13 +3906,20 @@ async function vGaji(){
       <td class="r" style="white-space:nowrap">${r.bayar ? `<button class="btn sm" data-slip="${r.user_id}" type="button">Slip</button>${ro ? "" : ` <button class="btn sm ghost" data-batal="${r.bayar.id}" type="button">Batalkan</button>`}`
         : r.kotor && !ro ? `<button class="btn sm pri" data-bayar="${r.user_id}" type="button">Bayar</button>` : ""}</td></tr>`).join("") || `<tr><td colspan="9" class="empty">Belum ada karyawan.</td></tr>`}
     </tbody></table></div>
-    <p class="small muted" style="margin:8px 0 0">Kotor = gaji pokok + insentif produksi + insentif lain + lembur (${rp(G.lembur_per_jam)}/jam) + bonus. Bersih = kotor − potongan kasbon. Setiap pembayaran otomatis tercatat di Pengeluaran (kategori Gaji Karyawan).</p>
+    <p class="small muted" style="margin:8px 0 0">Kotor = gaji pokok + tambahan tetap + insentif produksi + insentif lain + lembur (${rp(G.lembur_per_jam)}/jam) + bonus. Bersih = kotor − potongan kasbon. Setiap pembayaran otomatis tercatat di Pengeluaran (kategori Gaji Karyawan).</p>
 
     <div class="grid2" style="align-items:start;margin-top:18px">
       <section class="panel stack" id="gPokok"><h3 style="font-size:17px">Gaji pokok</h3>
         <p class="small muted" style="margin:0">Gaji pokok per periode (per bulan) tiap karyawan.</p>
         <div class="stack">${G.rows.map(r => `<div class="row" style="align-items:center"><span style="flex:1">${esc(r.nama)}</span><input type="number" data-pokok="${r.user_id}" value="${r.gaji_pokok ?? r.pokok ?? 0}" min="0" step="50000" inputmode="numeric" style="width:150px" ${ro ? "disabled" : ""}></div>`).join("")}</div>
         ${ro ? "" : `<button class="btn pri" id="gPokokSimpan" type="button">Simpan gaji pokok</button>`}
+      </section>
+      <section class="panel stack" id="gTambah"><h3 style="font-size:17px">➕ Tambahan tetap tiap bulan</h3>
+        <p class="small muted" style="margin:0">Bonus tetap, transport, dll. — otomatis ikut di setiap gajian (periode yang belum dibayar) &amp; tercetak di slip.</p>
+        <div class="stack" id="gtDaftar">${G.rows.map(r => `<div class="gt-orang" data-gt="${r.user_id}"><b>${esc(r.nama)}</b>
+          <div class="stack gt-isi">${(r.tambahan_tetap || []).map(t => barisTambahan(t, ro)).join("")}</div>
+          ${ro ? "" : `<button class="btn sm ghost gt-plus" type="button">+ Tambah</button>`}</div>`).join("")}</div>
+        ${ro ? "" : `<button class="btn pri" id="gTambahSimpan" type="button">Simpan tambahan</button>`}
       </section>
       <section class="panel stack"><h3 style="font-size:17px">Kasbon / hutang karyawan</h3>
         ${K ? `${K.saldo.length ? `<div class="list">${K.saldo.map(x => `<div class="li"><div class="main"><div class="t">${esc(x.nama)}</div><div class="small muted">sisa hutang</div></div><b class="num" style="color:var(--bad)">${rp(x.sisa)}</b></div>`).join("")}</div>` : `<p class="small muted" style="margin:0">Tidak ada hutang karyawan.</p>`}
@@ -3930,10 +3937,22 @@ async function vGaji(){
     await api("PUT", "/api/gaji/pokok", { pokok: $$("[data-pokok]").map(i => ({ user_id: +i.dataset.pokok, gaji_pokok: num(i.value) })) });
     toast("Gaji pokok tersimpan"); vGaji();
   }, e.target);
+  const pasangHapusGt = () => $$("#gtDaftar .gt-hapus").forEach(b => b.onclick = () => b.closest(".gt-baris").remove());
+  $$("#gtDaftar .gt-plus").forEach(b => b.onclick = () => { b.previousElementSibling.insertAdjacentHTML("beforeend", barisTambahan({ ket: "", nominal: "" }, false)); pasangHapusGt(); b.previousElementSibling.lastElementChild.querySelector("input").focus(); });
+  pasangHapusGt();
+  const ts = $("#gTambahSimpan"); if (ts) ts.onclick = e => coba(async () => {
+    await api("PUT", "/api/gaji/tambahan", { daftar: $$("#gtDaftar [data-gt]").map(o => ({ user_id: +o.dataset.gt,
+      tambahan: $$(".gt-baris", o).map(b => ({ ket: $(".gt-ket", b).value.trim(), nominal: num($(".gt-nom", b).value) || 0 })).filter(t => t.ket || t.nominal) })) });
+    toast("Tambahan gaji tersimpan"); vGaji();
+  }, e.target);
   const kb = $("#gKasbon"); if (kb) kb.onclick = () => formKasbon("pinjam", G, K);
   const kc = $("#gCicil"); if (kc) kc.onclick = () => formKasbon("bayar", G, K);
   $$("[data-hapus-kasbon]").forEach(b => b.onclick = () => konfirmasi("Hapus catatan kasbon?", "Catatan ini (dan pengeluarannya, bila kasbon baru) dihapus.", "Hapus",
     () => coba(async () => { await api("DELETE", `/api/kasbon/${b.dataset.hapusKasbon}`); toast("Catatan kasbon dihapus"); vGaji(); })));
+}
+function barisTambahan(t, ro){
+  return `<div class="row gt-baris" style="align-items:center;gap:6px"><input type="text" class="gt-ket grow" value="${esc(t.ket)}" maxlength="60" placeholder="Mis. Transport" style="flex:1;min-width:0" ${ro ? "disabled" : ""}>
+    <input type="number" class="gt-nom" value="${t.nominal}" min="0" step="10000" inputmode="numeric" placeholder="Rp" style="width:105px" ${ro ? "disabled" : ""}>${ro ? "" : `<button class="btn sm ghost gt-hapus" type="button" aria-label="Hapus">✕</button>`}</div>`;
 }
 function formKasbon(jenis, G, K){
   const sisa = new Map((K.saldo || []).map(x => [x.user_id, x.sisa]));
@@ -3964,6 +3983,7 @@ function bayarGaji(G, r){
   modal(`<h3>Bayar gaji ${esc(r.nama)}</h3><p class="muted" style="margin:0">Periode ${tglID(G.dari)} – ${tglID(G.sampai)}</p>
     <div class="list">
       <div class="li"><div class="main">Gaji pokok</div><b class="num">${rp(r.pokok)}</b></div>
+      ${(r.tambahanDetail || []).map(t => `<div class="li"><div class="main">${esc(t.ket)} <span class="small muted">tambahan tetap</span></div><b class="num">${rp(t.nominal)}</b></div>`).join("")}
       <div class="li"><div class="main">Insentif produksi <span class="small muted">${fq(r.qty || 0)} pcs</span></div><b class="num">${rp(r.ins_produksi)}</b></div>
       ${(r.lainDetail || []).map(d => `<div class="li"><div class="main">${esc(d.label)} <span class="small muted">${d.kali}×</span></div><b class="num">${rp(d.nominal)}</b></div>`).join("")}
       <div class="li"><div class="main">Lembur <span class="small muted">${jamMenit(r.lembur_menit)} × ${rp(G.lembur_per_jam)}/jam</span></div><b class="num">${rp(r.lembur)}</b></div>
@@ -3998,7 +4018,9 @@ function slipGajiLines(G, r){
   const w = lebar(), garis = "-".repeat(w), L = [], b = r.bayar || {};
   L.push({ t: center(B.toko.nama_toko, w), b: 1 }, { t: center("SLIP GAJI", w), b: 1 }, { t: garis });
   L.push({ t: lr("Nama", r.nama, w) }, { t: lr("Periode", tglPendek(G.dari) + "-" + tglPendek(G.sampai), w) }, { t: lr("Hadir", r.hadir + " hari", w) }, { t: garis });
-  L.push({ t: lr("Gaji pokok", angka(r.pokok), w) }, { t: lr(`Insentif produksi ${fq(r.qty || 0)}pcs`, angka(r.ins_produksi), w) });
+  L.push({ t: lr("Gaji pokok", angka(r.pokok), w) });
+  (r.tambahanDetail || []).forEach(t => L.push({ t: lr(t.ket, angka(t.nominal), w) }));
+  L.push({ t: lr(`Insentif produksi ${fq(r.qty || 0)}pcs`, angka(r.ins_produksi), w) });
   if (r.ins_lain) L.push({ t: lr("Insentif lain", angka(r.ins_lain), w) });
   if (r.lembur_menit) L.push({ t: lr("Lembur " + jamMenit(r.lembur_menit), angka(r.lembur), w) });
   if (r.bonus) { L.push({ t: lr("Bonus", angka(r.bonus), w) }); if (b.bonus_ket) wrap("  " + b.bonus_ket, w).forEach(l => L.push({ t: l })); }

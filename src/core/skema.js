@@ -473,6 +473,14 @@ CREATE INDEX absen_ket_tgl ON absen_ket(tgl);`,
   AND NOT EXISTS (SELECT 1 FROM insentif_bayar b WHERE b.pembuat_id = produksi.pembuat_id AND produksi.tgl BETWEEN b.periode_dari AND b.periode_sampai);`,
 /* 22: belanja offline — foto / PDF nota disimpan sebagai bukti. */
 `ALTER TABLE belanja ADD COLUMN nota TEXT;`,
+/* 23: tambahan gaji tetap tiap bulan per karyawan (bonus tetap, transport, dll.) — JSON [{ket, nominal}] — ikut tercatat di pembayaran gaji.
+   Isi awal sesuai permintaan pemilik: Savira bonus jaga mamas 100rb, Eva bonus bawa motor 100rb, Wulan transport 150rb. */
+`ALTER TABLE users ADD COLUMN tambahan TEXT;
+ALTER TABLE gaji_bayar ADD COLUMN tambahan INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE gaji_bayar ADD COLUMN tambahan_ket TEXT;
+UPDATE users SET tambahan = '[{"ket":"Bonus bantu jaga mamas","nominal":100000}]' WHERE peran <> 'admin' AND (UPPER(TRIM(nama)) = 'SAVIRA' OR UPPER(TRIM(nama)) LIKE 'SAVIRA %');
+UPDATE users SET tambahan = '[{"ket":"Bonus bawa motor","nominal":100000}]' WHERE peran <> 'admin' AND (UPPER(TRIM(nama)) = 'EVA' OR UPPER(TRIM(nama)) LIKE 'EVA %');
+UPDATE users SET tambahan = '[{"ket":"Transport","nominal":150000}]' WHERE peran <> 'admin' AND (UPPER(TRIM(nama)) = 'WULAN' OR UPPER(TRIM(nama)) LIKE 'WULAN %');`,
 ];
 
 export const DEFAULT_SETTINGS = {
