@@ -4048,6 +4048,36 @@ function lencanaInsentif(tarif){
   const besar = tarif >= (Number(B.toko.insentif) || 0);
   return `<span class="pill ins-lencana ${besar ? "ins-besar" : "ins-kecil"}" title="${besar ? "Insentif besar" : `Insentif kecil: harga jual di bawah ${rp(B.toko.ins_murah_batas ?? 50000)}`}">${besar ? "💰 Insentif besar" : "🪙 Insentif kecil"} · ${rp(tarif)}</span>`;
 }
+/** Daftarkan produk baru langsung dari form produksi (mis. produk musiman Hari Guru), lalu isi ke baris produksinya. */
+function produkBaruCepat(namaAwal, inputBaris){
+  namaAwal = String(namaAwal || "").replace(/^RG\d+\s*·\s*/i, "").trim().toUpperCase();
+  modal(`<div class="modal-kepala"><h3>🆕 Produk baru</h3>${tombolTutup()}</div>
+    <p class="small muted" style="margin:0 0 6px">${namaAwal ? `"${esc(namaAwal)}" belum ada di daftar produk. ` : ""}Daftarkan dulu supaya bisa dicatat di produksi &amp; dijual di kasir.${isAdmin() ? "" : " Admin akan diberi tahu untuk mengecek harganya."}</p>
+    <div class="stack">
+      <label class="f">Nama produk<input type="text" id="pbN" value="${esc(namaAwal)}" placeholder="Contoh: BUKET HARI GURU 50K" autocomplete="off"></label>
+      <label class="f">Harga jual (Rp)<input type="number" id="pbH" min="0" step="1000" inputmode="numeric" placeholder="Contoh: 50000"></label>
+      <label class="f">Kategori<select id="pbK">${B.kategori.map(k => `<option>${k}</option>`).join("")}</select></label>
+      <div class="small muted" id="pbIns"></div>
+    </div>
+    <div class="actions"><button class="btn" data-close>Batal</button><button class="btn pri" id="pbOk" type="button">Daftarkan</button></div>`, m => {
+    const tebak = () => { $("#pbK", m).value = tebakKategori($("#pbN", m).value || ""); };
+    const ins = () => { const h = num($("#pbH", m).value) || 0, t = h && h < (B.toko.ins_murah_batas ?? 50000) ? (B.toko.ins_murah ?? 500) : B.toko.insentif;
+      $("#pbIns", m).innerHTML = h ? `Insentif produksi: <b>${rp(t)}</b>/pcs (${t < B.toko.insentif ? "insentif kecil" : "insentif besar"})` : ""; };
+    tebak(); $("#pbN", m).oninput = tebak; $("#pbH", m).oninput = ins;
+    setTimeout(() => (namaAwal ? $("#pbH", m) : $("#pbN", m)).focus(), 50);
+    $("#pbOk", m).onclick = e => coba(async () => {
+      const nama = $("#pbN", m).value.trim(), harga = num($("#pbH", m).value) || 0;
+      if (!nama) return toast("Isi nama produk"); if (!harga) return toast("Isi harga jual");
+      const p = await api("POST", "/api/produk/cepat", { nama, harga, kategori: $("#pbK", m).value });
+      await muatUlang();
+      const dl = $("#prodList"); if (dl) dl.innerHTML = B.produk.map(x => `<option value="${x.kode} · ${esc(x.nama)}">`).join("");
+      if (inputBaris) inputBaris.value = `${p.kode} · ${p.nama}`;
+      closeModal();
+      toast(p.sudahAda ? `${p.nama} ternyata sudah terdaftar (${p.kode}) — dipakai` : `${p.kode} · ${p.nama} terdaftar. Isi jumlahnya lalu Simpan produksi.`);
+      const q = inputBaris?.closest(".prow")?.querySelector(".pQ"); if (q) { q.focus(); q.select(); }
+    }, e.target);
+  });
+}
 async function vProduksi(){
   if (!pPer) pPer = periodeDari(today(), B.toko.periode_mulai);
   const [a, b] = pPer;
@@ -4060,7 +4090,7 @@ async function vProduksi(){
         <h3 style="font-size:17px">Catat hasil produksi</h3>
         <div class="row"><label class="f grow">Tanggal<input type="date" id="pT" value="${today()}" max="${today()}"></label><label class="f grow">Pembuat<select id="pO">${pembuatList.map(s => `<option value="${s.id}" ${s.id === pOleh ? "selected" : ""}>${esc(s.nama)}</option>`).join("")}</select></label></div>
         <div id="pRows" class="stack"></div>
-        <button class="btn sm" id="pAddRow" type="button" style="align-self:flex-start">+ Baris lagi</button>
+        <div class="row" style="gap:8px"><button class="btn sm" id="pAddRow" type="button">+ Baris lagi</button><button class="btn sm" id="pBaru" type="button">🆕 Produk baru (belum terdaftar)</button></div>
         <label class="row small"><input type="checkbox" id="pStok" checked> Tambahkan ke stok ready (restock)</label>
         <p class="small muted" style="margin:0">Matikan centang untuk pesanan yang langsung diambil pelanggan (sudah dijual sebagai PRODUKSI di kasir), supaya stok tidak dobel.</p>
         <button class="btn pri big" id="pSave" type="button">Simpan produksi</button>
@@ -4102,6 +4132,7 @@ async function vProduksi(){
   };
   addRow();
   $("#pAddRow").onclick = addRow;
+  $("#pBaru").onclick = () => { const kosong = $$(".prow .pI").find(i => !i.value.trim()); if (!kosong) addRow(); produkBaruCepat("", kosong || $$(".prow .pI").pop()); };
   $("#pO").onchange = e => pOleh = +e.target.value;
   $("#pPrev").onclick = () => { pPer = geserPeriode(a, -1, B.toko.periode_mulai); vProduksi(); };
   $("#pNext").onclick = () => { pPer = geserPeriode(a, 1, B.toko.periode_mulai); vProduksi(); };
@@ -4110,7 +4141,7 @@ async function vProduksi(){
     for (const r of $$(".prow")) {
       const v = $(".pI", r).value.trim(), q = num($(".pQ", r).value); if (!v) continue;
       const kode = v.split("·")[0].trim().toUpperCase(), x = B.produk.find(p => p.kode === kode) || cariScan(v)?.x;
-      if (!x || !B.produk.includes(x)) return toast(`Produk "${v}" tidak ditemukan. Pilih dari daftar.`);
+      if (!x || !B.produk.includes(x)) return produkBaruCepat(v, $(".pI", r));
       if (!q) return toast(`Isi jumlah untuk ${x.nama}`);
       items.push({ product_id: x.id, qty: q });
     }

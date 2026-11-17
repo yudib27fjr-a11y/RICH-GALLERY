@@ -325,6 +325,19 @@ test("gaji: tambahan tetap tiap bulan (bonus/transport) ikut gaji kotor, pengelu
   await admin("DELETE", `/api/gaji/${r.bayar.id}`);
 });
 
+test("produk baru dari form produksi: karyawan bisa mendaftarkan (nama sama dipakai ulang), langsung bisa dicatat produksinya", async () => {
+  assert.equal((await kasir("POST", "/api/produk/cepat", { nama: "Buket Hari Guru Spesial 65K" })).status, 400, "harga wajib");
+  const r = await kasir("POST", "/api/produk/cepat", { nama: "Buket Hari Guru Spesial 65K", harga: 65000, kategori: "BUKET HARI GURU" });
+  assert.equal(r.status, 200, JSON.stringify(r.data)); assert.equal(r.data.nama, "BUKET HARI GURU SPESIAL 65K"); assert.match(r.data.kode, /^RG\d+/);
+  const lagi = await kasir("POST", "/api/produk/cepat", { nama: "buket hari guru spesial 65k", harga: 99000 });
+  assert.equal(lagi.data.id, r.data.id); assert.ok(lagi.data.sudahAda); assert.equal(lagi.data.harga, 65000, "harga lama tidak diubah");
+  assert.equal((await kasir("POST", "/api/produk", { nama: "X", harga: 1 })).status, 403, "form produk lengkap tetap khusus admin");
+  const boot = (await admin("GET", "/api/bootstrap")).data, staf = boot.staf.find(x => !["RINA", "IZA"].includes(x.nama) && x.peran !== "admin");
+  const pr = await admin("POST", "/api/produksi", { pembuat_id: staf.id, restock: true, items: [{ product_id: r.data.id, qty: 3 }] });
+  assert.equal(pr.status, 200, JSON.stringify(pr.data));
+  assert.equal((await admin("GET", "/api/bootstrap")).data.produk.find(x => x.id === r.data.id).stok, 3);
+});
+
 test("sinkron: antrean terkirim ke Apps Script (lewat redirect 302) dengan jumlah kolom sesuai tab sheet", async () => {
   const { createServer } = await import("node:http");
   const { DatabaseSync } = await import("node:sqlite");

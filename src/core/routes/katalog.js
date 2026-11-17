@@ -2,6 +2,7 @@ import { route } from "../router.js";
 import { one, run, tx, getSettings } from "../db.js";
 import { bad, teks, angka, pilihan, hariIni } from "../util.js";
 import { ambilItem, ubahStok, antre } from "../stok.js";
+import { antreNotif } from "../notif.js";
 import { KATEGORI, KAT_BAHAN, barcodeDefault, tebakKategori } from "../../../public/shared.js";
 
 const TABEL = { produk: "products", bahan: "materials" };
@@ -55,6 +56,18 @@ function simpan(jenis, body, user, id = null){
   }
   return ambilItem(jenis, itemId);
 }
+
+/* Produk baru yang belum terdaftar saat mencatat produksi (mis. produk musiman Hari Guru):
+   semua pengguna boleh mendaftarkan — cukup nama, harga & kategori; admin diberi tahu untuk mengecek. Nama sama → pakai yang sudah ada. */
+route("POST", "/api/produk/cepat", "semua", ({ body, user }) => tx(() => {
+  const nama = teks(body.nama, { wajib: true, max: 120, upper: true, nama: "Nama produk" });
+  const ada = one("SELECT id FROM products WHERE UPPER(nama) = ? AND dihapus IS NULL", [nama]);
+  if (ada) return { ...ambilItem("produk", ada.id), sudahAda: true };
+  if (user.peran !== "admin" && !(Number(body.harga) > 0)) throw bad("Isi harga jual produk baru");
+  const p = simpan("produk", { nama, harga: body.harga, kategori: body.kategori }, user);
+  if (user.peran !== "admin") antreNotif(`🆕 Produk baru didaftarkan ${user.nama}`, `${p.kode} · ${p.nama} · Rp${Math.round(p.harga).toLocaleString("id-ID")} (${p.kategori})\nCek harga & kategorinya di menu Produk.`, "/#stok");
+  return p;
+}), { pusatSaja: true });
 
 for (const jenis of ["produk", "bahan"]) {
   route("POST", `/api/${jenis}`, "admin", ({ body, user }) => tx(() => simpan(jenis, body, user)));
