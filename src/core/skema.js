@@ -481,6 +481,8 @@ ALTER TABLE gaji_bayar ADD COLUMN tambahan_ket TEXT;
 UPDATE users SET tambahan = '[{"ket":"Bonus bantu jaga mamas","nominal":100000}]' WHERE peran <> 'admin' AND (UPPER(TRIM(nama)) = 'SAVIRA' OR UPPER(TRIM(nama)) LIKE 'SAVIRA %');
 UPDATE users SET tambahan = '[{"ket":"Bonus bawa motor","nominal":100000}]' WHERE peran <> 'admin' AND (UPPER(TRIM(nama)) = 'EVA' OR UPPER(TRIM(nama)) LIKE 'EVA %');
 UPDATE users SET tambahan = '[{"ket":"Transport","nominal":150000}]' WHERE peran <> 'admin' AND (UPPER(TRIM(nama)) = 'WULAN' OR UPPER(TRIM(nama)) LIKE 'WULAN %');`,
+/* 24: kategori DEKORASI (unit Rich Party) — produk bernama dekor/backdrop/garland pindah ke sana. */
+`UPDATE products SET kategori = 'DEKORASI', diubah = datetime('now') WHERE dihapus IS NULL AND (UPPER(nama) LIKE '%DEKOR%' OR UPPER(nama) LIKE '%BACKDROP%' OR UPPER(nama) LIKE '%GARLAND%');`,
 ];
 
 export const DEFAULT_SETTINGS = {

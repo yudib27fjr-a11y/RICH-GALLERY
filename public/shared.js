@@ -1,11 +1,11 @@
 // Aturan bersama: dipakai server (Node) dan browser. Ubah di sini, berlaku di keduanya.
 
-export const KATEGORI = ["BUKET BUNGA","BUKET WISUDA","BUKET UANG","BUKET SNACK","BUKET COSTUME","BUKET BONEKA","SINGLE FLOWER","ROUND BUKET","BAG FLOWERS","HOT BALON","BLOOM BOX","SNACK TOWER","STANDING UCAPAN","STANDING FLOWER","SEWA STANDING UCAPAN","SEWA HAND BUKET","SEWA SESERAHAN","MAHAR","BUKET HARI GURU","BUKET BAG WISUDA","BUKET PROFESI","VAS BUNGA","HAMPERS","ADDITIONAL"];
+export const KATEGORI = ["BUKET BUNGA","BUKET WISUDA","BUKET UANG","BUKET SNACK","BUKET COSTUME","BUKET BONEKA","SINGLE FLOWER","ROUND BUKET","BAG FLOWERS","HOT BALON","BLOOM BOX","SNACK TOWER","STANDING UCAPAN","STANDING FLOWER","SEWA STANDING UCAPAN","SEWA HAND BUKET","SEWA SESERAHAN","MAHAR","BUKET HARI GURU","BUKET BAG WISUDA","BUKET PROFESI","VAS BUNGA","HAMPERS","DEKORASI","ADDITIONAL"];
 export const KAT_BAHAN = ["KERTAS","BUNGA","PITA","BONEKA","BLOOM BOX","BALON KARET","BALON PVC","AKRILIK","STANDING FLOWERS","LAIN-LAIN"];
 export const KAT_PENGELUARAN = ["Belanja Bahan","Operasional","Gaji Karyawan","Kasbon Karyawan","Insentif Produksi","Listrik & Air","Transport / Ongkir","Sewa Tempat","Promosi","Lain-lain"];
 export const METODE = ["Tunai","Transfer","QRIS"];
 
-const ATURAN_KAT = [["WISUDA","BUKET WISUDA"],["SKRIPSI","BUKET WISUDA"],["UANG","BUKET UANG"],["TOWER","SNACK TOWER"],["SNACK","BUKET SNACK"],["GURU","BUKET HARI GURU"],["SEWA STANDING","SEWA STANDING UCAPAN"],["SEWA HAND","SEWA HAND BUKET"],["SEWA","SEWA SESERAHAN"],["SESERAHAN","SEWA SESERAHAN"],["HANTARAN","SEWA SESERAHAN"],["MAHAR","MAHAR"],["STANDING FLOWER","STANDING FLOWER"],["STANDING","STANDING UCAPAN"],["PAPAN","STANDING UCAPAN"],["BONEKA","BUKET BONEKA"],["SINGLE","SINGLE FLOWER"],["ROUND","ROUND BUKET"],["TOTE","ADDITIONAL"],["PAPER","ADDITIONAL"],["FLOWER BAG","BAG FLOWERS"],["BAG FLOWER","BAG FLOWERS"],["BALON","HOT BALON"],["BLOOM","BLOOM BOX"],["VAS","VAS BUNGA"],["PARSEL","HAMPERS"],["PARCEL","HAMPERS"],["HAMPERS","HAMPERS"],["KERANJANG","HAMPERS"],["PROFESI","BUKET PROFESI"],["CUSTOM","BUKET COSTUME"],["THUMBELINA","BUKET BUNGA"],["FRESH","BUKET BUNGA"],["BUKET","BUKET BUNGA"],["HAND","BUKET BUNGA"]];
+const ATURAN_KAT = [["DEKOR","DEKORASI"],["BACKDROP","DEKORASI"],["GARLAND","DEKORASI"],["PARTY","DEKORASI"],["WISUDA","BUKET WISUDA"],["SKRIPSI","BUKET WISUDA"],["UANG","BUKET UANG"],["TOWER","SNACK TOWER"],["SNACK","BUKET SNACK"],["GURU","BUKET HARI GURU"],["SEWA STANDING","SEWA STANDING UCAPAN"],["SEWA HAND","SEWA HAND BUKET"],["SEWA","SEWA SESERAHAN"],["SESERAHAN","SEWA SESERAHAN"],["HANTARAN","SEWA SESERAHAN"],["MAHAR","MAHAR"],["STANDING FLOWER","STANDING FLOWER"],["STANDING","STANDING UCAPAN"],["PAPAN","STANDING UCAPAN"],["BONEKA","BUKET BONEKA"],["SINGLE","SINGLE FLOWER"],["ROUND","ROUND BUKET"],["TOTE","ADDITIONAL"],["PAPER","ADDITIONAL"],["FLOWER BAG","BAG FLOWERS"],["BAG FLOWER","BAG FLOWERS"],["BALON","HOT BALON"],["BLOOM","BLOOM BOX"],["VAS","VAS BUNGA"],["PARSEL","HAMPERS"],["PARCEL","HAMPERS"],["HAMPERS","HAMPERS"],["KERANJANG","HAMPERS"],["PROFESI","BUKET PROFESI"],["CUSTOM","BUKET COSTUME"],["THUMBELINA","BUKET BUNGA"],["FRESH","BUKET BUNGA"],["BUKET","BUKET BUNGA"],["HAND","BUKET BUNGA"]];
 export function tebakKategori(nama){
   const n = String(nama || "").toUpperCase();
   for (const [k, v] of ATURAN_KAT) if (n.includes(k)) return v;
@@ -197,7 +197,7 @@ export const UNIT = [
   { id: "papan", nama: "Papan Ucapan", brand: "Papan Ucapan", ikon: "🪧", warna: "#b91c1c" },
 ];
 export const UNIT_KAT_BAWAAN = { "HAMPERS": "hampers", "SNACK TOWER": "hampers", "SEWA SESERAHAN": "hantaran", "MAHAR": "hantaran", "SEWA HAND BUKET": "hantaran",
-  "STANDING UCAPAN": "papan", "STANDING FLOWER": "papan", "SEWA STANDING UCAPAN": "papan", "DEKORASI": "party" };
+  "STANDING UCAPAN": "papan", "STANDING FLOWER": "papan", "SEWA STANDING UCAPAN": "papan", "DEKORASI": "party", "HOT BALON": "party" }; // Rich Party = dekorasi balon & semua jenis dekorasi
 export const UNIT_JENIS = { dekorasi: "party", seserahan: "hantaran", mahar: "hantaran", standing: "papan", parcel: "hampers", buket_uang: "bouquet", buket_costume: "bouquet" };
 /** Unit dari kategori produk ("" = ikut barang lain, mis. ADDITIONAL). peta = pengaturan admin { KATEGORI: unit }. */
 export function unitKategori(kat, peta = {}){
@@ -205,7 +205,7 @@ export function unitKategori(kat, peta = {}){
   if (peta && peta[k] && UNIT.some(u => u.id === peta[k])) return peta[k];
   if (UNIT_KAT_BAWAAN[k]) return UNIT_KAT_BAWAAN[k];
   if (!k || k === "ADDITIONAL") return "";
-  if (/DEKOR|PARTY/.test(k)) return "party";
+  if (/DEKOR|PARTY|BALON|BALLOON|BACKDROP/.test(k)) return "party";
   if (/HAMPERS|PARSEL|PARCEL/.test(k)) return "hampers";
   if (/SESERAHAN|HANTARAN|MAHAR/.test(k)) return "hantaran";
   if (/STANDING|PAPAN/.test(k)) return "papan";

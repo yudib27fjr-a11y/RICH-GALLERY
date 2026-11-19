@@ -1217,7 +1217,7 @@ const saringUnit = (id, L, pilih) => { const ada = UNIT.filter(u => L.some(x => 
 const lencanaUnit = (id, pendek = true) => { const u = infoUnit(id); return u ? `<span class="unit-tag" style="--c:${u.warna}" title="${esc(u.nama)}">${u.ikon}${pendek ? "" : " " + esc(u.nama)}</span>` : ""; };
 
 /* ================= MENU UTAMA: 5 unit besar Rich Gallery ================= */
-const SUB_UNIT = { bouquet: "buket, bloom box, boneka, wisuda", hampers: "hampers, parsel, snack tower", party: "dekorasi, balon, sewa", hantaran: "seserahan, mahar, hantaran", papan: "standing ucapan & flower" };
+const SUB_UNIT = { bouquet: "buket, bloom box, boneka, wisuda", hampers: "hampers, parsel, snack tower", party: "dekorasi balon & semua dekorasi", hantaran: "seserahan, mahar, hantaran", papan: "standing ucapan & flower" };
 async function vBeranda(){
   const nProduk = id => B.produk.filter(p => p.aktif && unitP(p.kategori) === id).length;
   $("#main").innerHTML = `<div class="beranda">
