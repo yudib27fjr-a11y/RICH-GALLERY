@@ -197,7 +197,7 @@ export const UNIT = [
   { id: "papan", nama: "Papan Ucapan", brand: "Papan Ucapan", ikon: "🪧", warna: "#b91c1c" },
 ];
 export const UNIT_KAT_BAWAAN = { "HAMPERS": "hampers", "SNACK TOWER": "hampers", "SEWA SESERAHAN": "hantaran", "MAHAR": "hantaran", "SEWA HAND BUKET": "hantaran",
-  "STANDING UCAPAN": "papan", "STANDING FLOWER": "papan", "SEWA STANDING UCAPAN": "papan", "DEKORASI": "party", "HOT BALON": "party" }; // Rich Party = dekorasi balon & semua jenis dekorasi
+  "STANDING UCAPAN": "papan", "STANDING FLOWER": "papan", "SEWA STANDING UCAPAN": "papan", "DEKORASI": "party", "HOT BALON": "bouquet" }; // Rich Party = dekorasi (termasuk dekor balon); Hot air balon = Gift & Bouquet
 export const UNIT_JENIS = { dekorasi: "party", seserahan: "hantaran", mahar: "hantaran", standing: "papan", parcel: "hampers", buket_uang: "bouquet", buket_costume: "bouquet" };
 /** Unit dari kategori produk ("" = ikut barang lain, mis. ADDITIONAL). peta = pengaturan admin { KATEGORI: unit }. */
 export function unitKategori(kat, peta = {}){
