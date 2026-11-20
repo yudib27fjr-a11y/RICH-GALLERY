@@ -684,3 +684,4 @@ button.br-hero{display:block;width:100%;text-align:left;border:0;font:inherit;cu
   .prod.prod-u .pill.mut{display:none}
 }
 .gt-orang{border:1px solid var(--line);border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;gap:6px}.gt-orang .gt-plus{align-self:flex-start}
+.absen-konfirm{margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:15px}.absen-konfirm b{font-size:16px}

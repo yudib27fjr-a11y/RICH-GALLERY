@@ -79,6 +79,16 @@ function jarakWajahTerdaftar(userId, ciri){
   if (!Array.isArray(d) || !d.length || !Array.isArray(ciri) || ciri.length !== 128 || !ciri.every(n => typeof n === "number" && isFinite(n))) return null;
   return Math.min(...d.map(v => Math.sqrt(v.reduce((s, x, i) => s + (x - ciri[i]) ** 2, 0))));
 }
+/** Karyawan LAIN yang wajahnya juga mirip (selisih < 0,08 dari jarak ke pemilik) — tanda wajah bisa tertukar. */
+function wajahMiripLain(userId, ciri, d){
+  if (d == null) return null;
+  for (const id of Object.keys(dataWajah())) {
+    if (+id === +userId) continue;
+    const d2 = jarakWajahTerdaftar(+id, ciri);
+    if (d2 != null && d2 - d < 0.08) return +id;
+  }
+  return null;
+}
 /** Masuk aplikasi dengan wajah — hanya di perangkat yang diizinkan absen, hanya akun karyawan (admin tetap pakai password). */
 route("POST", "/api/login-wajah", false, ({ body, ctx }) => {
   const st = statusKiosk(body.alat);
@@ -130,6 +140,8 @@ function daftarWajahOtomatis(u, ciri, tgl, jam){
   if (lama.length >= 8) return false;
   // PIN sudah benar → wajah yang agak mirip (pose / cahaya beda) ikut dipelajari agar absen berikutnya dikenali; wajah jauh beda (titip absen) tidak.
   if (lama.length) { const d = jarakWajahTerdaftar(u.id, ciri); if (d == null || d >= BATAS_WAJAH + 0.1) return false; }
+  // Jangan pelajari wajah yang lebih mirip karyawan lain (mencegah wajah dua orang tercampur)
+  for (const id of Object.keys(W)) { if (+id === +u.id) continue; const d2 = jarakWajahTerdaftar(+id, ciri); if (d2 != null && d2 < BATAS_WAJAH) return false; }
   setSetting("wajah", { ...W, [u.id]: { d: [...lama, ciri.map(n => Math.round(n * 10000) / 10000)], t: (W[u.id] || {}).t || tgl, oto: 1 } });
   if (!lama.length) antreNotif(`😊 Wajah ${u.nama} terdaftar otomatis`, `Dari selfie absen ${tgl} ${String(jam).slice(0, 5)} (pakai PIN). Pastikan fotonya benar ${u.nama} — bila salah, hapus di Pengaturan → Absensi → Wajah karyawan.`, `/#absen?tgl=${tgl}&u=${u.id}`);
   return true;
@@ -152,6 +164,7 @@ route("POST", "/api/absen/pin", false, ({ body, ctx }) => {
   if (String(body.pin ?? "") === "") {
     if (dWajah == null) throw new HttpError(401, dataWajah()[u.id] ? "Wajah belum terbaca — ulangi foto, atau ketik PIN" : "Wajah belum didaftarkan admin — ketik PIN");
     if (dWajah >= BATAS_WAJAH) { catatGagal(kunci); throw new HttpError(401, "Wajah tidak dikenali — ulangi foto, atau ketik PIN"); }
+    if (wajahMiripLain(u.id, body.ciri, dWajah) != null) throw new HttpError(401, `Wajah juga mirip karyawan lain — supaya tidak tertukar, ketik PIN ${u.nama}`);
   } else if (!cekPassword(String(body.pin), u.pass_hash)) { catatGagal(kunci); throw new HttpError(401, "PIN salah"); }
   resetGagal(kunci);
   if (dWajah != null) Object.assign(body, { wajah: dWajah, wajah_ok: dWajah < BATAS_WAJAH });

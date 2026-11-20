@@ -521,6 +521,11 @@ test("absen PIN + selfie: hanya perangkat yang diizinkan & di lokasi toko", asyn
   assert.equal((await absenHp({ pin: "", ciri: LAIN })).status, 401, "wajah lain ditolak tanpa PIN");
   assert.equal((await absenHp({ pin: "" })).status, 401, "tanpa PIN & tanpa wajah ditolak");
   const wj = await absenHp({ pin: "", ciri: V2 }); assert.equal(wj.status, 200, JSON.stringify(wj.data));
+  // Wajah dua karyawan mirip (seperti Eva & Savira): tanpa PIN ditolak supaya tidak tertukar; dengan PIN tetap bisa & tidak dipelajari ke wajah yang salah
+  const lainP = k.staf.find(s => s.nama !== "IZA" && s.id !== izaP.id), MIRIP = V.map(x => x + 0.004);
+  assert.equal((await pusat("PUT", "/api/absen/wajah", { user_id: lainP.id, data: [MIRIP] })).status, 200);
+  const tukar = await absenHp({ pin: "", ciri: V2 }); assert.equal(tukar.status, 401); assert.match(tukar.data.error, /mirip karyawan lain/);
+  await pusat("DELETE", "/api/absen/wajah", { user_id: lainP.id });
   // Masuk aplikasi dengan wajah (hanya dari perangkat yang diizinkan absen)
   assert.equal((await tamuP("POST", "/api/login-wajah", { ciri: V2 })).status, 403, "tanpa perangkat absen ditolak");
   assert.equal((await tamuP("POST", "/api/login-wajah", { alat: hp.token, ciri: LAIN })).status, 401, "wajah lain ditolak");

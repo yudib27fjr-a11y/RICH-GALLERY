@@ -3608,6 +3608,15 @@ async function ciriWajah(src){
 const BATAS_WAJAH = 0.5; // jarak < 0,5 = orang yang sama
 const jarakWajah = (a, b) => Math.sqrt(a.reduce((s, x, i) => s + (x - b[i]) ** 2, 0));
 const jarakKe = (ciri, data) => data && data.d && data.d.length ? Math.min(...data.d.map(v => jarakWajah(ciri, v))) : null;
+const SELISIH_WAJAH = 0.08; // wajah harus jelas lebih mirip satu orang daripada karyawan lain — supaya tidak tertukar (mis. Eva ↔ Savira)
+/** Siapa pemilik wajah ini? null bila tidak ada yang cocok ATAU dua orang sama-sama mirip (ragu → harus PIN). */
+function kenaliWajah(ciri, WJ, staf){
+  const h = staf.map(s => ({ id: s.id, d: jarakKe(ciri, WJ[s.id]) })).filter(x => x.d != null).sort((a, b) => a.d - b.d);
+  const [a, b] = h;
+  if (!a || a.d >= BATAS_WAJAH - 0.05) return null;
+  if (b && b.d - a.d < SELISIH_WAJAH) return { ragu: true, id: a.id, id2: b.id };
+  return a;
+}
 /** Daftar perangkat (iMin kasir, HP/iPhone absen) dengan sakelar izin absen on/off. */
 async function perangkatAbsen(){
   const el = $("#abPerangkat"); if (!el) return;
@@ -3760,10 +3769,12 @@ async function bukaAbsen(jenisAwal){
     <div class="actions"><button class="btn" id="akBatal" type="button">Batal</button><button class="btn pri" id="akKirim" type="button" disabled>Simpan absen</button></div>`, m => {
     const v = $("#akV", m), img = $("#akF", m), ket = $("#akKet", m);
     const matikan = () => { try { stream && stream.getTracks().forEach(t => t.stop()); } catch {} stream = null; };
-    const dikenali = () => cekWajah === "ok" && $("#akU", m).value && (d => d != null && d < BATAS_WAJAH)(jarakKe(ciri, WJ[$("#akU", m).value]));
+    const dikenali = () => { // tanpa PIN hanya bila wajah jelas milik nama yang dipilih (bukan mirip juga dengan karyawan lain)
+      if (cekWajah !== "ok" || !$("#akU", m).value) return false;
+      const k = kenaliWajah(ciri, WJ, K.staf); return !!k && !k.ragu && String(k.id) === $("#akU", m).value; };
     const siap = () => { $("#akKirim", m).disabled = !(foto && lokasi && lokasi.ok && $("#akU", m).value && ($("#akP", m).value || dikenali()) && ["ok", "tanpa"].includes(cekWajah)); };
-    let terkirim = false, otomatis = false;
-    const cobaOtomatis = () => { if (otomatis && !terkirim && dikenali() && lokasi && lokasi.ok) { terkirim = true; $("#akKirim", m).click(); } };
+    let terkirim = false, otomatis = false, jedaSelesai = false;
+    const cobaOtomatis = () => { if (otomatis && jedaSelesai && !terkirim && dikenali() && lokasi && lokasi.ok) { terkirim = true; $("#akKirim", m).click(); } };
     const hasilWajah = () => {
       if (cekWajah !== "ok") return { wajah: undefined, wajah_ok: undefined };
       const d = jarakKe(ciri, WJ[$("#akU", m).value]); return d == null ? {} : { wajah: d, wajah_ok: d < BATAS_WAJAH };
@@ -3773,7 +3784,9 @@ async function bukaAbsen(jenisAwal){
       const id = $("#akU", m).value, nama = (K.staf.find(x => String(x.id) === id) || {}).nama || "";
       if (!id) { ket.innerHTML = "🤖 Wajah terbaca. Pilih nama kamu."; return; }
       const d = jarakKe(ciri, WJ[id]);
+      const k = kenaliWajah(ciri, WJ, K.staf), lain = k && String(k.id) !== id ? k : k && k.ragu ? { id: k.id2 } : null, namaLain = lain ? (K.staf.find(x => x.id === lain.id) || {}).nama || "" : "";
       ket.innerHTML = d == null ? `🤖 Wajah ${esc(nama)} belum terdaftar — ketik PIN, wajah ini akan otomatis didaftarkan saat absen disimpan.`
+        : d < BATAS_WAJAH && !dikenali() && namaLain ? `<b style="color:var(--warn,#d97706)">⚠️ Wajah juga mirip ${esc(namaLain)}</b><br><span class="small">Supaya tidak tertukar, ketik <b>PIN ${esc(nama)}</b> lalu Simpan.</span>`
         : d < BATAS_WAJAH ? `<b style="color:var(--ok)">✅ Wajah cocok: ${esc(nama)}</b>`
         : `<b style="color:var(--bad)">⚠️ Wajah tidak cocok dengan ${esc(nama)}</b><br><span class="small">Ulangi foto dengan wajah jelas & terang. Bila tetap disimpan, admin akan melihat tanda ⚠️.</span>`;
     };
@@ -3796,7 +3809,7 @@ async function bukaAbsen(jenisAwal){
     })();
     // Pindai wajah otomatis dari kamera: begitu wajah karyawan terdaftar dikenali, foto diambil & absen tersimpan sendiri.
     const pindaiOtomatis = async () => {
-      let coba = 0;
+      let coba = 0, calon = null;
       while (document.body.contains(v) && !foto && stream) {
         try {
           const w = 360, h = Math.round(w * (v.videoHeight || 480) / (v.videoWidth || 640)), c = document.createElement("canvas"); c.width = w; c.height = h;
@@ -3804,16 +3817,24 @@ async function bukaAbsen(jenisAwal){
           const x = await ciriWajah(c);
           if (foto || !document.body.contains(v)) return;
           if (x) {
-            let terbaik = null; for (const sx of K.staf) { const d = jarakKe(x, WJ[sx.id]); if (d != null && d < BATAS_WAJAH - 0.05 && (!terbaik || d < terbaik.d)) terbaik = { id: sx.id, d }; }
+            const k = kenaliWajah(x, WJ, K.staf), terbaik = k && !k.ragu ? k : null;
+            if (k && k.ragu) { calon = null; ket.textContent = "Wajah mirip lebih dari satu karyawan — pilih nama & ketik PIN, lalu Ambil foto"; }
+            // harus 2× berturut-turut dikenali sebagai orang yang sama sebelum dipakai
+            if (terbaik && calon !== terbaik.id) { calon = terbaik.id; await new Promise(r => setTimeout(r, 250)); continue; }
             if (terbaik) {
               foto = c.toDataURL("image/jpeg", 0.6); ciri = x; cekWajah = "ok"; otomatis = true;
               img.src = foto; img.hidden = false; v.hidden = true; $("#akAmbil", m).hidden = true; $("#akUlang", m).hidden = false;
               $("#akU", m).value = String(terbaik.id); tulisWajah(); siap();
+              const nama = (K.staf.find(s => s.id === terbaik.id) || {}).nama || "";
+              // Konfirmasi: tersimpan otomatis 3 detik lagi, kecuali ditekan "Bukan saya"
+              ket.insertAdjacentHTML("beforeend", `<div class="absen-konfirm"><b>Absen sebagai ${esc(toTitle(nama))}?</b> <span id="akHit">3</span> dtk <button class="btn sm danger" id="akBukan" type="button">Bukan saya</button></div>`);
+              let n = 3; const hit = setInterval(() => { const e = $("#akHit", m); if (!e || !otomatis) return clearInterval(hit); if (--n <= 0) { clearInterval(hit); e.textContent = "0"; jedaSelesai = true; cobaOtomatis(); } else e.textContent = String(n); }, 1000);
+              $("#akBukan", m).onclick = () => { clearInterval(hit); otomatis = false; $("#akU", m).value = ""; ket.innerHTML = "<b>Pilih nama kamu</b> lalu ketik <b>PIN</b>, kemudian Simpan absen."; siap(); $("#akU", m).focus(); };
               if (!(lokasi && lokasi.ok)) ket.insertAdjacentHTML("beforeend", "<br><span class='small'>Menunggu lokasi…</span>");
-              return cobaOtomatis();
+              return;
             }
-            if (++coba >= 6) ket.textContent = "Wajah belum dikenali — pilih nama & ketik PIN, lalu Ambil foto";
-          }
+            if (++coba >= 6 && !(k && k.ragu)) ket.textContent = "Wajah belum dikenali — pilih nama & ketik PIN, lalu Ambil foto";
+          } else calon = null;
         } catch { ket.textContent = "Pengenal wajah belum bisa dipakai — pilih nama, ketik PIN, lalu Ambil foto"; return; }
         await new Promise(r => setTimeout(r, 600));
       }
@@ -3829,14 +3850,13 @@ async function bukaAbsen(jenisAwal){
         if (!foto) return;
         if (!x) { cekWajah = "gagal"; ket.innerHTML = `<b style="color:var(--bad)">Wajah tidak terdeteksi.</b> Tekan <b>Ulangi foto</b> — wajah menghadap kamera, tempat terang, tanpa masker.`; return siap(); }
         ciri = x; cekWajah = "ok";
-        if (!$("#akU", m).value) { // pilih nama otomatis dari wajah yang paling mirip
-          let terbaik = null; for (const sx of K.staf) { const d = jarakKe(x, WJ[sx.id]); if (d != null && d < BATAS_WAJAH - 0.05 && (!terbaik || d < terbaik.d)) terbaik = { id: sx.id, d }; }
-          if (terbaik) $("#akU", m).value = String(terbaik.id);
+        if (!$("#akU", m).value) { // pilih nama otomatis hanya bila wajah jelas milik satu orang
+          const k = kenaliWajah(x, WJ, K.staf); if (k && !k.ragu) $("#akU", m).value = String(k.id);
         }
         tulisWajah(); siap();
       }).catch(() => { cekWajah = "tanpa"; ket.textContent = "Pengenal wajah belum bisa dipakai di perangkat ini — absen tetap bisa disimpan."; siap(); });
     };
-    $("#akUlang", m).onclick = () => { foto = ""; ciri = null; cekWajah = "belum"; otomatis = false; terkirim = false; img.hidden = true; v.hidden = false; ket.textContent = "Arahkan wajah ke kamera, lalu tekan Ambil foto"; $("#akAmbil", m).hidden = false; $("#akUlang", m).hidden = true; siap(); if (Object.keys(WJ).length) pindaiOtomatis(); };
+    $("#akUlang", m).onclick = () => { foto = ""; ciri = null; cekWajah = "belum"; otomatis = false; terkirim = false; jedaSelesai = false; img.hidden = true; v.hidden = false; ket.textContent = "Arahkan wajah ke kamera, lalu tekan Ambil foto"; $("#akAmbil", m).hidden = false; $("#akUlang", m).hidden = true; siap(); if (Object.keys(WJ).length) pindaiOtomatis(); };
     muatWajahAI().catch(() => {}); // siapkan model AI sambil karyawan mengisi nama & PIN
     // Lokasi
     const bacaLokasi = async () => {
