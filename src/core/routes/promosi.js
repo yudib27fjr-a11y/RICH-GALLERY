@@ -22,11 +22,22 @@ const rp = n => "Rp" + Math.round(n || 0).toLocaleString("id-ID");
 /* ---------- pengaturan tugas ---------- */
 const userAktif = id => id ? one("SELECT id, nama FROM users WHERE id = ? AND aktif = 1", [+id]) : null;
 const userNama = k => one("SELECT id, nama FROM users WHERE nama_key = ? AND aktif = 1", [k]);
-/** { pic: {id,nama}|null, minPromosi, wajib: [{id,nama,min}] } — bawaan: PJ promosi Iza, wajib konten Wulan 2×/minggu. */
+/** { pic: {id,nama}|null, minPromosi, wajib: [{id,nama,min}] } — bawaan: PJ promosi Iza, wajib konten Wulan 4×/minggu. */
+/** Sekali saja (permintaan pemilik, Nov 2026): target konten Wulan 2 → 4 video/minggu, jadwal Selasa & Jumat → Sen, Sel, Kam, Jum. */
+function naikkanTargetKonten(s){
+  if (s.patch_konten4) return s;
+  const w = userNama("wulan"), t = s.tugas || {};
+  if (w && Array.isArray(t.wajib_konten)) setSetting("tugas", { ...t, wajib_konten: t.wajib_konten.map(x => +x.user_id === w.id ? { ...x, min: Math.max(4, Number(x.min) || 0) } : x) });
+  const j = s.jadwal_konten;
+  if (j && Array.isArray(j.hari) && j.hari.join() === "2,5") setSetting("jadwal_konten", { ...j, hari: [1, 2, 4, 5] });
+  setSetting("patch_konten4", 1);
+  return getSettings();
+}
 export function setelanTugas(s = getSettings()){
+  s = naikkanTargetKonten(s);
   const t = s.tugas || {};
   const pic = t.pic_promosi_id !== undefined ? userAktif(t.pic_promosi_id) : userNama("iza");
-  const daftar = Array.isArray(t.wajib_konten) ? t.wajib_konten : (() => { const w = userNama("wulan"); return w ? [{ user_id: w.id, min: 2 }] : []; })();
+  const daftar = Array.isArray(t.wajib_konten) ? t.wajib_konten : (() => { const w = userNama("wulan"); return w ? [{ user_id: w.id, min: 4 }] : []; })();
   const wajib = daftar.map(x => { const u = userAktif(x.user_id); return u ? { id: u.id, nama: u.nama, min: Math.max(1, Number(x.min) || 1) } : null; }).filter(Boolean);
   return { pic, minPromosi: Math.max(1, Number(t.min_promosi_bulan) || 1), wajib };
 }
