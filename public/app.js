@@ -252,6 +252,9 @@ function escposStruk(lines){
 }
 /** Kirim ESC/POS ke printer: langsung ke printer bawaan, atau lewat aplikasi RawBT. Mengembalikan true bila terkirim. */
 function kirimEscpos(s){
+  if (D.modeCetak === "bt" && NATIVE && NATIVE.cetakKe) { // printer Bluetooth tambahan yang dipasangkan (mis. printer struk kecil)
+    if (!D.btAlamat) { toast("Pilih printer Bluetooth dulu di Pengaturan → Perangkat ini"); return true; }
+    NATIVE.cetakKe(D.btAlamat, btoa(s)); toast(`Mencetak ke ${D.btNama || "printer Bluetooth"}…`); return true; }
   if (D.modeCetak === "langsung" && NATIVE && NATIVE.cetakLangsung) { NATIVE.cetakLangsung(btoa(s)); toast("Mencetak…"); return true; }
   if (D.modeCetak === "rawbt" || D.modeCetak === "langsung") { window.location.href = "rawbt:base64," + btoa(s); return true; }
   return false;
@@ -590,7 +593,7 @@ function cariScan(kode){
 }
 function cetakLabel(daftar){ // [{x, jenis, n}]
   const mm = D.kertas == 80 ? 80 : 58, cw = mm == 80 ? 72 : 48, w = lebar();
-  if (D.modeCetak === "rawbt" || D.modeCetak === "langsung") {
+  if (D.modeCetak === "rawbt" || D.modeCetak === "langsung" || D.modeCetak === "bt") {
     let s = ESC + "@";
     daftar.forEach(({ x, jenis, n }) => { const bc = labelBarcode(x, jenis); for (let i = 0; i < n; i++) {
       s += ESC + "a\x01" + ESC + "E\x01" + ascii(x.nama).slice(0, w) + "\n" + ESC + "E\x00";
@@ -1873,7 +1876,7 @@ function tileAksi({ id = "", warna, gambar, label, href = "", garis = false }){
 
 /** Setelah Bayar & Cetak: pilih cara mencetak (tidak langsung membuka dialog print). */
 function pilihCetak(s){
-  const mode = { langsung: "printer bawaan iMin", rawbt: "aplikasi RawBT", chrome: NATIVE ? "layanan cetak Android" : "printer komputer" }[D.modeCetak] || (NATIVE ? "layanan cetak Android" : "printer komputer");
+  const mode = { langsung: "printer bawaan iMin", bt: D.btNama ? `printer Bluetooth ${D.btNama}` : "printer Bluetooth", rawbt: "aplikasi RawBT", chrome: NATIVE ? "layanan cetak Android" : "printer komputer" }[D.modeCetak] || (NATIVE ? "layanan cetak Android" : "printer komputer");
   const opsi = [
     ["struk", "🧾", "Struk kasir", `Kertas ${D.kertas == 80 ? "80" : "58"} mm lewat ${mode}`],
     ["nota", "📄", "Nota (setengah A4)", "Invoice berlogo & tanda tangan, bisa diedit dulu"],
@@ -4644,7 +4647,13 @@ function vAtur(){
       <section class="panel stack"><h3 style="font-size:17px">Perangkat ini</h3>
         <p class="small muted" style="margin:0">Berlaku untuk HP/tablet yang sedang dipakai saja.</p>
         <label class="f">Lebar kertas printer<select id="pK"><option value="58" ${D.kertas == 58 ? "selected" : ""}>58 mm (32 karakter)</option><option value="80" ${D.kertas == 80 ? "selected" : ""}>80 mm (48 karakter)</option></select></label>
-        <label class="f">Cara mencetak<select id="pM">${NATIVE && NATIVE.cetakLangsung ? `<option value="langsung" ${D.modeCetak === "langsung" ? "selected" : ""}>Printer bawaan iMin langsung (paling tajam)</option>` : ""}<option value="chrome" ${D.modeCetak === "chrome" ? "selected" : ""}>Layanan cetak Android (gambar)</option><option value="rawbt" ${D.modeCetak === "rawbt" ? "selected" : ""}>Aplikasi RawBT (ESC/POS)</option></select></label>
+        <label class="f">Cara mencetak<select id="pM">${NATIVE && NATIVE.cetakLangsung ? `<option value="langsung" ${D.modeCetak === "langsung" ? "selected" : ""}>Printer bawaan iMin langsung (paling tajam)</option>` : ""}${NATIVE && NATIVE.cetakKe ? `<option value="bt" ${D.modeCetak === "bt" ? "selected" : ""}>Printer Bluetooth (printer struk terpisah)</option>` : ""}<option value="chrome" ${D.modeCetak === "chrome" ? "selected" : ""}>Layanan cetak Android (gambar)</option><option value="rawbt" ${D.modeCetak === "rawbt" ? "selected" : ""}>Aplikasi RawBT (ESC/POS)</option></select></label>
+        ${D.modeCetak === "bt" && NATIVE && NATIVE.daftarBluetooth ? (() => { let L = []; const r = String(NATIVE.daftarBluetooth() || "[]");
+          if (r !== "izin") { try { L = JSON.parse(r); } catch {} }
+          return r === "izin" ? `<p class="note">Izinkan akses <b>Perangkat sekitar</b> yang muncul, lalu tekan <b>Muat ulang</b>.</p><button class="btn sm" id="pBtMuat" type="button">🔄 Muat ulang</button>`
+            : `<div class="row" style="gap:8px;align-items:flex-end"><label class="f grow">Printer Bluetooth<select id="pBt"><option value="">— pilih printer —</option>${L.map(d => `<option value="${esc(d.alamat)}" ${d.alamat === D.btAlamat ? "selected" : ""}>${esc(d.nama)}</option>`).join("")}</select></label><button class="btn sm" id="pBtMuat" type="button">🔄</button></div>
+              <p class="note small">${L.length ? "" : "<b>Belum ada perangkat Bluetooth terpasang.</b> "}Printer harus dipasangkan (pair) dulu di <b>Pengaturan Android → Bluetooth</b>. Biasanya namanya seperti <i>Printer001</i>, <i>MPT-II</i>, <i>PT-210</i>, atau <i>BlueTooth Printer</i>; PIN pairing umumnya <b>0000</b> atau <b>1234</b>.</p>`; })() : ""}
+        ${NATIVE && !NATIVE.cetakKe ? `<p class="note small">Untuk printer struk Bluetooth terpisah, perbarui aplikasi ke versi terbaru (Pengaturan → Periksa pembaruan).</p>` : ""}
         <p class="note">${NATIVE && NATIVE.cetakLangsung ? `<b>Printer bawaan langsung</b> mengirim teks ke printer iMin seperti aplikasi kasir lain, hasilnya hitam dan tajam. Bluetooth harus menyala (printer iMin tersambung lewat Bluetooth internal "BluetoothPrinter"). ${(() => { const st = statusPrinterLangsung(); return st === "izin" ? "Saat mencetak pertama kali, izinkan akses <i>Perangkat sekitar</i>." : st ? `Printer ditemukan: <b>${esc(st)}</b>.` : "Printer bawaan belum terdeteksi — pastikan Bluetooth menyala."; })()}<br>` : ""}Layanan cetak Android mengubah struk menjadi gambar, sehingga bisa tampak buram. RawBT butuh aplikasi RawBT dari Play Store.</p>
         <div class="row"><button class="btn" id="pTest" type="button">Cetak struk uji</button><button class="btn" id="pKartu" type="button">Cetak kartu uji</button></div>
         <label class="row" style="gap:8px"><input type="checkbox" id="pKetuk" ${D.ketuk === false ? "" : "checked"}> Bunyi &amp; getar saat tombol diketuk</label>
@@ -4687,6 +4696,8 @@ function vAtur(){
   if (NATIVE) aturMode();
   $("#pK").onchange = e => { D.kertas = +e.target.value; simpanD(); vAtur(); };
   $("#pM").onchange = e => { D.modeCetak = e.target.value; D.modeDipilih = true; simpanD(); vAtur(); };
+  const pBt = $("#pBt"); if (pBt) pBt.onchange = () => { D.btAlamat = pBt.value; D.btNama = pBt.value ? pBt.selectedOptions[0].textContent : ""; simpanD(); toast(D.btAlamat ? `Printer: ${D.btNama} — tekan Cetak struk uji` : "Printer dikosongkan"); };
+  const pBtM = $("#pBtMuat"); if (pBtM) pBtM.onclick = () => vAtur();
   $("#thm").onchange = e => { D.tema = e.target.value; simpanD(); terapkanTema(); };
   $("#pKetuk").onchange = e => { D.ketuk = e.target.checked; simpanD(); if (D.ketuk) umpanKetuk(); };
   $("#pTest").onclick = () => cetak({ no: B.toko.prefix + "UJI", tgl: today(), jam: "00:00", kasir: B.me.nama, pelanggan: "UJI CETAK", hp: "", items: [{ nama: "BUKET BUNGA 100K", harga: 100000, qty: 1 }, { nama: "COKLAT SILVERQUEEN", harga: 15000, qty: 2 }], subtotal: 130000, diskon: 0, ongkir: 0, total: 130000, metode: "Tunai", bayar: 150000, catatan: "" });
@@ -5175,6 +5186,7 @@ async function aturCabang(){
    Native mengunduh pembaruan di latar belakang lalu memanggil window.rgPembaruan(jenis, teks):
    "web" = tampilan & aturan baru siap, tinggal muat ulang; "apk" = versi aplikasi baru; "info" = pesan biasa. */
 /** Screenshot dibagikan dari TikTok/Galeri ke aplikasi Android (Bagikan → Rich Gallery) → buka Belanja TikTok Shop & baca otomatis. */
+window.rgIzinBluetooth = () => { if (view === "atur") vAtur(); }; // izin "Perangkat sekitar" baru diberikan → muat daftar printer
 window.rgBagikan = () => {
   const N = window.RGNative; if (!N || typeof N.ambilBagikan !== "function" || !B) return; // belum masuk: diambil lagi sesudah masuk
   let daftar = []; try { daftar = JSON.parse(N.ambilBagikan() || "[]"); } catch {}

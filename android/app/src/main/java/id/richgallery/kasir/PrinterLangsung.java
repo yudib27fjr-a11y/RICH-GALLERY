@@ -34,8 +34,9 @@ class PrinterLangsung {
 
     private final MainActivity act;
     private final Object kunci = new Object();
-    /** Data yang menunggu izin Bluetooth (Android 12+). */
+    /** Data yang menunggu izin Bluetooth (Android 12+), dan printer tujuannya (null = otomatis). */
     private volatile byte[] menunggu;
+    private volatile String menungguAlamat;
 
     /** Layanan printer iMin: null = belum dicek / tidak ada, true = tersambung. */
     private volatile boolean iminSiap = false;
@@ -115,6 +116,34 @@ class PrinterLangsung {
         try { return d.getName(); } catch (SecurityException e) { return "izin"; }
     }
 
+    /** Printer Bluetooth yang sudah dipasangkan di Pengaturan Android: JSON [{nama, alamat}], atau "izin" bila izin belum ada (izin lalu diminta). */
+    String daftarBluetooth() {
+        BluetoothAdapter bt = BluetoothAdapter.getDefaultAdapter();
+        if (bt == null) return "[]";
+        if (perluIzin()) { act.runOnUiThread(() -> act.requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, KODE_IZIN)); return "izin"; }
+        org.json.JSONArray a = new org.json.JSONArray();
+        try {
+            Set<BluetoothDevice> semua = bt.getBondedDevices();
+            if (semua != null) for (BluetoothDevice d : semua) {
+                String n; try { n = d.getName(); } catch (SecurityException e) { continue; }
+                org.json.JSONObject o = new org.json.JSONObject();
+                o.put("nama", n == null ? d.getAddress() : n); o.put("alamat", d.getAddress());
+                a.put(o);
+            }
+        } catch (Exception e) { return "[]"; }
+        return a.toString();
+    }
+
+    /** Cetak ke printer Bluetooth tertentu (alamat MAC), mis. printer struk tambahan yang dipasangkan ke iMin. */
+    void cetakKe(String alamat, byte[] data) {
+        if (perluIzin()) {
+            menunggu = data; menungguAlamat = alamat;
+            act.runOnUiThread(() -> act.requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, KODE_IZIN));
+            return;
+        }
+        new Thread(() -> kirim(data, alamat)).start();
+    }
+
     void cetak(byte[] data) {
         if (iminAda) { // printer bawaan iMin lewat layanan sistem (tanpa Bluetooth)
             new Thread(() -> { if (!kirimImin(data)) kirimBluetoothAtauIzin(data); }).start();
@@ -125,26 +154,31 @@ class PrinterLangsung {
 
     private void kirimBluetoothAtauIzin(byte[] data) {
         if (perluIzin()) {
-            menunggu = data;
+            menunggu = data; menungguAlamat = null;
             act.runOnUiThread(() -> act.requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, KODE_IZIN));
             return;
         }
-        new Thread(() -> kirim(data)).start();
+        new Thread(() -> kirim(data, null)).start();
     }
 
     /** Dipanggil MainActivity setelah pengguna menjawab permintaan izin. */
     void hasilIzin(boolean diizinkan) {
-        byte[] d = menunggu; menunggu = null;
-        if (!diizinkan) { act.toast("Izin \"Perangkat sekitar\" diperlukan untuk mencetak ke printer bawaan."); return; }
-        if (d != null) new Thread(() -> kirim(d)).start();
+        byte[] d = menunggu; String al = menungguAlamat; menunggu = null; menungguAlamat = null;
+        if (!diizinkan) { act.toast("Izin \"Perangkat sekitar\" diperlukan untuk mencetak ke printer Bluetooth."); return; }
+        if (d != null) new Thread(() -> kirim(d, al)).start();
+        else act.jalankanJs("window.rgIzinBluetooth ? window.rgIzinBluetooth() : 0");
     }
 
-    private void kirim(byte[] data) {
+    private void kirim(byte[] data, String alamat) {
         synchronized (kunci) {
             BluetoothAdapter bt = BluetoothAdapter.getDefaultAdapter();
             if (bt == null) { act.toast("Perangkat ini tidak punya Bluetooth untuk printer bawaan. Pilih cara cetak lain di Pengaturan."); return; }
             if (!bt.isEnabled()) { act.toast("Nyalakan Bluetooth dulu: printer bawaan iMin tersambung lewat Bluetooth internal."); return; }
-            BluetoothDevice d = cari();
+            BluetoothDevice d;
+            if (alamat != null) {
+                try { d = bt.getRemoteDevice(alamat); } catch (Exception e) { d = null; }
+                if (d == null) { act.toast("Printer Bluetooth tidak ditemukan. Pasangkan lagi di Pengaturan Android → Bluetooth."); return; }
+            } else d = cari();
             if (d == null) { act.toast(iminAda ? "Layanan printer iMin belum siap. Tutup lalu buka lagi aplikasi, atau pilih cara cetak lain." : "Printer bawaan tidak ditemukan. Cek Pengaturan Android → Bluetooth, atau pilih cara cetak lain."); return; }
             BluetoothSocket s = null;
             Exception galat = null;
@@ -172,7 +206,7 @@ class PrinterLangsung {
                     s = null;
                 }
             }
-            if (galat != null) act.toast("Gagal mencetak ke printer bawaan: " + galat.getMessage());
+            if (galat != null) act.toast((alamat != null ? "Gagal mencetak ke printer Bluetooth (pastikan printer menyala & dekat): " : "Gagal mencetak ke printer bawaan: ") + galat.getMessage());
         }
     }
 }
