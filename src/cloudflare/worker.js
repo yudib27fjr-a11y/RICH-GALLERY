@@ -3,7 +3,7 @@
    - Semua /api/* diteruskan ke SATU Durable Object "toko" yang memegang database SQLite toko.
      Satu objek = satu database = semua permintaan berurutan, jadi aturan stok & nomor nota tetap aman.
    - Cron tiap 5 menit membangunkan objek untuk mengirim antrean ke Google Sheet. */
-import { pasangDriver, migrasi, seedJikaKosong, isiDemo, gantiMerek, jalankan, cariRoute, kirimOutbox, kirimNotif, bersihkanSesiKadaluarsa, hapusFotoAbsenLama, hapusNotaBelanjaLama, terimaEmail, rekapProduksiHarian, cekKontenBaru, pengingatTugasHarian } from "../core/semua.js";
+import { pasangDriver, migrasi, seedJikaKosong, isiDemo, gantiMerek, demoAktif, jalankan, cariRoute, kirimOutbox, kirimNotif, bersihkanSesiKadaluarsa, hapusFotoAbsenLama, hapusNotaBelanjaLama, terimaEmail, rekapProduksiHarian, cekKontenBaru, pengingatTugasHarian } from "../core/semua.js";
 import { mimeKeTeks } from "./email.js";
 import { buatDriverDO } from "./driver.js";
 import { pasangPlatformCF } from "./platform.js";
@@ -30,7 +30,7 @@ export class Toko {
     this.state = state;
     this.env = env;
     this.siap = false;
-    this.demo = env.DEMO === "1";
+    this.demo = false; // objek demo dikenali dari header x-rg-demo yang dipasang Worker (header dari luar selalu dibuang)
   }
   async siapkan(){
     if (this.siap) return;
@@ -42,18 +42,21 @@ export class Toko {
       // Versi demo: tidak ada koneksi keluar (Google Sheet, notifikasi, Instagram, …); tiap pengunjung punya database sendiri
       // yang dihapus otomatis 3 hari kemudian.
       platform.http = async () => { throw new Error("Tidak tersedia di versi demo"); };
-      if (await isiDemo({ wa: this.env.DEMO_WA })) await this.state.storage.setAlarm(Date.now() + 3 * 86400_000);
+      if (await isiDemo()) await this.state.storage.setAlarm(Date.now() + 3 * 86400_000);
       pasangDriver(this.drv);
     } else seedJikaKosong();
     this.siap = true;
   }
   async alarm(){ // hanya demo: database pengunjung dihapus
-    if (!this.demo) return;
+    pasangDriver(this.drv || (this.drv = buatDriverDO(this.state.storage)));
+    let demo = false; try { demo = demoAktif(); } catch { /* tabel belum ada */ }
+    if (!demo) return; // database toko asli tidak pernah dihapus
     await this.state.storage.deleteAll();
     this.siap = false; this.siapP = null;
   }
 
   async fetch(req){
+    if (!this.siap) this.demo = req.headers.get("x-rg-demo") === "1";
     if (!this.siap) { this.siapP ||= this.siapkan().finally(() => { this.siapP = null; }); await this.siapP; }
     const url = new URL(req.url);
     if (this.demo && url.pathname.startsWith("/__")) return json(404, { error: "Tidak ada" });
@@ -120,7 +123,8 @@ async function demoFetch(req, env, url){
     // Tiap pengunjung: database sendiri (dikenali dari cookie), supaya coba-coba orang lain tidak saling mengganggu.
     let id = parseCookies(req.headers.get("cookie") || "").rg_demo || "", baru = false;
     if (!/^[A-Za-z0-9]{20,40}$/.test(id)) { id = crypto.randomUUID().replace(/-/g, ""); baru = true; }
-    const res = await env.TOKO.get(env.TOKO.idFromName("demo:" + id)).fetch(req);
+    const rq = new Request(req); rq.headers.set("x-rg-demo", "1");
+    const res = await env.TOKO.get(env.TOKO.idFromName("demo:" + id)).fetch(rq);
     if (!baru) return res;
     const r = new Response(res.body, res);
     r.headers.append("Set-Cookie", `rg_demo=${id}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${3 * 86400}${url.protocol === "https:" ? "; Secure" : ""}`);
@@ -139,8 +143,11 @@ async function demoFetch(req, env, url){
 export default {
   async fetch(req, env){
     const url = new URL(req.url);
-    if (env.DEMO === "1") return demoFetch(req, env, url);
-    if (url.pathname.startsWith("/api/")) return objekToko(env).fetch(req);
+    if (/^demo\./.test(url.hostname) || env.DEMO === "1") return demoFetch(req, env, url);
+    if (url.pathname.startsWith("/api/")) {
+      const r = new Request(req); r.headers.delete("x-rg-demo"); // hanya Worker yang boleh menandai objek demo
+      return objekToko(env).fetch(r);
+    }
     return env.ASSETS.fetch(req);
   },
   /** Email ke belanja@richgallery.my.id (Cloudflare Email Routing → Worker ini): pesanan Shopee dicatat sebagai belanja. */
@@ -152,7 +159,6 @@ export default {
     } catch (e) { console.error("email masuk", e.message); }
   },
   async scheduled(_event, env, ctx){
-    if (env.DEMO === "1") return;
     ctx.waitUntil(objekToko(env).fetch("https://toko/__tugas"));
   },
 };

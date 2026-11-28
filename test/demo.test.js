@@ -31,7 +31,7 @@ function storageTiruan(file){
 
 before(async () => {
   const { default: worker, Toko } = await import("../src/cloudflare/worker.js");
-  const env = { DEMO: "1", DEMO_WA: "6281234567890", ASSETS: { fetch: async () => new Response("aset", { headers: { "Content-Type": "text/plain" } }) } };
+  const env = { ASSETS: { fetch: async () => new Response("aset", { headers: { "Content-Type": "text/plain" } }) } };
   const objek = new Map();
   env.TOKO = { idFromName: n => n, get: id => {
     if (!objek.has(id)) objek.set(id, new Toko({ storage: storageTiruan(path.join(dir, id.replace(/\W/g, "_") + ".sqlite")), waitUntil: p => p }, env));
@@ -39,7 +39,7 @@ before(async () => {
   } };
   server = createServer(async (req, res) => {
     const chunks = []; for await (const c of req) chunks.push(c);
-    const r = await worker.fetch(new Request(`http://127.0.0.1:${PORT}${req.url}`, { method: req.method, headers: req.headers, body: ["GET", "HEAD"].includes(req.method) ? undefined : Buffer.concat(chunks) }), env);
+    const r = await worker.fetch(new Request(`http://demo.contoh.test:${PORT}${req.url}`, { method: req.method, headers: req.headers, body: ["GET", "HEAD"].includes(req.method) ? undefined : Buffer.concat(chunks) }), env);
     const h = {}; r.headers.forEach((v, k) => { h[k] = v; });
     res.writeHead(r.status, h); res.end(Buffer.from(await r.arrayBuffer()));
   });
@@ -61,7 +61,7 @@ function pengunjung(){
 test("demo: toko contoh netral, masuk tanpa password, tiap pengunjung terpisah", async () => {
   const a = pengunjung();
   const info = await a("GET", "/api/demo/info");
-  assert.equal(info.status, 200); assert.equal(info.data.demo, true); assert.equal(info.data.wa, "6281234567890"); assert.equal(info.data.merek, "Yudsky Tech");
+  assert.equal(info.status, 200); assert.equal(info.data.demo, true); assert.equal(typeof info.data.wa, "string"); assert.equal(info.data.merek, "Yudsky Tech");
   assert.equal((await a("GET", "/api/bootstrap")).status, 401, "belum masuk");
   const ms = await a("POST", "/api/demo/masuk", { peran: "admin" }); assert.equal(ms.status, 200, ms.teks);
   const b = await a("GET", "/api/bootstrap");

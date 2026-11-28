@@ -11,12 +11,14 @@ compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 routes = [
   { pattern = "pos.richgallery.my.id", custom_domain = true },
+  # Versi DEMO untuk promosi jasa pembuatan aplikasi (Yudsky Tech): toko contoh netral, data toko asli tidak ikut.
+  { pattern = "demo.richgallery.my.id", custom_domain = true },
 ]
 
 [assets]
 directory = "./public"
 binding = "ASSETS"
-run_worker_first = ["/api/*"]
+run_worker_first = ["/api/*", "/", "/index.html"] # "/" untuk judul & pratinjau link versi demo
 
 [[durable_objects.bindings]]
 name = "TOKO"
@@ -31,36 +33,4 @@ new_sqlite_classes = ["Toko"]
 crons = ["*/5 * * * *"]
 
 [observability]
-enabled = true
-
-# ---------------------------------------------------------------------------
-# Versi DEMO untuk promosi jasa pembuatan aplikasi (Yudsky Tech): https://demo.richgallery.my.id
-# Toko contoh netral; tiap pengunjung mendapat database sendiri (dihapus otomatis 3 hari). Data toko asli tidak ikut.
-# Dipasang dengan: npx wrangler deploy --env demo
-[env.demo]
-name = "yudsky-demo"
-workers_dev = true
-routes = [
-  { pattern = "demo.richgallery.my.id", custom_domain = true },
-]
-# DEMO_WA: nomor WhatsApp untuk tombol "Pesan aplikasi seperti ini" (format 62…)
-vars = { DEMO = "1", DEMO_WA = "" }
-
-[env.demo.assets]
-directory = "./public"
-binding = "ASSETS"
-run_worker_first = ["/api/*", "/", "/index.html"]
-
-[[env.demo.durable_objects.bindings]]
-name = "TOKO"
-class_name = "Toko"
-
-[[env.demo.migrations]]
-tag = "v1"
-new_sqlite_classes = ["Toko"]
-
-[env.demo.triggers]
-crons = []
-
-[env.demo.observability]
 enabled = true

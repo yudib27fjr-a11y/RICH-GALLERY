@@ -10,6 +10,8 @@ import { tebakKategori, barcodeDefault, tambahHari, unitKategori } from "../../p
 import { HttpError, hariIni } from "./util.js";
 
 export const MEREK_DEMO = "Yudsky Tech";
+/** Nomor WhatsApp Yudsky Tech untuk tombol "Pesan aplikasi seperti ini" (format 62…). */
+export const WA_DEMO = "";
 const KASIR = ["SARI", "DEWI", "RINA"];
 const PELANGGAN = ["ANISA", "BUDI", "CITRA", "DIMAS", "EKA", "FAJAR", "GITA", "HANA", "INDRA", "JIHAN", "KARIN", "LUKMAN", "MAYA", "NADIA", "OKTA", "PUTRI", "RIZKY", "SALSA", "TIARA", "WAHYU"];
 
@@ -28,13 +30,13 @@ function acak(benih){ let x = benih >>> 0 || 1; return () => { x ^= x << 13; x >
 export const demoAktif = () => !!getSettings().demo;
 
 /** Isi database baru dengan toko contoh + transaksi 2 minggu terakhir. Sekali saja (database kosong). */
-export async function isiDemo({ wa = "" } = {}){
+export async function isiDemo(){
   if (one("SELECT COUNT(*) n FROM products").n > 0) return false;
   const r = acak(20261128);
   const pilih = a => a[Math.floor(r() * a.length)];
   tx(() => {
     const S = {
-      demo: true, demo_wa: String(wa || "").replace(/\D/g, ""),
+      demo: true,
       nama_toko: "TOKO BUNGA CONTOH", alamat: "Jl. Melati No. 1, Kota Contoh", telp: "0812-0000-0000",
       footer: "Ini struk DEMO — aplikasi kasir buatan Yudsky Tech\nTerima kasih telah mencoba 🌸", prefix: "TB/", no_berikutnya: 1,
       sheet_id: "", sync_url: "", canva_url: "", wa_nomor: "",
@@ -89,7 +91,7 @@ export async function isiDemo({ wa = "" } = {}){
 
 /* ---- Alamat API khusus demo (404 di toko asli) ---- */
 const wajibDemo = () => { if (!demoAktif()) throw new HttpError(404, "Alamat API tidak dikenal"); };
-route("GET", "/api/demo/info", false, () => { wajibDemo(); const s = getSettings(); return { demo: true, merek: MEREK_DEMO, wa: s.demo_wa || "" }; });
+route("GET", "/api/demo/info", false, () => { wajibDemo(); return { demo: true, merek: MEREK_DEMO, wa: WA_DEMO }; });
 /** Masuk tanpa password sebagai pemilik (semua menu) atau kasir (menu karyawan). */
 route("POST", "/api/demo/masuk", false, ({ body, ctx }) => {
   wajibDemo();
