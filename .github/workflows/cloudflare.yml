@@ -49,3 +49,13 @@ jobs:
             echo "### Rich Gallery POS sudah online: $URL" >> "$GITHUB_STEP_SUMMARY"
             for i in 1 2 3 4 5 6; do curl -fsS "$URL/api/health" && break; sleep 5; done
           fi
+
+      - name: Pasang versi demo (promosi Yudsky Tech)
+        if: steps.cek.outputs.ada == '1'
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          npx --yes wrangler@4 deploy --env demo 2>&1 | tee demo.log
+          URL=$(grep -o 'https://[a-z0-9.-]*workers\.dev' demo.log | head -1)
+          [ -n "$URL" ] && echo "### Demo online: https://demo.richgallery.my.id (cadangan: $URL)" >> "$GITHUB_STEP_SUMMARY" || true

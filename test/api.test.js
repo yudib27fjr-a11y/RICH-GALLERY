@@ -338,6 +338,11 @@ test("produk baru dari form produksi: karyawan bisa mendaftarkan (nama sama dipa
   assert.equal((await admin("GET", "/api/bootstrap")).data.produk.find(x => x.id === r.data.id).stok, 3);
 });
 
+test("toko asli: alamat demo tidak aktif", async () => {
+  assert.equal((await admin("GET", "/api/demo/info")).status, 404);
+  assert.equal((await admin("POST", "/api/demo/masuk", { peran: "admin" })).status, 404);
+});
+
 test("sinkron: antrean terkirim ke Apps Script (lewat redirect 302) dengan jumlah kolom sesuai tab sheet", async () => {
   const { createServer } = await import("node:http");
   const { DatabaseSync } = await import("node:sqlite");

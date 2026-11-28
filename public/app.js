@@ -106,6 +106,9 @@ class ApiError extends Error { constructor(status, msg){ super(msg); this.status
 /* Di aplikasi Android mode offline, API dijalankan oleh mesin lokal (public/lokal/mesin.js) — aturannya sama dengan server. */
 const NATIVE = window.RGNative || null;
 const LOKAL = location.hostname === "rg.lokal";
+/* Versi DEMO (promosi jasa pembuatan aplikasi Yudsky Tech): alamat demo.… atau ?demo=1 (uji lokal). */
+const DEMO = (() => { try { if (/[?&]demo=1\b/.test(location.search)) sessionStorage.setItem("rg_demo", "1"); return /(^|\.)demo\.|yudsky-demo/i.test(location.hostname) || sessionStorage.getItem("rg_demo") === "1"; } catch { return false; } })();
+let DEMO_INFO = { wa: "", merek: "Yudsky Tech" };
 /* Perangkat kasir dengan printer bawaan (iMin "BluetoothPrinter", Sunmi "InnerPrinter"): pakai cetak langsung ESC/POS,
    hasilnya teks hitam tajam. Hanya otomatis bila pengguna belum pernah memilih cara cetak sendiri. */
 const statusPrinterLangsung = () => { try { return NATIVE && NATIVE.printerLangsung ? String(NATIVE.printerLangsung() || "") : ""; } catch { return ""; } };
@@ -705,6 +708,7 @@ const TAG_PEMBUAT = `<p class="tag-pembuat">Dibuat oleh <b>Yudsky Tech</b></p>`;
 /** Tombol kirim form. e.submitter baru ada di Chrome 81+, WebView perangkat lama (mis. iMin) belum punya. */
 const tombolKirim = e => e.submitter || e.target.querySelector('button[type="submit"]');
 function tampilLogin(pesan = ""){
+  if (DEMO) return tampilDemo(pesan);
   B = null; $("#cartbar").hidden = true; closeModal();
   $("#root").innerHTML = `<div class="auth"><form class="card" id="fLogin" autocomplete="on">
     <div class="merek"><img src="/logo.png" alt="Rich Gallery POS" width="128" height="128"></div>
@@ -5230,13 +5234,59 @@ function aturMode(){
 }
 
 /* ================= mulai ================= */
+/* ---------- Versi demo ---------- */
+const GANTI_DEMO = [[/Rich Gallery POS/g, "Aplikasi Kasir"], [/Rich Gallery/g, "Toko Bunga Contoh"], [/RICH GALLERY/g, "TOKO BUNGA CONTOH"], [/nyenengin\.id/gi, "Buket & Gift"], [/Rich Hampers/g, "Hampers"], [/Rich Party/g, "Dekorasi"], [/Rich Hantaran/g, "Seserahan"], [/richgallery\.my\.id/gi, "contoh.id"]];
+const waDemo = () => `https://wa.me/${DEMO_INFO.wa || ""}?text=${encodeURIComponent("Halo Yudsky Tech 👋, saya sudah coba demo aplikasi kasir. Saya tertarik dibuatkan aplikasi untuk usaha saya.")}`;
+function pasangDemo(){
+  document.title = "Demo Aplikasi Kasir · Yudsky Tech";
+  // Unit usaha contoh (bukan merek Rich Gallery)
+  const U = { bouquet: ["Buket & Gift", "Buket & Gift"], hampers: ["Hampers", "Hampers"], party: ["Dekorasi", "Dekorasi"], hantaran: ["Seserahan", "Seserahan"] };
+  UNIT.forEach(u => { if (U[u.id]) { u.nama = U[u.id][0]; u.brand = U[u.id][1]; } });
+  const ganti = t => GANTI_DEMO.reduce((x, [a, b]) => x.replace(a, b), t);
+  const rapikan = root => {
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let n = w.nextNode(); n; n = w.nextNode()) { if (/Rich|RICH|nyenengin|richgallery/.test(n.nodeValue)) n.nodeValue = ganti(n.nodeValue); }
+    (root.querySelectorAll ? root.querySelectorAll('img[src="/logo.png"], img[src="/monogram.png"]') : []).forEach(i => { i.src = i.getAttribute("src") === "/logo.png" ? "/demo/logo.svg" : "/demo/monogram.svg"; i.alt = "Toko Bunga Contoh"; });
+  };
+  new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) { if (n.nodeType === 1) rapikan(n); else if (n.nodeType === 3 && /Rich|nyenengin/.test(n.nodeValue)) n.nodeValue = ganti(n.nodeValue); } }).observe(document.body, { childList: true, subtree: true });
+  rapikan(document.body);
+  // Pita promosi di setiap layar
+  const pita = document.createElement("a");
+  pita.className = "demo-pita"; pita.target = "_blank"; pita.rel = "noopener"; pita.href = waDemo();
+  pita.innerHTML = `<b>DEMO</b><span>Mau aplikasi seperti ini untuk usahamu?</span><i>💬 Yudsky Tech</i>`;
+  document.body.appendChild(pita); document.body.classList.add("ada-demo");
+}
+function tampilDemo(pesan = ""){
+  B = null; $("#cartbar").hidden = true; closeModal();
+  const FITUR = [["🧾", "Kasir & struk", "Cetak struk, QRIS, transfer"], ["📅", "Pesanan", "Ambil / antar, pengingat"], ["📦", "Stok & produksi", "Stok otomatis berkurang"], ["🙂", "Absen wajah", "Lokasi + foto, tanpa mesin"], ["💰", "Gaji & insentif", "Hitung otomatis tiap bulan"], ["📊", "Laporan", "Omzet, laba, per unit usaha"]];
+  $("#root").innerHTML = `<div class="auth demo-masuk"><div class="card">
+    <div class="merek"><img src="/demo/logo.svg" alt="" width="96" height="96"></div>
+    <div><span class="demo-lencana">VERSI DEMO</span><h1 style="margin:6px 0 4px">Aplikasi Kasir Toko</h1>
+      <p class="muted" style="margin:0">Satu aplikasi untuk kasir, stok, pesanan, absen karyawan, gaji &amp; laporan. Semua data di sini <b>contoh</b> — bebas dicoba, tidak ada yang rusak.</p></div>
+    <div class="demo-fitur">${FITUR.map(([i, a, b]) => `<div><span>${i}</span><b>${a}</b><small>${b}</small></div>`).join("")}</div>
+    <div class="err">${esc(pesan)}</div>
+    <button class="btn pri big" id="dmAdmin" type="button">👑 Coba sebagai Pemilik toko</button>
+    <button class="btn big" id="dmKasir" type="button">🧑‍💼 Coba sebagai Kasir</button>
+    <a class="btn big demo-wa" href="${waDemo()}" target="_blank" rel="noopener">💬 Pesan aplikasi seperti ini</a>
+    <p class="small muted" style="margin:0;text-align:center">Bisa dibuat sesuai usaha Anda: toko, kafe, laundry, salon, klinik, dll. Bisa dipakai di HP, tablet, &amp; mesin kasir.</p>
+    ${TAG_PEMBUAT}</div></div>`;
+  const masuk = (peran, el) => coba(async () => { el.disabled = true; el.textContent = "Menyiapkan toko contoh…"; await api("POST", "/api/demo/masuk", { peran }); await mulai(); }, el);
+  $("#dmAdmin").onclick = e => masuk("admin", e.currentTarget);
+  $("#dmKasir").onclick = e => masuk("kasir", e.currentTarget);
+}
 async function mulai(){
   try { const h = location.hash.slice(1); if (h.includes("?")) sessionStorage.setItem("rg_tujuan", h); } catch {} // dibuka dari notifikasi: diingat sampai selesai login
   try {
     if (LOKAL && !window.RG_LOKAL) await import("/lokal/mesin.js");
+    if (DEMO && !mulai.demoSiap) { // versi demo: ambil nomor WA promosi & pasang pita sekali
+      mulai.demoSiap = true;
+      try { DEMO_INFO = { ...DEMO_INFO, ...(await api("GET", "/api/demo/info")) }; } catch {}
+      pasangDemo();
+    }
     const st = await api("GET", "/api/status");
     // Layar setup/masuk juga berarti halaman berhasil tampil, supaya pembaruan tidak dibatalkan otomatis.
     if (st.perluSetup) { tampilSetup(); return halamanTampil(); }
+    if (!st.masuk && DEMO) { tampilDemo(); return halamanTampil(); }
     if (!st.masuk) {
       // Penyambungan perangkat baru sempat gagal (mis. internet putus): lanjutkan dari layar sambungkan, bukan layar masuk.
       let sem = null; try { sem = JSON.parse(localStorage.getItem("rg_setup_sementara") || "null"); } catch {}

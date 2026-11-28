@@ -3,10 +3,11 @@
    - Semua /api/* diteruskan ke SATU Durable Object "toko" yang memegang database SQLite toko.
      Satu objek = satu database = semua permintaan berurutan, jadi aturan stok & nomor nota tetap aman.
    - Cron tiap 5 menit membangunkan objek untuk mengirim antrean ke Google Sheet. */
-import { pasangDriver, migrasi, seedJikaKosong, jalankan, cariRoute, kirimOutbox, kirimNotif, bersihkanSesiKadaluarsa, hapusFotoAbsenLama, hapusNotaBelanjaLama, terimaEmail, rekapProduksiHarian, cekKontenBaru, pengingatTugasHarian } from "../core/semua.js";
+import { pasangDriver, migrasi, seedJikaKosong, isiDemo, gantiMerek, jalankan, cariRoute, kirimOutbox, kirimNotif, bersihkanSesiKadaluarsa, hapusFotoAbsenLama, hapusNotaBelanjaLama, terimaEmail, rekapProduksiHarian, cekKontenBaru, pengingatTugasHarian } from "../core/semua.js";
 import { mimeKeTeks } from "./email.js";
 import { buatDriverDO } from "./driver.js";
 import { pasangPlatformCF } from "./platform.js";
+import { platform } from "../core/platform.js";
 
 const COOKIE = "rg_sid";
 const HEADER_AMAN = {
@@ -29,19 +30,33 @@ export class Toko {
     this.state = state;
     this.env = env;
     this.siap = false;
+    this.demo = env.DEMO === "1";
   }
-  siapkan(){
+  async siapkan(){
     if (this.siap) return;
     pasangPlatformCF();
-    pasangDriver(buatDriverDO(this.state.storage));
+    this.drv = buatDriverDO(this.state.storage);
+    pasangDriver(this.drv);
     migrasi();
-    seedJikaKosong();
+    if (this.demo) {
+      // Versi demo: tidak ada koneksi keluar (Google Sheet, notifikasi, Instagram, …); tiap pengunjung punya database sendiri
+      // yang dihapus otomatis 3 hari kemudian.
+      platform.http = async () => { throw new Error("Tidak tersedia di versi demo"); };
+      if (await isiDemo({ wa: this.env.DEMO_WA })) await this.state.storage.setAlarm(Date.now() + 3 * 86400_000);
+      pasangDriver(this.drv);
+    } else seedJikaKosong();
     this.siap = true;
+  }
+  async alarm(){ // hanya demo: database pengunjung dihapus
+    if (!this.demo) return;
+    await this.state.storage.deleteAll();
+    this.siap = false; this.siapP = null;
   }
 
   async fetch(req){
-    this.siapkan();
+    if (!this.siap) { this.siapP ||= this.siapkan().finally(() => { this.siapP = null; }); await this.siapP; }
     const url = new URL(req.url);
+    if (this.demo && url.pathname.startsWith("/__")) return json(404, { error: "Tidak ada" });
     if (url.pathname === "/__email") { // dari Email Worker (bukan dari internet: hanya /api/* yang diteruskan ke objek ini)
       try { const r = terimaEmail(await req.json()); this.state.waitUntil?.(kirimNotif().catch(() => {})); return json(200, r); }
       catch (e) { console.error("email", e.message); return json(500, { error: e.message }); }
@@ -71,6 +86,8 @@ export class Toko {
         if (teks) { try { body = JSON.parse(teks); } catch { if (/^[\w%.-]+=/.test(teks)) body = Object.fromEntries(new URLSearchParams(teks)); else return json(400, { error: "Format data tidak valid" }); } }
       }
       let cookieKeluar = null;
+      // Beberapa objek demo bisa berjalan di isolate yang sama (modul dipakai bersama): pastikan database objek INI yang aktif.
+      pasangDriver(this.drv);
       const hasil = await jalankan({
         method: req.method, path: url.pathname, query: Object.fromEntries(url.searchParams), body,
         token: parseCookies(req.headers.get("cookie") || "")[COOKIE] || null,
@@ -82,8 +99,9 @@ export class Toko {
         return new Response(hasil.unduh.isi, { status: 200, headers: { "Content-Type": hasil.unduh.tipe, "Content-Disposition": `attachment; filename="${hasil.unduh.nama}"`, "Cache-Control": "no-store", ...HEADER_AMAN, ...extra } });
       }
       // Ada antrean Google Sheet: kirim sebentar lagi (tanpa menahan jawaban ke kasir).
-      this.state.waitUntil?.(kirimOutbox().catch(() => {}));
-      if (req.method !== "GET") this.state.waitUntil?.(kirimNotif().catch(e => console.error("notif", e.message))); // kabari HP admin
+      if (!this.demo) this.state.waitUntil?.(kirimOutbox().catch(() => {}));
+      if (req.method !== "GET" && !this.demo) this.state.waitUntil?.(kirimNotif().catch(e => console.error("notif", e.message))); // kabari HP admin
+      if (this.demo) return new Response(gantiMerek(JSON.stringify(hasil.data)), { status: hasil.status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...HEADER_AMAN, ...extra } });
       return json(hasil.status, hasil.data, extra);
     } catch (e) {
       return json(e.status || 500, { error: e.status ? e.message : "Terjadi kesalahan di server" });
@@ -93,9 +111,35 @@ export class Toko {
 
 const objekToko = env => env.TOKO.get(env.TOKO.idFromName("toko"));
 
+/* ---------- Versi demo (promosi Yudsky Tech) ---------- */
+const OG_DEMO = `<meta property="og:type" content="website"><meta property="og:title" content="Coba Aplikasi Kasir Toko — Demo gratis">
+<meta property="og:description" content="Kasir, stok, pesanan, absen wajah, gaji & laporan dalam 1 aplikasi. Coba langsung di HP — dibuat oleh Yudsky Tech.">
+<meta property="og:image" content="/demo/og.jpg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image">`;
+async function demoFetch(req, env, url){
+  if (url.pathname.startsWith("/api/")) {
+    // Tiap pengunjung: database sendiri (dikenali dari cookie), supaya coba-coba orang lain tidak saling mengganggu.
+    let id = parseCookies(req.headers.get("cookie") || "").rg_demo || "", baru = false;
+    if (!/^[A-Za-z0-9]{20,40}$/.test(id)) { id = crypto.randomUUID().replace(/-/g, ""); baru = true; }
+    const res = await env.TOKO.get(env.TOKO.idFromName("demo:" + id)).fetch(req);
+    if (!baru) return res;
+    const r = new Response(res.body, res);
+    r.headers.append("Set-Cookie", `rg_demo=${id}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${3 * 86400}${url.protocol === "https:" ? "; Secure" : ""}`);
+    return r;
+  }
+  const res = await env.ASSETS.fetch(req);
+  if (!(res.headers.get("content-type") || "").includes("text/html")) return res;
+  // Halaman utama: judul & pratinjau tautan (WhatsApp) untuk versi demo
+  const og = `${OG_DEMO.replace('content="/demo/og.jpg"', `content="${url.origin}/demo/og.jpg"`)}<meta property="og:url" content="${url.origin}/">`;
+  return new HTMLRewriter()
+    .on("title", { element(e){ e.setInnerContent("Demo Aplikasi Kasir · Yudsky Tech"); } })
+    .on("head", { element(e){ e.append(og, { html: true }); } })
+    .transform(res);
+}
+
 export default {
   async fetch(req, env){
     const url = new URL(req.url);
+    if (env.DEMO === "1") return demoFetch(req, env, url);
     if (url.pathname.startsWith("/api/")) return objekToko(env).fetch(req);
     return env.ASSETS.fetch(req);
   },
@@ -108,6 +152,7 @@ export default {
     } catch (e) { console.error("email masuk", e.message); }
   },
   async scheduled(_event, env, ctx){
+    if (env.DEMO === "1") return;
     ctx.waitUntil(objekToko(env).fetch("https://toko/__tugas"));
   },
 };

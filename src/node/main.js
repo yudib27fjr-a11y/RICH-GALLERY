@@ -3,12 +3,14 @@ import { config } from "./config.js";
 import { bukaDb, tutupDb } from "./driver.js";
 import { pasangPlatformNode } from "./platform.js";
 import { handle } from "./http.js";
-import { migrasi, seedJikaKosong, kirimOutbox, bersihkanSesiKadaluarsa, sinkronCabang, hapusFotoAbsenLama, hapusNotaBelanjaLama, rekapProduksiHarian, kirimNotif, cekKontenBaru, pengingatTugasHarian } from "../core/semua.js";
+import { migrasi, seedJikaKosong, isiDemo, kirimOutbox, bersihkanSesiKadaluarsa, sinkronCabang, hapusFotoAbsenLama, hapusNotaBelanjaLama, rekapProduksiHarian, kirimNotif, cekKontenBaru, pengingatTugasHarian } from "../core/semua.js";
 
 pasangPlatformNode();
 bukaDb();
 const baru = migrasi();
-if (seedJikaKosong()) console.log("Database baru dibuat dan diisi data awal dari sheet PEMBUKUAN RG 2026.");
+// DEMO=1: toko contoh untuk promosi (tanpa koneksi keluar: Google Sheet, notifikasi, dll.)
+if (process.env.DEMO === "1") { const { platform } = await import("../core/platform.js"); platform.http = async () => { throw new Error("Tidak tersedia di versi demo"); }; if (await isiDemo({ wa: process.env.DEMO_WA })) console.log("Database demo diisi toko contoh."); }
+else if (seedJikaKosong()) console.log("Database baru dibuat dan diisi data awal dari sheet PEMBUKUAN RG 2026.");
 else if (baru) console.log("Database baru dibuat.");
 
 const server = createServer((req, res) => { handle(req, res); });
